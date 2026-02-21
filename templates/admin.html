@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Neural-Log</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .admin-nav {
+            display: flex;
+            gap: 15px;
+        }
+
+        .admin-nav a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(139, 0, 0, 0.6), rgba(211, 47, 47, 0.6));
+            border-radius: 20px;
+            transition: all 0.3s;
+            border: 1px solid rgba(211, 47, 47, 0.3);
+        }
+
+        .admin-nav a:hover {
+            background: linear-gradient(135deg, rgba(211, 47, 47, 0.8), rgba(255, 107, 53, 0.8));
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
+        }
+
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(26, 26, 26, 0.95);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(211, 47, 47, 0.3);
+        }
+
+        .users-table th {
+            background: linear-gradient(135deg, var(--dark-red), var(--primary-color));
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(255, 107, 53, 0.5);
+        }
+
+        .users-table td {
+            padding: 15px;
+            border-bottom: 1px solid rgba(211, 47, 47, 0.2);
+            color: white;
+            background: rgba(20, 20, 20, 0.6);
+        }
+
+        .users-table tr:hover {
+            background: rgba(211, 47, 47, 0.1);
+        }
+
+        .users-table tr:hover td {
+            background: rgba(211, 47, 47, 0.1);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-admin {
+            background: linear-gradient(135deg, var(--accent-orange), var(--bat-gold));
+            color: #000;
+            border: 1px solid var(--bat-gold);
+            font-weight: 600;
+        }
+
+        .badge-user {
+            background: linear-gradient(135deg, rgba(139, 0, 0, 0.8), rgba(211, 47, 47, 0.8));
+            color: white;
+            border: 1px solid rgba(211, 47, 47, 0.5);
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-right: 5px;
+            transition: all 0.2s;
+        }
+
+        .btn-view {
+            background: linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(50, 50, 50, 0.9));
+            color: white;
+            border: 1px solid rgba(211, 47, 47, 0.3);
+        }
+
+        .btn-view:hover {
+            background: linear-gradient(135deg, rgba(50, 50, 50, 0.9), rgba(70, 70, 70, 0.9));
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
+        }
+
+        .btn-toggle-admin {
+            background: linear-gradient(135deg, var(--accent-orange), var(--bat-gold));
+            color: #000;
+            font-weight: 600;
+            border: 1px solid var(--bat-gold);
+        }
+
+        .btn-toggle-admin:hover {
+            background: linear-gradient(135deg, var(--bat-gold), var(--accent-orange));
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #8B0000, #D32F2F);
+            color: white;
+            border: 1px solid rgba(139, 0, 0, 0.5);
+        }
+
+        .btn-delete:hover {
+            background: linear-gradient(135deg, #D32F2F, var(--accent-orange));
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.6);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .activity-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="admin-header">
+                <div>
+                    <h1>🛡️ Admin Dashboard</h1>
+                    <p class="subtitle">Manage Users and System Data</p>
+                </div>
+                <div class="admin-nav">
+                    <a href="/">📊 Main App</a>
+                    <a href="/logout">Logout</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- System Stats -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3 id="totalUsers">0</h3>
+                <p>Total Users</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalActivities">0</h3>
+                <p>Total Activities</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalAdmins">0</h3>
+                <p>Admin Users</p>
+            </div>
+        </div>
+
+        <!-- Users Management -->
+        <div class="card">
+            <h2>👥 User Management</h2>
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Activities</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px;">Loading users...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Most Active Users -->
+        <div class="card">
+            <h2>📈 Most Active Users</h2>
+            <div id="activeUsersList"></div>
+        </div>
+    </div>
+
+    <!-- User Activities Modal -->
+    <div id="activitiesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeActivitiesModal()">&times;</span>
+            <h2 id="modalUsername"></h2>
+            <div id="activitiesContent" class="activity-list"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load admin stats
+        async function loadAdminStats() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalUsers').textContent = stats.total_users;
+                document.getElementById('totalActivities').textContent = stats.total_activities;
+                document.getElementById('totalAdmins').textContent = stats.total_admins;
+                
+                // Display active users
+                const activeUsersList = document.getElementById('activeUsersList');
+                if (stats.active_users.length > 0) {
+                    activeUsersList.innerHTML = stats.active_users.map((user, index) => `
+                        <div style="display: flex; justify-content: space-between; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 5px;">
+                            <span><strong>${index + 1}.</strong> ${user.username}</span>
+                            <span><strong>${user.activity_count}</strong> activities</span>
+                        </div>
+                    `).join('');
+                } else {
+                    activeUsersList.innerHTML = '<p style="text-align: center; color: #7f8c8d;">No activity data yet</p>';
+                }
+            } catch (error) {
+                console.error('Error loading admin stats:', error);
+            }
+        }
+
+        // Load all users
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                const users = await response.json();
+                
+                const tbody = document.getElementById('usersTableBody');
+                
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No users found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td><strong>${user.username}</strong></td>
+                        <td>${user.email || '-'}</td>
+                        <td>
+                            <span class="badge ${user.is_admin ? 'badge-admin' : 'badge-user'}">
+                                ${user.is_admin ? '🛡️ Admin' : '👤 User'}
+                            </span>
+                        </td>
+                        <td>${user.activity_count}</td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            <button class="action-btn btn-view" onclick="viewUserActivities(${user.id}, '${user.username}')">
+                                View Data
+                            </button>
+                            <button class="action-btn btn-toggle-admin" onclick="toggleUserAdmin(${user.id})">
+                                ${user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                            </button>
+                            <button class="action-btn btn-delete" onclick="deleteUser(${user.id}, '${user.username}')">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showNotification('Error loading users', 'error');
+            }
+        }
+
+        // View user activities
+        async function viewUserActivities(userId, username) {
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/activities`);
+                const activities = await response.json();
+                
+                document.getElementById('modalUsername').textContent = `Activities for ${username}`;
+                
+                const content = document.getElementById('activitiesContent');
+                
+                if (activities.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; padding: 40px; color: #7f8c8d;">No activities logged yet</p>';
+                } else {
+                    content.innerHTML = activities.map(activity => `
+                        <div class="activity-item">
+                            <div class="activity-header">
+                                <div>
+                                    <div class="activity-title">${activity.activity_name}</div>
+                                    <div class="activity-date">${formatDate(activity.date)}</div>
+                                </div>
+                            </div>
+                            ${activity.description ? `<p>${activity.description}</p>` : ''}
+                            <div class="activity-meta">
+                                ${activity.duration ? `<span>⏱️ ${activity.duration} min</span>` : ''}
+                                ${activity.progress_score ? `<span>📊 Score: ${activity.progress_score}/10</span>` : ''}
+                            </div>
+                            ${activity.notes ? `<div style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">💭 ${activity.notes}</div>` : ''}
+                        </div>
+                    `).join('');
+                }
+                
+                document.getElementById('activitiesModal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading user activities:', error);
+                showNotification('Error loading activities', 'error');
+            }
+        }
+
+        // Close modal
+        function closeActivitiesModal() {
+            document.getElementById('activitiesModal').style.display = 'none';
+        }
+
+        // Toggle user admin status
+        async function toggleUserAdmin(userId) {
+            if (!confirm('Are you sure you want to toggle admin status for this user?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/toggle-admin`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`Admin status updated successfully`, 'success');
+                    loadUsers();
+                    loadAdminStats();
+                } else {
+                    showNotification(data.message || 'Failed to update admin status', 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling admin:', error);
+                showNotification('Error updating admin status', 'error');
+            }
+        }
+
+        // Delete user
+        async function deleteUser(userId, username) {
+            if (!confirm(`Are you sure you want to delete user "${username}" and all their data? This action cannot be undone!`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`User "${username}" deleted successfully`, 'success');
+                    loadUsers();
+                    loadAdminStats();
+                } else {
+                    showNotification(data.message || 'Failed to delete user', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showNotification('Error deleting user', 'error');
+            }
+        }
+
+        // Utility functions
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                background: ${type === 'success' ? '#50c878' : type === 'error' ? '#e74c3c' : '#4a90e2'};
+                color: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('activitiesModal');
+            if (event.target == modal) {
+                closeActivitiesModal();
+            }
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAdminStats();
+            loadUsers();
+        });
+    </script>
+</body>
+</html>

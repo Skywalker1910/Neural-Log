@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural-Log - Daily Activity Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>� NEURAL-LOG</h1>
+                    <p class="subtitle">Your Daily Chronicle - Track the Night</p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="color: white; margin-bottom: 10px;">
+                        <span style="opacity: 0.9;">👤 </span>
+                        <span id="current-username" style="font-weight: 600;"></span>
+                        <span id="admin-badge" style="display: none; background: rgba(255, 255, 255, 0.3); padding: 2px 8px; border-radius: 10px; margin-left: 8px; font-size: 0.85rem;">🛡️ Admin</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <a href="/admin" id="admin-link" class="logout-btn" style="display: none;">Admin Panel</a>
+                        <a href="/logout" class="logout-btn">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3 id="totalDays">0</h3>
+                <p>Days Logged</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalActivities">0</h3>
+                <p>Total Activities</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="avgScore">0</h3>
+                <p>Avg Progress Score</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Daily Checklist Form -->
+            <div class="card">
+                <div class="checklist-header">
+                    <h2>📋 Daily Checklist - End of Day Review</h2>
+                    <div class="progress-indicator">
+                        <span id="currentStep">1</span> / <span id="totalSteps">0</span>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="progress-bar-container">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                
+                <form id="dailyChecklistForm">
+                    <div class="form-group date-selector">
+                        <label for="date">Date: <span id="todayIndicator" class="today-badge">📅 Today</span></label>
+                        <div class="date-navigation">
+                            <button type="button" class="btn-date-nav" onclick="navigateDate(-1)" title="Previous Day">
+                                ← Previous Day
+                            </button>
+                            <input type="date" id="date" required>
+                            <button type="button" class="btn-date-nav" onclick="navigateDate(1)" title="Next Day">
+                                Next Day →
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Wizard Container for Step-by-Step -->
+                    <div id="checklistWizard" class="wizard-container">
+
+                    <!-- Wake Up Time -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">⏰ Woke up at</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="wakeTime" value="05:00 - 05:30">
+                                <span>05:00 - 05:30 AM</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="wakeTime" value="05:30 - 06:30">
+                                <span>05:30 - 06:30 AM</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="wakeTime" value="06:30 - 07:30">
+                                <span>06:30 - 07:30 AM</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="wakeTime" value="After 07:30">
+                                <span>After 07:30 AM</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Coffee -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">☕ Coffee</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="coffee" value="No" onchange="toggleSubOptions('coffeeTime', false)">
+                                <span>No</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="coffee" value="Yes" onchange="toggleSubOptions('coffeeTime', true)">
+                                <span>Yes</span>
+                            </label>
+                        </div>
+                        <div id="coffeeTime" class="sub-options" style="display: none;">
+                            <label class="sub-label">When?</label>
+                            <label class="radio-option">
+                                <input type="radio" name="coffeeTime" value="Within 30 min">
+                                <span>Within 30 minutes of waking up</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="coffeeTime" value="After 30 min">
+                                <span>After 30 minutes</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Breakfast -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">🍳 Breakfast</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="breakfast" value="No" onchange="toggleSubOptions('breakfastTime', false)">
+                                <span>No</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="breakfast" value="Yes" onchange="toggleSubOptions('breakfastTime', true)">
+                                <span>Yes</span>
+                            </label>
+                        </div>
+                        <div id="breakfastTime" class="sub-options" style="display: none;">
+                            <label class="sub-label">When?</label>
+                            <label class="radio-option">
+                                <input type="radio" name="breakfastTime" value="Within 30 min">
+                                <span>Within 30 minutes of waking up</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="breakfastTime" value="After 30 min">
+                                <span>After 30 minutes</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Exercise -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">💪 Exercise</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="exercise" value="No" onchange="toggleSubOptions('exerciseType', false)">
+                                <span>No</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="exercise" value="Yes" onchange="toggleSubOptions('exerciseType', true)">
+                                <span>Yes</span>
+                            </label>
+                        </div>
+                        <div id="exerciseType" class="sub-options" style="display: none;">
+                            <label class="sub-label">Type:</label>
+                            <label class="radio-option">
+                                <input type="radio" name="exerciseType" value="Cardio">
+                                <span>Cardio (Running, Walking)</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="exerciseType" value="Strength">
+                                <span>Strength Training</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="exerciseType" value="Yoga">
+                                <span>Yoga/Stretching</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="exerciseType" value="Other">
+                                <span>Other</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Lunch -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">🍱 Lunch</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="lunch" value="No">
+                                <span>No</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="lunch" value="Yes - Home cooked">
+                                <span>Yes - Home cooked</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="lunch" value="Yes - Outside">
+                                <span>Yes - Outside</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Dinner -->
+                    <div class="checklist-item">
+                        <label class="checklist-label">🍽️ Dinner</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="dinner" value="No">
+                                <span>No</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="dinner" value="Yes - Home cooked">
+                                <span>Yes - Home cooked</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="dinner" value="Yes - Outside">
+                                <span>Yes - Outside</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Wizard Container for Step-by-Step -->
+                    <div id="checklistWizard" class="wizard-container">
+                        <!-- Steps will be dynamically loaded here -->
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="wizard-navigation">
+                        <button type="button" id="prevBtn" class="btn btn-secondary" onclick="previousStep()">
+                            ← Back
+                        </button>
+                        <button type="button" id="nextBtn" class="btn btn-primary" onclick="nextStep()">
+                            Next →
+                        </button>
+                        <button type="submit" id="submitBtn" class="btn btn-success" style="display: none;">
+                            ✅ Save Today's Log
+                        </button>
+                    </div>
+                    
+                    <div class="wizard-hint">
+                        💡 Tip: Use <kbd>Enter</kbd> or <kbd>→</kbd> to go next, <kbd>←</kbd> to go back
+                    </div>
+                </form>
+                
+                <div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                    <button type="button" class="btn btn-secondary" onclick="openCustomItemModal()">
+                        ⚙️ Manage Custom Checklist Items
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal for Adding Custom Items -->
+            <div id="customItemModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeCustomItemModal()">&times;</span>
+                    <h2>Add Custom Checklist Item</h2>
+                    <form id="customItemForm">
+                        <div class="form-group">
+                            <label for="customItemName">Item Name:</label>
+                            <input type="text" id="customItemName" placeholder="e.g., Meditation, Reading" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="customItemType">Response Type:</label>
+                            <select id="customItemType" class="form-select">
+                                <option value="yes-no">Yes/No</option>
+                                <option value="text">Text Input</option>
+                                <option value="rating">Rating (1-5)</option>
+                                <option value="time">Time Range</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="customOptionsGroup" style="display: none;">
+                            <label for="customOptions">Options (one per line):</label>
+                            <textarea id="customOptions" placeholder="Option 1\nOption 2\nOption 3" rows="4"></textarea>
+                            <small style="color: #7f8c8d;">For time range, enter options like: 6:00 - 7:00 AM</small>
+                        </div>
+
+                        <!-- Sub-response configuration for Yes/No type -->
+                        <div id="subResponseGroup" style="display: none;">
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" id="enableSubResponse" style="width: auto;">
+                                    <span>Add follow-up question when "Yes" is selected</span>
+                                </label>
+                            </div>
+
+                            <div id="subResponseConfig" style="display: none; padding-left: 20px; border-left: 3px solid var(--primary-color); margin-left: 10px;">
+                                <div class="form-group">
+                                    <label for="subResponsePrompt">Follow-up Question:</label>
+                                    <input type="text" id="subResponsePrompt" placeholder="e.g., When? What type?">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subResponseType">Response Type:</label>
+                                    <select id="subResponseType" class="form-select">
+                                        <option value="radio">Multiple Choice (select one)</option>
+                                        <option value="checkbox">Checkboxes (select multiple)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="subResponseOptions">Options (one per line):</label>
+                                    <textarea id="subResponseOptions" placeholder="Option 1\nOption 2\nOption 3" rows="4"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="customItemIcon">Icon (emoji):</label>
+                            <input type="text" id="customItemIcon" placeholder="📚" maxlength="2">
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button type="submit" class="btn btn-primary">Add Item</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeCustomItemModal()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Manage Custom Items -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Manage Custom Items</h2>
+                </div>
+                <div id="customItemsList" class="custom-items-list">
+                    <!-- Custom items will be listed here -->
+                </div>
+            </div>
+
+            <!-- Milestones -->
+            <div class="card">
+                <h2>Check Milestone Insights</h2>
+                <div class="milestone-buttons">
+                    <button class="btn btn-milestone" onclick="checkMilestone(10)">10 Days</button>
+                    <button class="btn btn-milestone" onclick="checkMilestone(25)">25 Days</button>
+                    <button class="btn btn-milestone" onclick="checkMilestone(45)">45 Days</button>
+                    <button class="btn btn-milestone" onclick="checkMilestone(70)">70 Days</button>
+                    <button class="btn btn-milestone" onclick="checkMilestone(100)">100 Days</button>
+                </div>
+                <div id="milestoneInsights" class="milestone-insights"></div>
+            </div>
+
+            <!-- Progress Chart -->
+            <div class="card">
+                <h2>Progress Over Time</h2>
+                <canvas id="progressChart"></canvas>
+            </div>
+
+            <!-- Activities List -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Recent Activities</h2>
+                    <button class="btn btn-secondary" onclick="exportToExcel()">Export to Excel</button>
+                </div>
+                <div id="activitiesList" class="activities-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
