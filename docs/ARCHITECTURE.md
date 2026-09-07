@@ -17,7 +17,8 @@ Browser
   v
 Flask app (app.py)
   |
-  |-- sqlite3 -------------> neural_log.db        (users, activities, milestones)
+  |-- sqlite3 -------------> neural_log.db  (users, activities, milestones,
+  |                                          daily_xp, user_badges)
   |
   '-- filesystem (JSON) ---> artifacts/paths/<username>.json       (checklist templates)
                               artifacts/checklists/<username>.jsonl (daily submissions)
@@ -57,6 +58,12 @@ text, each with an optional follow-up sub-question). Four defaults ship in
 users can also create, rename, reorder, and delete their own. `load_user_paths()`
 lazily creates a user's `artifacts/paths/<username>.json` on first access and migrates
 legacy `selected_path` string values into the newer path-id based format.
+
+## Gamification
+
+XP, levels, streak multipliers, and badges are computed from `daily_xp` and
+`user_badges` (SQL, since it's aggregate/queried data - see above) whenever a daily
+checklist is submitted. Full scoring spec: [GAMIFICATION.md](GAMIFICATION.md).
 
 ## Frontend
 

@@ -2,6 +2,27 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## Phase 2 - Gamification system
+
+- **Add**: `daily_xp` and `user_badges` SQLite tables (`init_db()`), created
+  alongside the existing ones.
+- **Add**: per-item `weight` (1-5) on Path checklist items (`normalize_checklist_items`,
+  Path editor UI); default Paths tuned with heavier weights on
+  workout/study/deep-work items. See `docs/GAMIFICATION.md` for the full scoring spec.
+- **Add**: `calculate_daily_xp()`, `compute_level()`, `award_daily_xp()`, and
+  `evaluate_badges()` in `app.py` - the scoring engine, hooked into the existing
+  `/api/activities` "Daily Checklist" submission path.
+- **Refactor**: pulled the streak-counting loop out of `/api/stats` into a shared
+  `calculate_current_streak()`, since the XP engine needed the same logic.
+- **Add**: `GET /api/gamification/summary` (XP/level/streak/badges) and
+  `GET /api/leaderboard/<overall|monthly>` endpoints.
+- **Add**: a Level/XP banner, Badges modal, and Leaderboard modal on the main
+  dashboard (`templates/index.html`, `static/js/app.js`, `static/css/style.css`); a
+  "badge unlocked" toast on checklist submission.
+- **Add**: `tests/test_gamification.py` covering XP weighting, level thresholds, the
+  streak multiplier, same-day resubmission (no double-counting), badge unlocks, and
+  both leaderboards. Shared test fixtures moved to `tests/conftest.py`.
+
 ## Phase 1 - Foundation
 
 - **Fix**: `handleDailyChecklistSubmit()` in `static/js/app.js` referenced

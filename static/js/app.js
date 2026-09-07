@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadPaths();
     await loadCustomItems();
     loadStats();
+    loadGamificationSummary();
     loadActivities();
     initChart();
     displayCustomItems(); // Display custom items management list
@@ -842,6 +843,9 @@ function renderPathEditorList() {
         <div class="path-activity-row">
             <div class="path-activity-index">${index + 1}</div>
             <input class="path-activity-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" oninput="updatePathActivityName(${index}, this.value)">
+            <select class="form-select path-activity-weight" title="XP impact - how much this item is worth" onchange="updatePathActivityWeight(${index}, this.value)" ${item.type === 'rating' ? 'disabled' : ''}>
+                ${[1, 2, 3, 4, 5].map(w => `<option value="${w}" ${Number(item.weight || 1) === w ? 'selected' : ''}>${w}x XP</option>`).join('')}
+            </select>
             <input class="path-move-slider" type="range" min="1" max="${pathEditorItemsDraft.length}" value="${index + 1}" step="1" onchange="movePathActivityWithSlider(${index}, this)">
             <button type="button" class="btn btn-secondary" onclick="removePathActivityItem(${index})">Remove</button>
         </div>
@@ -851,6 +855,11 @@ function renderPathEditorList() {
 function updatePathActivityName(index, value) {
     if (!pathEditorItemsDraft[index]) return;
     pathEditorItemsDraft[index].name = value;
+}
+
+function updatePathActivityWeight(index, value) {
+    if (!pathEditorItemsDraft[index]) return;
+    pathEditorItemsDraft[index].weight = parseInt(value, 10) || 1;
 }
 
 function movePathActivityWithSlider(index, sliderElement) {
@@ -869,7 +878,8 @@ function addPathActivityItem() {
     pathEditorItemsDraft.push({
         name: 'New Activity',
         type: 'yes-no',
-        icon: ''
+        icon: '',
+        weight: 1
     });
     renderPathEditorList();
 }
@@ -1152,6 +1162,14 @@ window.onclick = function(event) {
     if (event.target == pathEditorModal) {
         closePathEditorModal();
     }
+    const badgesModal = document.getElementById('badgesModal');
+    if (event.target == badgesModal) {
+        closeBadgesModal();
+    }
+    const leaderboardModal = document.getElementById('leaderboardModal');
+    if (event.target == leaderboardModal) {
+        closeLeaderboardModal();
+    }
 }
 
 // Initialize all event listeners when DOM is ready
@@ -1360,18 +1378,26 @@ async function handleDailyChecklistSubmit(e) {
         });
         
         if (response.ok) {
+            const result = await response.json();
+
             // Reset wizard
             wizardData = {};
             currentWizardStep = 0;
             renderWizardStep(0);
             setTodayDate();
-            
+
             // Reload data
             loadStats();
+            loadGamificationSummary();
             loadActivities();
             updateChart();
-            
+
             showNotification('Daily log saved successfully!', 'success');
+
+            (result.newly_earned_badges || []).forEach((badge, index) => {
+                // Stagger toasts slightly so multiple unlocks don't overlap
+                setTimeout(() => showNotification(`Badge unlocked: ${badge.name}`, 'success'), 600 * (index + 1));
+            });
         }
     } catch (error) {
         console.error('Error saving daily log:', error);
@@ -1405,6 +1431,110 @@ async function loadStats() {
         document.getElementById('currentStreak').textContent = stats.current_streak || 0;
     } catch (error) {
         console.error('Error loading stats:', error);
+    }
+}
+
+// Load XP/level/streak-multiplier summary for the Level banner
+async function loadGamificationSummary() {
+    try {
+        const response = await fetch('/api/gamification/summary');
+        const summary = await response.json();
+
+        document.getElementById('xpLevel').textContent = summary.level;
+        document.getElementById('xpIntoLevel').textContent = summary.xp_into_level;
+        document.getElementById('xpForNextLevel').textContent = summary.xp_for_next_level;
+
+        const percent = summary.xp_for_next_level > 0
+            ? Math.min(100, Math.round((summary.xp_into_level / summary.xp_for_next_level) * 100))
+            : 100;
+        document.getElementById('xpBar').style.width = `${percent}%`;
+
+        const multiplierEl = document.getElementById('xpStreakMultiplier');
+        multiplierEl.textContent = summary.streak_multiplier_pct > 0
+            ? `🔥 ${summary.current_streak}-day streak (+${summary.streak_multiplier_pct}% XP)`
+            : '';
+    } catch (error) {
+        console.error('Error loading gamification summary:', error);
+    }
+}
+
+// Badges modal
+function openBadgesModal() {
+    document.getElementById('badgesModal').style.display = 'block';
+    loadBadges();
+}
+
+function closeBadgesModal() {
+    document.getElementById('badgesModal').style.display = 'none';
+}
+
+async function loadBadges() {
+    const grid = document.getElementById('badgesGrid');
+    grid.innerHTML = '<div class="no-custom-items">Loading badges...</div>';
+
+    try {
+        const response = await fetch('/api/gamification/summary');
+        const summary = await response.json();
+
+        grid.innerHTML = summary.badges.map(badge => `
+            <div class="badge-tile ${badge.earned ? 'earned' : 'locked'}">
+                <div class="badge-tile-name">${badge.name}</div>
+                <div class="badge-tile-description">${badge.description}</div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading badges:', error);
+        grid.innerHTML = '<div class="no-custom-items">Failed to load badges.</div>';
+    }
+}
+
+// Leaderboard modal
+function openLeaderboardModal() {
+    document.getElementById('leaderboardModal').style.display = 'block';
+    loadLeaderboard('overall');
+}
+
+function closeLeaderboardModal() {
+    document.getElementById('leaderboardModal').style.display = 'none';
+}
+
+async function loadLeaderboard(scope) {
+    document.getElementById('leaderboardTabOverall').classList.toggle('active', scope === 'overall');
+    document.getElementById('leaderboardTabMonthly').classList.toggle('active', scope === 'monthly');
+
+    const wrap = document.getElementById('leaderboardTableWrap');
+    wrap.innerHTML = '<div class="no-custom-items">Loading leaderboard...</div>';
+
+    try {
+        const response = await fetch(`/api/leaderboard/${scope}`);
+        const data = await response.json();
+
+        if (!data.entries || data.entries.length === 0) {
+            wrap.innerHTML = '<div class="no-custom-items">No XP logged yet.</div>';
+            return;
+        }
+
+        wrap.innerHTML = `
+            <table class="leaderboard-table">
+                <thead>
+                    <tr><th>#</th><th>Username</th><th>Level</th><th>XP</th><th>Streak</th></tr>
+                </thead>
+                <tbody>
+                    ${data.entries.map(entry => `
+                        <tr class="${entry.username === currentUsername ? 'is-current-user' : ''}">
+                            <td>${entry.rank}</td>
+                            <td>${entry.username}</td>
+                            <td>${entry.level}</td>
+                            <td>${entry.total_xp}</td>
+                            <td>${entry.current_streak}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        wrap.innerHTML = '<div class="no-custom-items">Failed to load leaderboard.</div>';
     }
 }
 

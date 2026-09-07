@@ -10,7 +10,7 @@ in order.
 | Phase | What | Status |
 |-------|------|--------|
 | 1 | Foundation - bug fixes, config hardening, docs, smoke tests | ✅ Done |
-| 2 | Gamification system - XP, levels, streaks, badges, leaderboard | 🔲 Not started |
+| 2 | Gamification system - XP, levels, streaks, badges, leaderboard | ✅ Done |
 | 3 | AWS deployment | 🔲 Not started |
 | 4 | iOS app | 🔲 Not started |
 
@@ -29,26 +29,25 @@ Made the existing app correct and configurable before building on top of it:
   submission path.
 - Wrote this documentation set.
 
-## Phase 2 - Gamification system
+## Phase 2 - Gamification system (done)
 
-The core hook of the app: turn "did I do my checklist today" into a game.
+The core hook of the app: turned "did I do my checklist today" into a game.
 
-Rough shape (to be nailed down in its own design pass, not decided yet):
-
-- **XP & levels** - points per completed checklist item, weighted (e.g. workout >
-  did-you-hydrate), with a level curve so early levels come fast and later ones take
-  sustained consistency.
-- **Streaks** - already have day-over-day streak calculation in `/api/stats`; extend
-  it into a scored mechanic (streak multipliers, streak-loss handling that doesn't
-  feel punishing enough to make people quit).
-- **Badges / achievements** - milestone-based (first 7-day streak, 100 days logged,
-  first custom Path created, etc.).
-- **Leaderboard** - since this launches with a known group of 5-10 friends, a simple
-  ranked view (XP, current streak, or both) rather than a public/global one.
-- Needs a real data model decision: new SQL tables (`xp_events`, `badges`,
-  `user_badges`) most likely, since this data is exactly the kind of aggregate/queried
-  data SQLite is already used for elsewhere (see
-  [ARCHITECTURE.md](ARCHITECTURE.md#why-two-storage-systems)).
+- **XP & levels** - each checklist item has a weight (1-5); completing it awards
+  `weight * 10` XP. A level curve (`50 * (level-1)^2` cumulative) means early levels
+  come fast, later ones take sustained consistency.
+- **Streak multiplier** - `current_streak` (from `/api/stats`) now also scales that
+  day's XP: +2%/day, capped at +50%. Missing a day only resets the streak - no XP or
+  level penalty.
+- **Badges** - 8 code-defined achievements (first log, 7/30-day streaks, 100 days,
+  custom Path created, a perfect day, levels 5 and 10), tracked per-user in
+  `user_badges` and evaluated on every checklist submission.
+- **Two leaderboards** - overall (all-time XP) and monthly (resets each calendar
+  month), both visible to the whole friend group.
+- Full spec: [GAMIFICATION.md](GAMIFICATION.md). Data model: new `daily_xp` and
+  `user_badges` SQL tables (see
+  [ARCHITECTURE.md](ARCHITECTURE.md#why-two-storage-systems) for why this is SQL and
+  not JSON, unlike the Paths system).
 
 ## Phase 3 - AWS deployment
 

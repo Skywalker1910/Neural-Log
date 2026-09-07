@@ -19,7 +19,10 @@ today; the roadmap covers what's next.
   Thor / Captain America / Ironman, or your own custom one), answered one at a time,
   keyboard-navigable.
 - **Custom Paths** - create, rename, reorder, and delete your own checklist items and
-  templates per user.
+  templates per user, each item weighted for XP.
+- **Gamification** - XP and levels for completing your checklist, a streak
+  multiplier, 8 badges, and overall + monthly leaderboards across the group. Full
+  scoring spec: [docs/GAMIFICATION.md](docs/GAMIFICATION.md).
 - **Accounts & admin** - session-based login; the first registered user becomes an
   admin who can view/manage every other user's account and activity.
 - **Stats & streaks** - days logged, total activities, current streak, average
@@ -78,14 +81,15 @@ Neural-Log/
 ├── tests/                  # pytest smoke tests
 └── docs/
     ├── ARCHITECTURE.md     # how it's built, and why
+    ├── GAMIFICATION.md     # XP/levels/streaks/badges scoring spec
     ├── ROADMAP.md          # gamification -> AWS -> iOS, in order
     └── CHANGELOG.md        # what changed, newest first
 ```
 
 ## Roadmap
 
-Gamification system next, then AWS deployment, then an iOS app - see
-[docs/ROADMAP.md](docs/ROADMAP.md) for the current thinking on each.
+AWS deployment next, then an iOS app - see [docs/ROADMAP.md](docs/ROADMAP.md) for the
+current thinking on each.
 
 ## License
 

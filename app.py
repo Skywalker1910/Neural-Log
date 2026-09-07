@@ -29,26 +29,31 @@ DEFAULT_PATHS = [
     'Ironman Path'
 ]
 
-def _time_item(name, options):
+def _time_item(name, options, weight=1):
     return {
         'name': name,
         'type': 'time',
         'icon': '',
+        'weight': weight,
         'options': options
     }
 
-def _yes_no_item(name):
+def _yes_no_item(name, weight=1):
     return {
         'name': name,
         'type': 'yes-no',
-        'icon': ''
+        'icon': '',
+        'weight': weight
     }
 
 def _rating_item(name):
+    # Rating items are self-reflection, not a completed task - excluded from XP scoring
+    # (see calculate_daily_xp), so their weight is never actually used.
     return {
         'name': name,
         'type': 'rating',
-        'icon': ''
+        'icon': '',
+        'weight': 0
     }
 
 DEFAULT_PATH_LIBRARY = [
@@ -59,9 +64,9 @@ DEFAULT_PATH_LIBRARY = [
         'checklist_items': [
             _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
             _yes_no_item('Did you hydrate or drink coffee this morning?'),
-            _yes_no_item('Did you complete strength training today?'),
-            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)'),
-            _yes_no_item('Did you study or learn something new today?'),
+            _yes_no_item('Did you complete strength training today?', weight=3),
+            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)', weight=3),
+            _yes_no_item('Did you study or learn something new today?', weight=3),
             _yes_no_item('Did you complete your most important task today?'),
             _yes_no_item('Did you eat balanced meals today?'),
             _yes_no_item('Did you spend time reflecting or journaling?'),
@@ -77,10 +82,10 @@ DEFAULT_PATH_LIBRARY = [
             _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
             _yes_no_item('Did you drink enough water today?'),
             _yes_no_item('Did you eat a protein-rich breakfast?'),
-            _yes_no_item('Did you complete a strength workout?'),
-            _yes_no_item('Did you do cardio or endurance training?'),
+            _yes_no_item('Did you complete a strength workout?', weight=3),
+            _yes_no_item('Did you do cardio or endurance training?', weight=3),
             _yes_no_item('Did you eat a healthy lunch?'),
-            _yes_no_item('Did you stay physically active today?'),
+            _yes_no_item('Did you stay physically active today?', weight=3),
             _yes_no_item('Did you stretch or do recovery exercises?'),
             _yes_no_item('Did you prepare for good sleep tonight?'),
             _rating_item('Rate your energy/performance today (1–5)')
@@ -94,11 +99,11 @@ DEFAULT_PATH_LIBRARY = [
             _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
             _yes_no_item('Did you start your morning in an organized way?'),
             _yes_no_item('Did you eat a healthy breakfast?'),
-            _yes_no_item('Did you exercise today?'),
-            _yes_no_item('Did you complete your most important task?'),
+            _yes_no_item('Did you exercise today?', weight=3),
+            _yes_no_item('Did you complete your most important task?', weight=3),
             _yes_no_item('Did you help someone or contribute positively today?'),
             _yes_no_item('Did you keep your workspace clean and organized?'),
-            _yes_no_item('Did you read or learn something new?'),
+            _yes_no_item('Did you read or learn something new?', weight=3),
             _yes_no_item('Did you reflect on your day?'),
             _rating_item('Rate your discipline today (1–5)')
         ]
@@ -110,10 +115,10 @@ DEFAULT_PATH_LIBRARY = [
         'checklist_items': [
             _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
             _yes_no_item('Did you review your daily learning goals?'),
-            _yes_no_item('Did you spend at least 1 hour studying or learning?'),
-            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?'),
+            _yes_no_item('Did you spend at least 1 hour studying or learning?', weight=3),
+            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?', weight=3),
             _yes_no_item('Did you read something educational today?'),
-            _yes_no_item('Did you work on a project or build something?'),
+            _yes_no_item('Did you work on a project or build something?', weight=3),
             _yes_no_item('Did you solve a problem or learn a new concept?'),
             _yes_no_item('Did you document what you learned today?'),
             _yes_no_item('Did you plan tomorrow’s learning tasks?'),
@@ -148,11 +153,19 @@ def normalize_checklist_items(items):
             continue
 
         item_type = str(item.get('type', 'yes-no')).strip() or 'yes-no'
+
+        try:
+            weight = int(item.get('weight', 1))
+        except (TypeError, ValueError):
+            weight = 1
+        weight = max(0, min(5, weight))
+
         normalized_item = {
             'id': str(item.get('id') or uuid4()),
             'name': name,
             'type': item_type,
-            'icon': str(item.get('icon', '')).strip()
+            'icon': str(item.get('icon', '')).strip(),
+            'weight': weight
         }
 
         options = item.get('options')
@@ -355,9 +368,267 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    
+
+    # One row per user per day a checklist was submitted - the source of truth
+    # for XP/levels/leaderboards. UNIQUE(user_id, date) lets resubmitting today's
+    # checklist recalculate in place instead of double-counting (see award_daily_xp).
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS daily_xp (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            base_xp INTEGER NOT NULL,
+            streak_multiplier_pct INTEGER NOT NULL,
+            total_xp INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+
+    # Which badges (see BADGE_DEFINITIONS) each user has unlocked, and when.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_badges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            badge_code TEXT NOT NULL,
+            earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, badge_code),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+
     conn.commit()
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Gamification: XP, levels, streak multiplier, badges
+# ---------------------------------------------------------------------------
+
+XP_PER_WEIGHT_POINT = 10       # each weight point on a completed item is worth this much XP
+STREAK_MULTIPLIER_PCT_PER_DAY = 2   # +2% total XP per consecutive day logged...
+STREAK_MULTIPLIER_CAP_PCT = 50      # ...capped at +50% (a 25-day streak)
+
+
+def calculate_current_streak(conn, user_id):
+    """Current consecutive-day streak (today or yesterday must be logged)."""
+    streak_rows = conn.execute('''
+        SELECT DISTINCT date
+        FROM activities
+        WHERE user_id = ?
+        ORDER BY date DESC
+    ''', (user_id,)).fetchall()
+
+    activity_dates = []
+    for row in streak_rows:
+        try:
+            activity_dates.append(datetime.strptime(row['date'], '%Y-%m-%d').date())
+        except (ValueError, TypeError):
+            continue
+
+    if not activity_dates:
+        return 0
+
+    today = datetime.now().date()
+    latest_date = activity_dates[0]
+
+    if latest_date < (today - timedelta(days=1)):
+        return 0
+
+    streak = 1
+    previous_date = latest_date
+    for activity_date in activity_dates[1:]:
+        day_gap = (previous_date - activity_date).days
+        if day_gap == 0:
+            continue
+        if day_gap == 1:
+            streak += 1
+            previous_date = activity_date
+            continue
+        break
+
+    return streak
+
+
+def _item_is_completed(item, response_value):
+    """Whether a single checklist item counts as 'done' for XP purposes."""
+    if response_value is None:
+        return False
+    value = str(response_value).strip()
+    if not value:
+        return False
+    if item.get('type') == 'yes-no':
+        return value.lower().startswith('yes')
+    return True  # time / text / other answered types
+
+
+def calculate_daily_xp(checklist_items, custom_responses):
+    """Base XP for one day's checklist, before the streak multiplier.
+
+    Rating-type items are self-reflection, not a completed task, and are
+    excluded from scoring entirely.
+    """
+    base_xp = 0
+    for item in checklist_items or []:
+        if item.get('type') == 'rating':
+            continue
+        response_value = (custom_responses or {}).get(item.get('name'))
+        if _item_is_completed(item, response_value):
+            base_xp += int(item.get('weight', 1) or 0) * XP_PER_WEIGHT_POINT
+    return base_xp
+
+
+def xp_for_level(level):
+    """Cumulative total XP required to reach a given level. Level 1 is the
+    starting level everyone begins at, so it requires 0 XP."""
+    return 50 * ((level - 1) ** 2)
+
+
+def compute_level(total_xp):
+    """Return (level, xp_into_current_level, xp_needed_for_next_level)."""
+    level = 1
+    while xp_for_level(level + 1) <= total_xp:
+        level += 1
+
+    xp_into_level = total_xp - xp_for_level(level)
+    xp_for_next = xp_for_level(level + 1) - xp_for_level(level)
+    return level, xp_into_level, xp_for_next
+
+
+def get_user_total_xp(conn, user_id):
+    row = conn.execute(
+        'SELECT COALESCE(SUM(total_xp), 0) as total FROM daily_xp WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()
+    return row['total'] if row else 0
+
+
+def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, completion_percent=0):
+    """Score one day's checklist submission, upsert daily_xp, evaluate badges.
+
+    Returns the list of newly-earned badge definitions (empty if none).
+    Safe to call more than once for the same (user_id, date) - it recomputes
+    and replaces rather than accumulating, so editing today's log doesn't
+    double-count XP.
+    """
+    base_xp = calculate_daily_xp(checklist_items, custom_responses)
+    streak = calculate_current_streak(conn, user_id)
+    multiplier_pct = min(streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
+    total_xp = round(base_xp * (1 + multiplier_pct / 100))
+
+    conn.execute('''
+        INSERT INTO daily_xp (user_id, date, base_xp, streak_multiplier_pct, total_xp)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, date) DO UPDATE SET
+            base_xp = excluded.base_xp,
+            streak_multiplier_pct = excluded.streak_multiplier_pct,
+            total_xp = excluded.total_xp
+    ''', (user_id, date, base_xp, multiplier_pct, total_xp))
+    conn.commit()
+
+    return evaluate_badges(conn, user_id, completion_percent_today=completion_percent)
+
+
+BADGE_DEFINITIONS = [
+    {
+        'code': 'first-log',
+        'name': 'First Steps',
+        'description': 'Logged your first daily checklist.',
+        'check': lambda ctx: ctx['total_days'] >= 1
+    },
+    {
+        'code': 'week-streak',
+        'name': 'One Week Strong',
+        'description': 'Reached a 7-day streak.',
+        'check': lambda ctx: ctx['current_streak'] >= 7
+    },
+    {
+        'code': 'month-streak',
+        'name': 'Consistency Master',
+        'description': 'Reached a 30-day streak.',
+        'check': lambda ctx: ctx['current_streak'] >= 30
+    },
+    {
+        'code': 'century',
+        'name': 'Century Club',
+        'description': 'Logged 100 days.',
+        'check': lambda ctx: ctx['total_days'] >= 100
+    },
+    {
+        'code': 'custom-path',
+        'name': 'Path Finder',
+        'description': 'Created your own custom Path.',
+        'check': lambda ctx: ctx['has_custom_path']
+    },
+    {
+        'code': 'perfect-day',
+        'name': 'Perfectionist',
+        'description': 'Completed 100% of a daily checklist.',
+        'check': lambda ctx: ctx['completion_percent_today'] >= 100
+    },
+    {
+        'code': 'level-5',
+        'name': 'Leveling Up',
+        'description': 'Reached level 5.',
+        'check': lambda ctx: ctx['level'] >= 5
+    },
+    {
+        'code': 'level-10',
+        'name': 'Double Digits',
+        'description': 'Reached level 10.',
+        'check': lambda ctx: ctx['level'] >= 10
+    }
+]
+
+
+def evaluate_badges(conn, user_id, completion_percent_today=0):
+    """Check all badge definitions against the user's current stats and
+    unlock any newly-earned ones. Returns the list of newly-earned definitions.
+    """
+    total_days = conn.execute(
+        'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()['count']
+    current_streak = calculate_current_streak(conn, user_id)
+    total_xp = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total_xp)
+
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    has_custom_path = False
+    if user_row:
+        paths_payload = load_user_paths(user_row)
+        has_custom_path = any(not path.get('is_default', False) for path in paths_payload.get('paths', []))
+
+    ctx = {
+        'total_days': total_days,
+        'current_streak': current_streak,
+        'total_xp': total_xp,
+        'level': level,
+        'has_custom_path': has_custom_path,
+        'completion_percent_today': completion_percent_today
+    }
+
+    already_earned = {
+        row['badge_code']
+        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
+    }
+
+    newly_earned = []
+    for badge in BADGE_DEFINITIONS:
+        if badge['code'] in already_earned:
+            continue
+        if badge['check'](ctx):
+            conn.execute(
+                'INSERT OR IGNORE INTO user_badges (user_id, badge_code) VALUES (?, ?)',
+                (user_id, badge['code'])
+            )
+            newly_earned.append(badge)
+
+    if newly_earned:
+        conn.commit()
+
+    return newly_earned
 
 # Decorator for routes that require login
 def login_required(f):
@@ -824,6 +1095,7 @@ def activities():
         conn.commit()
         activity_id = cursor.lastrowid
 
+        newly_earned_badges = []
         if data.get('activity_name') == 'Daily Checklist':
             checklist_payload = data.get('checklist_data') if isinstance(data.get('checklist_data'), dict) else {
                 'date': data.get('date'),
@@ -833,8 +1105,29 @@ def activities():
             }
             save_checklist_to_file(user_id, session.get('username', f'user_{user_id}'), activity_id, checklist_payload)
 
+            # Score this submission for XP/levels/badges against the exact Path
+            # (and its item weights) the user actually used that day.
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            if user_row:
+                paths_payload = load_user_paths(user_row)
+                path_id = checklist_payload.get('selected_path_id')
+                used_path = next((p for p in paths_payload['paths'] if p['id'] == path_id), None) \
+                    or get_selected_path(paths_payload)
+                checklist_items = used_path.get('checklist_items', []) if used_path else []
+                custom_responses = checklist_payload.get('custom_responses', {}) or {}
+                completion_percent = checklist_payload.get('completion_percent', 0) or 0
+
+                newly_earned = award_daily_xp(
+                    conn, user_id, data.get('date'), checklist_items, custom_responses,
+                    completion_percent=completion_percent
+                )
+                newly_earned_badges = [
+                    {'code': b['code'], 'name': b['name'], 'description': b['description']}
+                    for b in newly_earned
+                ]
+
         conn.close()
-        return jsonify({'success': True, 'id': activity_id}), 201
+        return jsonify({'success': True, 'id': activity_id, 'newly_earned_badges': newly_earned_badges}), 201
     
     # GET request - only return activities for current user
     activities = conn.execute(
@@ -888,38 +1181,8 @@ def stats():
     ''', (user_id,)).fetchall()
 
     # Calculate current streak based on distinct activity dates
-    streak_rows = conn.execute('''
-        SELECT DISTINCT date
-        FROM activities
-        WHERE user_id = ?
-        ORDER BY date DESC
-    ''', (user_id,)).fetchall()
+    current_streak = calculate_current_streak(conn, user_id)
 
-    activity_dates = []
-    for row in streak_rows:
-        try:
-            activity_dates.append(datetime.strptime(row['date'], '%Y-%m-%d').date())
-        except (ValueError, TypeError):
-            continue
-
-    current_streak = 0
-    if activity_dates:
-        today = datetime.now().date()
-        latest_date = activity_dates[0]
-
-        if latest_date >= (today - timedelta(days=1)):
-            current_streak = 1
-            previous_date = latest_date
-            for activity_date in activity_dates[1:]:
-                day_gap = (previous_date - activity_date).days
-                if day_gap == 0:
-                    continue
-                if day_gap == 1:
-                    current_streak += 1
-                    previous_date = activity_date
-                    continue
-                break
-    
     conn.close()
     
     return jsonify({
@@ -929,6 +1192,85 @@ def stats():
         'avg_score': round(avg_score, 2),
         'activities_by_date': [dict(row) for row in activities_by_date]
     })
+
+@app.route('/api/gamification/summary')
+@login_required
+def gamification_summary():
+    """Current user's XP, level, streak multiplier, and badge progress"""
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+
+    total_xp = get_user_total_xp(conn, user_id)
+    level, xp_into_level, xp_for_next_level = compute_level(total_xp)
+    current_streak = calculate_current_streak(conn, user_id)
+    streak_multiplier_pct = min(current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
+
+    earned_codes = {
+        row['badge_code']
+        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
+    }
+    conn.close()
+
+    badges = [
+        {
+            'code': badge['code'],
+            'name': badge['name'],
+            'description': badge['description'],
+            'earned': badge['code'] in earned_codes
+        }
+        for badge in BADGE_DEFINITIONS
+    ]
+
+    return jsonify({
+        'total_xp': total_xp,
+        'level': level,
+        'xp_into_level': xp_into_level,
+        'xp_for_next_level': xp_for_next_level,
+        'current_streak': current_streak,
+        'streak_multiplier_pct': streak_multiplier_pct,
+        'badges': badges
+    })
+
+@app.route('/api/leaderboard/<string:scope>')
+@login_required
+def leaderboard(scope):
+    """Ranked XP leaderboard across all users - 'overall' or 'monthly'"""
+    if scope not in ('overall', 'monthly'):
+        return jsonify({'error': 'Invalid leaderboard scope'}), 400
+
+    conn = get_db_connection()
+
+    if scope == 'monthly':
+        month_prefix = datetime.now().strftime('%Y-%m')
+        rows = conn.execute('''
+            SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
+            FROM users
+            LEFT JOIN daily_xp ON daily_xp.user_id = users.id AND daily_xp.date LIKE ?
+            GROUP BY users.id
+            ORDER BY total_xp DESC, users.username ASC
+        ''', (f'{month_prefix}%',)).fetchall()
+    else:
+        rows = conn.execute('''
+            SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
+            FROM users
+            LEFT JOIN daily_xp ON daily_xp.user_id = users.id
+            GROUP BY users.id
+            ORDER BY total_xp DESC, users.username ASC
+        ''').fetchall()
+
+    entries = []
+    for rank, row in enumerate(rows, start=1):
+        level, _, _ = compute_level(row['total_xp'])
+        entries.append({
+            'rank': rank,
+            'username': row['username'],
+            'total_xp': row['total_xp'],
+            'level': level,
+            'current_streak': calculate_current_streak(conn, row['user_id'])
+        })
+
+    conn.close()
+    return jsonify({'scope': scope, 'entries': entries})
 
 @app.route('/api/milestones/<int:days>')
 @login_required

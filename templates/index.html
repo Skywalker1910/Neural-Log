@@ -25,12 +25,28 @@
                     </div>
                     <div style="display: flex; gap: 10px; justify-content: flex-end;">
                         <a href="/admin" id="admin-link" class="logout-btn" style="display: none;">Admin Panel</a>
+                        <button type="button" class="logout-btn" onclick="openBadgesModal()">Badges</button>
+                        <button type="button" class="logout-btn" onclick="openLeaderboardModal()">Leaderboard</button>
                         <button type="button" class="logout-btn" onclick="openUserOptionsModal()">User Options</button>
                         <a href="/logout" class="logout-btn">Logout</a>
                     </div>
                 </div>
             </div>
         </header>
+
+        <!-- Level / XP banner -->
+        <div class="card xp-banner">
+            <div class="xp-banner-top">
+                <div class="xp-level-badge">Level <span id="xpLevel">1</span></div>
+                <div id="xpStreakMultiplier" class="xp-streak-multiplier"></div>
+            </div>
+            <div class="progress-bar-container xp-bar-container">
+                <div id="xpBar" class="progress-bar"></div>
+            </div>
+            <div class="xp-banner-bottom">
+                <span id="xpIntoLevel">0</span> / <span id="xpForNextLevel">50</span> XP to next level
+            </div>
+        </div>
 
         <div class="stats-container">
             <div class="stat-card">
@@ -253,6 +269,28 @@
                         <button type="button" class="btn btn-secondary" onclick="addPathActivityItem()">Add Activity</button>
                         <button type="button" class="btn btn-primary" onclick="savePathActivitiesFromEditor()">Save Sequence</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Badges Modal -->
+            <div id="badgesModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeBadgesModal()">&times;</span>
+                    <h2>Badges</h2>
+                    <div id="badgesGrid" class="badges-grid"></div>
+                </div>
+            </div>
+
+            <!-- Leaderboard Modal -->
+            <div id="leaderboardModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeLeaderboardModal()">&times;</span>
+                    <h2>Leaderboard</h2>
+                    <div class="leaderboard-tabs">
+                        <button type="button" id="leaderboardTabOverall" class="btn btn-secondary leaderboard-tab active" onclick="loadLeaderboard('overall')">Overall</button>
+                        <button type="button" id="leaderboardTabMonthly" class="btn btn-secondary leaderboard-tab" onclick="loadLeaderboard('monthly')">This Month</button>
+                    </div>
+                    <div id="leaderboardTableWrap" class="leaderboard-table-wrap"></div>
                 </div>
             </div>
 
