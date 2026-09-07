@@ -73,7 +73,17 @@ checklist is submitted. Full scoring spec: [GAMIFICATION.md](GAMIFICATION.md).
 - `static/js/app.js` - all client logic: wizard step engine, Paths CRUD, checklist
   submission, stats/chart loading, Excel export trigger.
 - `static/css/style.css` - a single hand-written stylesheet (CSS custom properties for
-  theming, no framework/preprocessor).
+  theming, no framework/preprocessor) - shared by all three pages (`index.html`,
+  `login.html`, `admin.html` all link it; none carry their own inline `<style>`).
+
+## Icons
+
+`static/images/icons/` holds a small set of circular-badge-ready PNGs generated from
+the source art in `artifacts/` by `scripts/build_icons.py` (Pillow, dev-time only -
+not a runtime dependency). Every default-Path checklist item carries an `icon` key
+(`ICON_KEYS` in `app.py`, validated in `normalize_checklist_items`); custom items get
+an icon-picker in the UI instead of free text. Re-run the script after adding or
+replacing anything in `artifacts/`.
 
 ## Known rough edges (tracked, not yet fixed)
 

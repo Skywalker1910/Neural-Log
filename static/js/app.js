@@ -8,6 +8,17 @@ let selectedPathName = '';
 let availablePaths = [];
 let pathEditorItemsDraft = [];
 
+// Keys map 1:1 to static/images/icons/<key>.png - see ICON_KEYS in app.py and
+// scripts/build_icons.py for how those images were generated.
+const ICON_KEYS = [
+    'sun', 'coffee', 'workout', 'code', 'chess', 'breakfast', 'lunch', 'water',
+    'sleep', 'default'
+];
+
+function iconPath(key) {
+    return `/static/images/icons/${ICON_KEYS.includes(key) ? key : 'default'}.png`;
+}
+
 // Set today's date and update indicator
 function setTodayDate() {
     const dateInput = document.getElementById('date');
@@ -192,7 +203,7 @@ function initializeWizard() {
         id: 'notes',
         type: 'textarea',
         title: 'Any additional notes about today?',
-        icon: '/static/images/default-2.png',
+        icon: iconPath('default'),
         placeholder: 'Anything special about today? (Optional)',
         optional: true
     });
@@ -205,7 +216,8 @@ function initializeWizard() {
 function createCustomWizardStep(item, index) {
     const step = {
         id: `custom_${index}`,
-        title: `${item.icon ? `${item.icon} ` : ''}${item.name}`,
+        title: item.name,
+        icon: iconPath(item.icon),
         type: item.type
     };
     
@@ -516,7 +528,7 @@ async function loadCurrentUser() {
         
         // Show admin badge and link if user is admin
         if (data.is_admin) {
-            document.getElementById('admin-badge').style.display = 'inline-block';
+            document.getElementById('admin-badge').style.display = 'inline-flex';
             document.getElementById('admin-link').style.display = 'inline-block';
         } else {
             document.getElementById('admin-badge').style.display = 'none';
@@ -550,6 +562,7 @@ function renderPathPreview(pathId = selectedPath) {
     container.innerHTML = items.map((item, index) => `
         <div class="path-preview-row">
             <span class="path-preview-index">${index + 1}.</span>
+            <img class="icon-badge-sm" src="${iconPath(item.icon)}" alt="">
             <span class="path-preview-text">${item.name}</span>
             <span class="path-preview-type">${item.type}</span>
         </div>
@@ -661,134 +674,6 @@ async function saveCustomItems() {
     renderPathPreview(selectedPath);
 }
 
-// Render custom items in the checklist
-function renderCustomItems() {
-    const container = document.getElementById('customItemsContainer');
-    container.innerHTML = '';
-    
-    customItems.forEach((item, index) => {
-        const itemDiv = document.createElement('div');
-        itemDiv.className = 'checklist-item';
-        itemDiv.innerHTML = `
-            <div class="custom-item-header">
-                <label class="checklist-label">${item.icon} ${item.name}</label>
-                <button type="button" class="remove-item-btn" onclick="removeCustomItem(${index})">Remove</button>
-            </div>
-            ${generateCustomItemInput(item, index)}
-        `;
-        container.appendChild(itemDiv);
-    });
-}
-
-// Generate input based on item type
-function generateCustomItemInput(item, index) {
-    const fieldName = `custom_${index}`;
-    const subFieldName = `custom_${index}_sub`;
-    
-    switch(item.type) {
-        case 'yes-no':
-            let yesNoHTML = `
-                <div class="radio-group">
-                    <label class="radio-option">
-                        <input type="radio" name="${fieldName}" value="No" onchange="toggleCustomSubResponse(${index}, false)">
-                        <span>No</span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="${fieldName}" value="Yes" onchange="toggleCustomSubResponse(${index}, true)">
-                        <span>Yes</span>
-                    </label>
-                </div>
-            `;
-            
-            // Add sub-response if configured
-            if (item.subResponse) {
-                const subType = item.subResponse.type;
-                const inputType = subType === 'checkbox' ? 'checkbox' : 'radio';
-                
-                yesNoHTML += `
-                    <div id="customSub_${index}" class="sub-options" style="display: none;">
-                        <label class="sub-label">${item.subResponse.prompt}</label>
-                        <div class="${subType === 'checkbox' ? 'checkbox-group' : 'radio-group'}">
-                            ${item.subResponse.options.map((opt, optIndex) => `
-                                <label class="${subType === 'checkbox' ? 'checkbox-option' : 'radio-option'}">
-                                    <input type="${inputType}" name="${subFieldName}${subType === 'checkbox' ? '_' + optIndex : ''}" value="${opt}">
-                                    <span>${opt}</span>
-                                </label>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-            
-            return yesNoHTML;
-        
-        case 'text':
-            return `
-                <input type="text" name="${fieldName}" class="custom-text-input" 
-                       placeholder="Enter your response..." 
-                       style="width: 100%; padding: 12px; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1rem;">
-            `;
-        
-        case 'rating':
-            return `
-                <div class="rating-group">
-                    <label class="rating-option" data-rating="1" onclick="selectCustomRating(${index}, 1)">1</label>
-                    <label class="rating-option" data-rating="2" onclick="selectCustomRating(${index}, 2)">2</label>
-                    <label class="rating-option" data-rating="3" onclick="selectCustomRating(${index}, 3)">3</label>
-                    <label class="rating-option" data-rating="4" onclick="selectCustomRating(${index}, 4)">4</label>
-                    <label class="rating-option" data-rating="5" onclick="selectCustomRating(${index}, 5)">5</label>
-                </div>
-                <input type="hidden" name="${fieldName}" id="customRating_${index}">
-            `;
-        
-        case 'time':
-            const options = item.options || [];
-            return `
-                <div class="radio-group">
-                    ${options.map(opt => `
-                        <label class="radio-option">
-                            <input type="radio" name="${fieldName}" value="${opt}">
-                            <span>${opt}</span>
-                        </label>
-                    `).join('')}
-                </div>
-            `;
-        
-        default:
-            return '';
-    }
-}
-
-// Toggle custom sub-response visibility
-function toggleCustomSubResponse(index, show) {
-    const element = document.getElementById(`customSub_${index}`);
-    if (element) {
-        element.style.display = show ? 'block' : 'none';
-        // Clear sub-options when hidden
-        if (!show) {
-            const inputs = element.querySelectorAll('input[type="radio"], input[type="checkbox"]');
-            inputs.forEach(input => input.checked = false);
-        }
-    }
-}
-
-// Select custom rating
-function selectCustomRating(index, rating) {
-    const ratingInput = document.getElementById(`customRating_${index}`);
-    if (ratingInput) {
-        ratingInput.value = rating;
-    }
-}
-
-// Remove custom item
-async function removeCustomItem(index) {
-    if (confirm('Are you sure you want to remove this item?')) {
-        customItems.splice(index, 1);
-        await saveCustomItems();
-        renderCustomItems();
-        showNotification('Custom item removed', 'success');
-    }
-}
 
 // Modal functions
 function openCustomItemModal() {
@@ -799,12 +684,35 @@ function openCustomItemModal() {
     document.getElementById('customOptionsGroup').style.display = 'none';
     document.getElementById('subResponseGroup').style.display = 'none';
     document.getElementById('subResponseConfig').style.display = 'none';
-    
+    renderIconPicker('default');
+
     // Reset button text
     const submitBtn = document.querySelector('#customItemForm button[type="submit"]');
     if (submitBtn) {
         submitBtn.textContent = 'Add Item';
     }
+}
+
+// Render the icon-picker grid in the custom item modal and select one option
+function renderIconPicker(selectedKey) {
+    const picker = document.getElementById('customItemIconPicker');
+    if (!picker) return;
+
+    picker.innerHTML = ICON_KEYS.map(key => `
+        <button type="button" class="icon-picker-option ${key === selectedKey ? 'selected' : ''}"
+                onclick="selectCustomItemIcon('${key}')" title="${key}">
+            <img src="${iconPath(key)}" alt="${key}">
+        </button>
+    `).join('');
+
+    document.getElementById('customItemIcon').value = selectedKey;
+}
+
+function selectCustomItemIcon(key) {
+    document.getElementById('customItemIcon').value = key;
+    document.querySelectorAll('#customItemIconPicker .icon-picker-option').forEach(btn => {
+        btn.classList.toggle('selected', btn.title === key);
+    });
 }
 
 function closeCustomItemModal() {
@@ -1263,7 +1171,7 @@ function initializeEventListeners() {
             }
             
             await saveCustomItems();
-            renderCustomItems();
+            displayCustomItems();
             closeCustomItemModal();
         });
     }
@@ -1804,7 +1712,10 @@ function displayCustomItems() {
         return `
             <div class="custom-item-card">
                 <div class="custom-item-info">
-                    <div class="custom-item-name">${item.icon} ${item.name}</div>
+                    <div class="custom-item-name">
+                        <img class="icon-badge-sm" src="${iconPath(item.icon)}" alt="">
+                        ${item.name}
+                    </div>
                     <div class="custom-item-details">Type: ${typeDisplay}</div>
                 </div>
                 <div class="custom-item-actions">
@@ -1832,7 +1743,7 @@ function editCustomItem(index) {
     // Populate form with existing values
     document.getElementById('customItemName').value = item.name;
     document.getElementById('customItemType').value = item.type;
-    document.getElementById('customItemIcon').value = item.icon || '';
+    renderIconPicker(item.icon || 'default');
     
     // Show/hide options based on type
     const optionsGroup = document.getElementById('customOptionsGroup');
@@ -1874,7 +1785,6 @@ async function deleteCustomItem(index) {
     if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
         customItems.splice(index, 1);
         await saveCustomItems();
-        renderCustomItems();
         displayCustomItems();
         showNotification(`Custom item "${item.name}" deleted!`, 'success');
     }

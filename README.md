@@ -29,6 +29,8 @@ today; the roadmap covers what's next.
   progress score, a Chart.js progress chart.
 - **Milestone insights** - a summary snapshot at 10/25/45/70/100 days logged.
 - **Excel export** - all of your activity history, formatted, one click.
+- **Custom icon set** - each checklist item shows a small circular badge icon,
+  generated from the artwork in `artifacts/` (see `scripts/build_icons.py`).
 
 ## Architecture
 
@@ -76,8 +78,10 @@ Neural-Log/
 ├── requirements.txt
 ├── .env.example            # copy to .env - see Setup
 ├── templates/              # Jinja templates (index / login / admin)
-├── static/{css,js}/        # frontend
-├── artifacts/              # per-user Paths + checklist submissions (JSON/JSONL)
+├── static/{css,js,images}/ # frontend + generated icon set (images/icons/)
+├── artifacts/              # per-user Paths + checklist submissions (JSON/JSONL),
+│                           # plus the source art scripts/build_icons.py reads from
+├── scripts/build_icons.py  # (re)generates static/images/icons/ from artifacts/
 ├── tests/                  # pytest smoke tests
 └── docs/
     ├── ARCHITECTURE.md     # how it's built, and why

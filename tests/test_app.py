@@ -120,3 +120,11 @@ def test_paths_endpoint_lists_default_paths_for_new_user(client):
     data = resp.get_json()
     path_names = {path["name"] for path in data["paths"]}
     assert path_names == {"Batman Path", "Thor Path", "Captain America Path", "Ironman Path"}
+
+
+def test_every_default_path_item_has_a_valid_icon_key(app_module):
+    """Every default-path checklist item must reference an icon that actually
+    exists in static/images/icons/ - see ICON_KEYS and scripts/build_icons.py."""
+    for path in app_module.DEFAULT_PATH_LIBRARY:
+        for item in path["checklist_items"]:
+            assert item["icon"] in app_module.ICON_KEYS, (path["name"], item["name"])

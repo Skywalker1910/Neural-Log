@@ -4,232 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neural-Log - Login</title>
-    <style>
-        :root {
-            --primary-color: #D32F2F;
-            --secondary-color: #50c878;
-            --danger-color: #e74c3c;
-            --bg-color: #0A0A0A;
-            --card-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --text-light: #b0b0b0;
-            --border-color: rgba(211, 47, 47, 0.3);
-            --shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
-            --dark-red: #8B0000;
-            --accent-orange: #FF6B35;
-            --bat-gold: #FFD700;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0A0A0A 0%, #1a0a0a 50%, #0d0000 100%);
-            color: var(--text-color);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .login-container {
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(20, 20, 20, 0.98) 100%);
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8),
-                        inset 0 1px 0 rgba(211, 47, 47, 0.2);
-            width: 100%;
-            max-width: 450px;
-            border: 1px solid rgba(211, 47, 47, 0.3);
-        }
-
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .login-header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .login-app-name {
-            font-weight: 900;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--primary-color);
-            text-shadow: 0 0 8px rgba(211, 47, 47, 0.9), 0 0 16px rgba(211, 47, 47, 0.75), 0 0 28px rgba(139, 0, 0, 0.6);
-        }
-
-        .login-brand {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-        }
-
-        .login-logo {
-            width: 125px;
-            height: 125px;
-            object-fit: contain;
-            filter: drop-shadow(0 0 14px rgba(211, 47, 47, 0.55)) drop-shadow(0 0 26px rgba(211, 47, 47, 0.28));
-        }
-
-        .login-header p {
-            color: var(--text-light);
-        }
-
-        .tabs {
-            display: flex;
-            margin-bottom: 30px;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .tab {
-            flex: 1;
-            padding: 12px 0;
-            text-align: center;
-            cursor: pointer;
-            font-weight: 500;
-            color: var(--text-light);
-            border-bottom: 3px solid transparent;
-            margin-bottom: -2px;
-            transition: all 0.3s;
-        }
-
-        .tab.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(211, 47, 47, 0.5);
-        }
-
-        .form-container {
-            display: none;
-        }
-
-        .form-container.active {
-            display: block;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--text-color);
-            font-weight: 500;
-        }
-
-        input[type="text"],
-        input[type="password"],
-        input[type="email"],
-        select,
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid rgba(211, 47, 47, 0.3);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: rgba(26, 26, 26, 0.8);
-            color: white;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 15px rgba(211, 47, 47, 0.4);
-            background: rgba(26, 26, 26, 0.95);
-        }
-
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border: 1px solid rgba(211, 47, 47, 0.55);
-            border-radius: 999px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-            background: linear-gradient(135deg, rgba(14, 14, 14, 0.95), rgba(28, 28, 28, 0.96));
-            color: white;
-            box-shadow: 0 0 10px rgba(211, 47, 47, 0.4), 0 0 24px rgba(211, 47, 47, 0.28);
-            position: relative;
-            overflow: hidden;
-            z-index: 0;
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            inset: -180%;
-            border-radius: inherit;
-            background: conic-gradient(from 90deg, transparent 0%, transparent 62%, rgba(255, 90, 90, 0.95) 78%, rgba(211, 47, 47, 0.9) 100%);
-            animation: movingBorderSpin 2.8s linear infinite;
-            filter: blur(3px);
-            z-index: -2;
-        }
-
-        .btn::after {
-            content: '';
-            position: absolute;
-            inset: 2px;
-            border-radius: inherit;
-            background: linear-gradient(135deg, rgba(12, 12, 12, 0.96), rgba(30, 30, 30, 0.95));
-            z-index: -1;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            border-color: rgba(255, 95, 95, 0.95);
-            box-shadow: 0 0 14px rgba(211, 47, 47, 0.6), 0 0 30px rgba(211, 47, 47, 0.48), 0 0 44px rgba(183, 28, 28, 0.32);
-        }
-
-        @keyframes movingBorderSpin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .error-message {
-            background: rgba(231, 76, 60, 0.2);
-            color: #ff6b6b;
-            border: 1px solid rgba(231, 76, 60, 0.4);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .success-message {
-            background: #e8f5e9;
-            color: var(--secondary-color);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .success-message.show {
-            display: block;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="login-page">
     <div class="login-container">
         <div class="login-header">
             <h1 class="login-brand">
@@ -260,7 +37,7 @@
                     <input type="password" id="login-password" required>
                 </div>
 
-                <button type="submit" class="btn">Login</button>
+                <button type="submit" class="btn btn-primary">Login</button>
             </form>
         </div>
 
@@ -297,7 +74,7 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn">Create Account</button>
+                <button type="submit" class="btn btn-primary">Create Account</button>
             </form>
         </div>
     </div>

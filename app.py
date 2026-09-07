@@ -29,30 +29,38 @@ DEFAULT_PATHS = [
     'Ironman Path'
 ]
 
-def _time_item(name, options, weight=1):
+# Keys map 1:1 to static/images/icons/<key>.png (see scripts/build_icons.py for how
+# those were generated from artifacts/). Any icon value outside this set falls back
+# to 'default' in normalize_checklist_items.
+ICON_KEYS = {
+    'sun', 'coffee', 'workout', 'code', 'chess', 'breakfast', 'lunch', 'water',
+    'sleep', 'default'
+}
+
+def _time_item(name, options, weight=1, icon='default'):
     return {
         'name': name,
         'type': 'time',
-        'icon': '',
+        'icon': icon,
         'weight': weight,
         'options': options
     }
 
-def _yes_no_item(name, weight=1):
+def _yes_no_item(name, weight=1, icon='default'):
     return {
         'name': name,
         'type': 'yes-no',
-        'icon': '',
+        'icon': icon,
         'weight': weight
     }
 
 def _rating_item(name):
     # Rating items are self-reflection, not a completed task - excluded from XP scoring
-    # (see calculate_daily_xp), so their weight is never actually used.
+    # (see calculate_daily_xp) and have no icon of their own.
     return {
         'name': name,
         'type': 'rating',
-        'icon': '',
+        'icon': 'default',
         'weight': 0
     }
 
@@ -62,13 +70,13 @@ DEFAULT_PATH_LIBRARY = [
         'name': 'Batman Path',
         'is_default': True,
         'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
-            _yes_no_item('Did you hydrate or drink coffee this morning?'),
-            _yes_no_item('Did you complete strength training today?', weight=3),
-            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)', weight=3),
-            _yes_no_item('Did you study or learn something new today?', weight=3),
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you hydrate or drink coffee this morning?', icon='coffee'),
+            _yes_no_item('Did you complete strength training today?', weight=3, icon='workout'),
+            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)', weight=3, icon='chess'),
+            _yes_no_item('Did you study or learn something new today?', weight=3, icon='code'),
             _yes_no_item('Did you complete your most important task today?'),
-            _yes_no_item('Did you eat balanced meals today?'),
+            _yes_no_item('Did you eat balanced meals today?', icon='breakfast'),
             _yes_no_item('Did you spend time reflecting or journaling?'),
             _yes_no_item('Did you plan tomorrow’s tasks?'),
             _rating_item('Rate your day (1–5)')
@@ -79,15 +87,15 @@ DEFAULT_PATH_LIBRARY = [
         'name': 'Thor Path',
         'is_default': True,
         'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
-            _yes_no_item('Did you drink enough water today?'),
-            _yes_no_item('Did you eat a protein-rich breakfast?'),
-            _yes_no_item('Did you complete a strength workout?', weight=3),
-            _yes_no_item('Did you do cardio or endurance training?', weight=3),
-            _yes_no_item('Did you eat a healthy lunch?'),
-            _yes_no_item('Did you stay physically active today?', weight=3),
-            _yes_no_item('Did you stretch or do recovery exercises?'),
-            _yes_no_item('Did you prepare for good sleep tonight?'),
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you drink enough water today?', icon='water'),
+            _yes_no_item('Did you eat a protein-rich breakfast?', icon='breakfast'),
+            _yes_no_item('Did you complete a strength workout?', weight=3, icon='workout'),
+            _yes_no_item('Did you do cardio or endurance training?', weight=3, icon='workout'),
+            _yes_no_item('Did you eat a healthy lunch?', icon='lunch'),
+            _yes_no_item('Did you stay physically active today?', weight=3, icon='workout'),
+            _yes_no_item('Did you stretch or do recovery exercises?', icon='workout'),
+            _yes_no_item('Did you prepare for good sleep tonight?', icon='sleep'),
             _rating_item('Rate your energy/performance today (1–5)')
         ]
     },
@@ -96,14 +104,14 @@ DEFAULT_PATH_LIBRARY = [
         'name': 'Captain America Path',
         'is_default': True,
         'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
             _yes_no_item('Did you start your morning in an organized way?'),
-            _yes_no_item('Did you eat a healthy breakfast?'),
-            _yes_no_item('Did you exercise today?', weight=3),
-            _yes_no_item('Did you complete your most important task?', weight=3),
+            _yes_no_item('Did you eat a healthy breakfast?', icon='breakfast'),
+            _yes_no_item('Did you exercise today?', weight=3, icon='workout'),
+            _yes_no_item('Did you complete your most important task?', weight=3, icon='code'),
             _yes_no_item('Did you help someone or contribute positively today?'),
             _yes_no_item('Did you keep your workspace clean and organized?'),
-            _yes_no_item('Did you read or learn something new?', weight=3),
+            _yes_no_item('Did you read or learn something new?', weight=3, icon='code'),
             _yes_no_item('Did you reflect on your day?'),
             _rating_item('Rate your discipline today (1–5)')
         ]
@@ -113,13 +121,13 @@ DEFAULT_PATH_LIBRARY = [
         'name': 'Ironman Path',
         'is_default': True,
         'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM']),
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
             _yes_no_item('Did you review your daily learning goals?'),
-            _yes_no_item('Did you spend at least 1 hour studying or learning?', weight=3),
-            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?', weight=3),
+            _yes_no_item('Did you spend at least 1 hour studying or learning?', weight=3, icon='code'),
+            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?', weight=3, icon='code'),
             _yes_no_item('Did you read something educational today?'),
-            _yes_no_item('Did you work on a project or build something?', weight=3),
-            _yes_no_item('Did you solve a problem or learn a new concept?'),
+            _yes_no_item('Did you work on a project or build something?', weight=3, icon='code'),
+            _yes_no_item('Did you solve a problem or learn a new concept?', icon='chess'),
             _yes_no_item('Did you document what you learned today?'),
             _yes_no_item('Did you plan tomorrow’s learning tasks?'),
             _rating_item('Rate your productivity today (1–5)')
@@ -160,11 +168,15 @@ def normalize_checklist_items(items):
             weight = 1
         weight = max(0, min(5, weight))
 
+        icon = str(item.get('icon', '')).strip()
+        if icon not in ICON_KEYS:
+            icon = 'default'
+
         normalized_item = {
             'id': str(item.get('id') or uuid4()),
             'name': name,
             'type': item_type,
-            'icon': str(item.get('icon', '')).strip(),
+            'icon': icon,
             'weight': weight
         }
 
