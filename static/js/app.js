@@ -2,6 +2,11 @@ let progressChart = null;
 let currentWizardStep = 0;
 let wizardSteps = [];
 let wizardData = {};
+let currentUsername = '';
+let selectedPath = '';
+let selectedPathName = '';
+let availablePaths = [];
+let pathEditorItemsDraft = [];
 
 // Set today's date and update indicator
 function setTodayDate() {
@@ -20,28 +25,29 @@ function updateTodayIndicator() {
     const selectedDate = dateInput.value;
     
     if (selectedDate === today) {
-        indicator.textContent = '📅 Today';
+        indicator.textContent = 'Today';
         indicator.style.display = 'inline-block';
     } else if (selectedDate < today) {
         const date = new Date(selectedDate);
-        indicator.textContent = '📆 Past Entry';
+        indicator.textContent = 'Past Entry';
         indicator.style.background = 'linear-gradient(135deg, #9b59b6, #8e44ad)';
         indicator.style.display = 'inline-block';
     } else {
-        indicator.textContent = '🔮 Future Entry';
+        indicator.textContent = 'Future Entry';
         indicator.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
         indicator.style.display = 'inline-block';
     }
 }
 
 // Load activities on page load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     setTodayDate();
-    loadCurrentUser();
+    await loadCurrentUser();
+    await loadPaths();
+    await loadCustomItems();
     loadStats();
     loadActivities();
     initChart();
-    loadCustomItems();
     displayCustomItems(); // Display custom items management list
     initializeWizard();
     initializeEventListeners();
@@ -109,7 +115,7 @@ async function loadActivityForDate(date) {
             // Update submit button text to indicate editing
             const submitBtn = document.getElementById('submitBtn');
             if (submitBtn) {
-                submitBtn.innerHTML = '💾 Update Entry';
+                submitBtn.innerHTML = 'Update Entry';
             }
             
             showNotification('Loaded previous entry for ' + date, 'info');
@@ -122,7 +128,7 @@ async function loadActivityForDate(date) {
             // Reset submit button text
             const submitBtn = document.getElementById('submitBtn');
             if (submitBtn) {
-                submitBtn.innerHTML = '✅ Save Today\'s Log';
+                submitBtn.innerHTML = 'Save Today\'s Log';
             }
         }
     } catch (error) {
@@ -133,59 +139,41 @@ async function loadActivityForDate(date) {
 // Populate wizard with data from previous activity
 function populateWizardFromActivity(activity) {
     wizardData = {};
-    
-    // Parse the description to extract values
-    const description = activity.description;
-    
-    // Extract wake time
-    const wakeMatch = description.match(/⏰ Woke up: ([^|]+)/);
-    if (wakeMatch) wizardData.wakeTime = wakeMatch[1].trim();
-    
-    // Extract coffee
-    const coffeeMatch = description.match(/☕ Coffee: ([^(|]+)(?:\(([^)]+)\))?/);
-    if (coffeeMatch) {
-        wizardData.coffee = coffeeMatch[1].trim();
-        if (coffeeMatch[2]) wizardData.coffeeTime = coffeeMatch[2].trim();
-    }
-    
-    // Extract breakfast
-    const breakfastMatch = description.match(/🍳 Breakfast: ([^(|]+)(?:\(([^)]+)\))?/);
-    if (breakfastMatch) {
-        wizardData.breakfast = breakfastMatch[1].trim();
-        if (breakfastMatch[2]) wizardData.breakfastTime = breakfastMatch[2].trim();
-    }
-    
-    // Extract exercise
-    const exerciseMatch = description.match(/💪 Exercise: ([^(|]+)(?:\(([^)]+)\))?/);
-    if (exerciseMatch) {
-        wizardData.exercise = exerciseMatch[1].trim();
-        if (exerciseMatch[2]) wizardData.exerciseType = exerciseMatch[2].trim();
-    }
-    
-    // Extract lunch
-    const lunchMatch = description.match(/🍱 Lunch: ([^|]+)/);
-    if (lunchMatch) wizardData.lunch = lunchMatch[1].trim();
-    
-    // Extract dinner
-    const dinnerMatch = description.match(/🍽️ Dinner: ([^|]+)/);
-    if (dinnerMatch) wizardData.dinner = dinnerMatch[1].trim();
-    
-    // Extract rating (convert from 0-10 back to 1-5)
-    wizardData.dayRating = String(Math.round(activity.progress_score / 2));
-    
-    // Extract notes
-    if (activity.notes) wizardData.notes = activity.notes;
-    
-    // Extract custom items
+
+    const description = activity.description || '';
+
     customItems.forEach((item, index) => {
-        const regex = new RegExp(`${item.icon}\\s*${item.name}:\\s*([^|]+)`, 'i');
+        const escapedName = item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`${escapedName}:\\s*([^|]+)`, 'i');
         const match = description.match(regex);
-        if (match) {
-            const value = match[1].trim();
-            wizardData[`custom_${index}`] = value;
+        if (!match) return;
+
+        const value = match[1].trim();
+        wizardData[`custom_${index}`] = value;
+
+        const subMatch = value.match(/^(Yes|No)\s*\(([^)]+)\)$/i);
+        if (subMatch) {
+            wizardData[`custom_${index}`] = subMatch[1];
+            if (item.subResponse) {
+                if (item.subResponse.type === 'checkbox') {
+                    const selectedOptions = subMatch[2].split(',').map(part => part.trim());
+                    selectedOptions.forEach((option, optionIndex) => {
+                        wizardData[`custom_${index}_sub_${optionIndex}`] = option;
+                    });
+                } else {
+                    wizardData[`custom_${index}_sub`] = subMatch[2].trim();
+                }
+            }
         }
     });
-    
+
+    const answeredCount = Object.keys(customResponses).length;
+    const totalCount = customItems.length || 1;
+    const completionPercent = Math.round((answeredCount / totalCount) * 100);
+
+    // Extract notes
+    if (activity.notes) wizardData.notes = activity.notes;
+
     // Reset to first step and render
     currentWizardStep = 0;
     renderWizardStep(0);
@@ -193,111 +181,19 @@ function populateWizardFromActivity(activity) {
 
 // Initialize the wizard with all checklist items
 function initializeWizard() {
-    wizardSteps = [
-        {
-            id: 'wakeTime',
-            type: 'radio',
-            title: 'What time did you wake up?',
-            icon: '/static/images/bed-time.png',
-            options: [
-                { value: '05:00 - 05:30', label: '05:00 - 05:30 AM' },
-                { value: '05:30 - 06:30', label: '05:30 - 06:30 AM' },
-                { value: '06:30 - 07:30', label: '06:30 - 07:30 AM' },
-                { value: 'After 07:30', label: 'After 07:30 AM' }
-            ]
-        },
-        {
-            id: 'coffee',
-            type: 'yes-no',
-            title: 'Did you have coffee today?',
-            icon: '/static/images/coffee.png',
-            subStep: {
-                prompt: 'When did you have it?',
-                id: 'coffeeTime',
-                options: [
-                    { value: 'Within 30 min', label: 'Within 30 minutes of waking up' },
-                    { value: 'After 30 min', label: 'After 30 minutes' }
-                ]
-            }
-        },
-        {
-            id: 'breakfast',
-            type: 'yes-no',
-            title: 'Did you have breakfast?',
-            icon: '/static/images/breakfast-1.png',
-            subStep: {
-                prompt: 'When did you have it?',
-                id: 'breakfastTime',
-                options: [
-                    { value: 'Within 30 min', label: 'Within 30 minutes of waking up' },
-                    { value: 'After 30 min', label: 'After 30 minutes' }
-                ]
-            }
-        },
-        {
-            id: 'exercise',
-            type: 'yes-no',
-            title: 'Did you exercise today?',
-            icon: '/static/images/work-out.png',
-            subStep: {
-                prompt: 'What type of exercise?',
-                id: 'exerciseType',
-                options: [
-                    { value: 'Cardio', label: 'Cardio (Running, Walking)' },
-                    { value: 'Strength', label: 'Strength Training' },
-                    { value: 'Yoga', label: 'Yoga/Stretching' },
-                    { value: 'Other', label: 'Other' }
-                ]
-            }
-        },
-        {
-            id: 'lunch',
-            type: 'radio',
-            title: 'Did you have lunch?',
-            icon: '/static/images/lunch-1.png',
-            options: [
-                { value: 'No', label: 'No' },
-                { value: 'Yes - Home cooked', label: 'Yes - Home cooked' },
-                { value: 'Yes - Outside', label: 'Yes - Outside' }
-            ]
-        },
-        {
-            id: 'dinner',
-            type: 'radio',
-            title: 'Did you have dinner?',
-            icon: '/static/images/lunch-2.png',
-            options: [
-                { value: 'No', label: 'No' },
-                { value: 'Yes - Home cooked', label: 'Yes - Home cooked' },
-                { value: 'Yes - Outside', label: 'Yes - Outside' }
-            ]
-        },
-        {
-            id: 'dayRating',
-            type: 'rating',
-            title: 'How was your overall day?',
-            icon: '/static/images/sun.png',
-            options: [
-                { value: '1', label: '😞', description: 'Poor' },
-                { value: '2', label: '😐', description: 'Below Average' },
-                { value: '3', label: '🙂', description: 'Average' },
-                { value: '4', label: '😊', description: 'Good' },
-                { value: '5', label: '😄', description: 'Excellent' }
-            ]
-        },
-        {
-            id: 'notes',
-            type: 'textarea',
-            title: 'Any additional notes about today?',
-            icon: '/static/images/default-2.png',
-            placeholder: 'Anything special about today? (Optional)',
-            optional: true
-        }
-    ];
-    
-    // Add custom items to wizard steps
+    wizardSteps = [];
+
     customItems.forEach((item, index) => {
         wizardSteps.push(createCustomWizardStep(item, index));
+    });
+
+    wizardSteps.push({
+        id: 'notes',
+        type: 'textarea',
+        title: 'Any additional notes about today?',
+        icon: '/static/images/default-2.png',
+        placeholder: 'Anything special about today? (Optional)',
+        optional: true
     });
     
     document.getElementById('totalSteps').textContent = wizardSteps.length;
@@ -308,7 +204,7 @@ function initializeWizard() {
 function createCustomWizardStep(item, index) {
     const step = {
         id: `custom_${index}`,
-        title: `${item.icon} ${item.name}`,
+        title: `${item.icon ? `${item.icon} ` : ''}${item.name}`,
         type: item.type
     };
     
@@ -328,15 +224,15 @@ function createCustomWizardStep(item, index) {
     } else if (item.type === 'rating') {
         step.type = 'rating';
         step.options = [
-            { value: '1', label: '😞', description: '1' },
-            { value: '2', label: '😐', description: '2' },
-            { value: '3', label: '🙂', description: '3' },
-            { value: '4', label: '😊', description: '4' },
-            { value: '5', label: '😄', description: '5' }
+            { value: '1', label: '1', description: '1' },
+            { value: '2', label: '2', description: '2' },
+            { value: '3', label: '3', description: '3' },
+            { value: '4', label: '4', description: '4' },
+            { value: '5', label: '5', description: '5' }
         ];
     } else if (item.type === 'time') {
         step.type = 'radio';
-        step.options = item.options.map(opt => ({ value: opt, label: opt }));
+        step.options = (item.options || []).map(opt => ({ value: opt, label: opt }));
     }
     
     return step;
@@ -612,50 +508,156 @@ async function loadCurrentUser() {
     try {
         const response = await fetch('/api/current-user');
         const data = await response.json();
+        currentUsername = data.username;
+        selectedPath = data.selected_path_id || '';
+        selectedPathName = data.selected_path || '';
         document.getElementById('current-username').textContent = data.username;
         
         // Show admin badge and link if user is admin
         if (data.is_admin) {
             document.getElementById('admin-badge').style.display = 'inline-block';
             document.getElementById('admin-link').style.display = 'inline-block';
+        } else {
+            document.getElementById('admin-badge').style.display = 'none';
+            document.getElementById('admin-link').style.display = 'none';
         }
     } catch (error) {
         console.error('Error loading user:', error);
     }
 }
 
-// Toggle sub-options visibility
-function toggleSubOptions(id, show) {
-    const element = document.getElementById(id);
-    if (element) {
-        element.style.display = show ? 'block' : 'none';
-        // Clear sub-options when hidden
-        if (!show) {
-            const radios = element.querySelectorAll('input[type="radio"]');
-            radios.forEach(radio => radio.checked = false);
-        }
+function getSelectedPathObject() {
+    return availablePaths.find(path => path.id === selectedPath) || null;
+}
+
+function renderPathPreview(pathId = selectedPath) {
+    const container = document.getElementById('selectedPathItemsPreview');
+    if (!container) return;
+
+    const path = availablePaths.find(item => item.id === pathId);
+    if (!path) {
+        container.innerHTML = '<div class="no-custom-items">No activities available for this path.</div>';
+        return;
     }
+
+    const items = Array.isArray(path.checklist_items) ? path.checklist_items : [];
+    if (!items.length) {
+        container.innerHTML = '<div class="no-custom-items">No activities yet. Add one to get started.</div>';
+        return;
+    }
+
+    container.innerHTML = items.map((item, index) => `
+        <div class="path-preview-row">
+            <span class="path-preview-index">${index + 1}.</span>
+            <span class="path-preview-text">${item.name}</span>
+            <span class="path-preview-type">${item.type}</span>
+        </div>
+    `).join('');
+}
+
+function refreshPathSelector() {
+    const pathSelect = document.getElementById('settingsPath');
+    if (!pathSelect) return;
+
+    pathSelect.innerHTML = availablePaths.map(path => `
+        <option value="${path.id}">${path.name}${path.is_default ? ' (Default)' : ''}</option>
+    `).join('');
+
+    if (selectedPath && availablePaths.some(path => path.id === selectedPath)) {
+        pathSelect.value = selectedPath;
+    } else if (availablePaths.length > 0) {
+        selectedPath = availablePaths[0].id;
+        selectedPathName = availablePaths[0].name;
+        pathSelect.value = selectedPath;
+    }
+
+    renderPathPreview(pathSelect.value);
+}
+
+async function loadPaths() {
+    try {
+        const response = await fetch('/api/paths');
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to load paths');
+        }
+
+        availablePaths = Array.isArray(data.paths) ? data.paths : [];
+        selectedPath = data.selected_path_id || selectedPath;
+        selectedPathName = data.selected_path_name || selectedPathName;
+        refreshPathSelector();
+    } catch (error) {
+        console.error('Error loading paths:', error);
+        showNotification('Failed to load paths', 'error');
+    }
+}
+
+async function setSelectedPath(pathId) {
+    const response = await fetch('/api/paths/selected', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ path_id: pathId })
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to select path');
+    }
+
+    selectedPath = data.selected_path_id;
+    selectedPathName = data.selected_path_name;
 }
 
 // Custom checklist items management
 let customItems = [];
 
-// Load custom items from localStorage
-function loadCustomItems() {
-    const stored = localStorage.getItem('customChecklistItems');
-    if (stored) {
-        customItems = JSON.parse(stored);
-        // Reinitialize wizard if it's already been initialized
-        if (wizardSteps.length > 0) {
-            initializeWizard();
+// Load custom items from backend JSON storage
+async function loadCustomItems() {
+    try {
+        const response = await fetch('/api/checklist-items');
+        const data = await response.json();
+
+        if (response.ok && data.success && Array.isArray(data.items)) {
+            customItems = data.items;
+            return;
         }
+
+        throw new Error(data.message || 'Failed to load checklist items');
+    } catch (error) {
+        console.error('Error loading checklist items:', error);
+        customItems = [];
     }
 }
 
-// Save custom items to localStorage
-function saveCustomItems() {
-    localStorage.setItem('customChecklistItems', JSON.stringify(customItems));
+// Save custom items to backend JSON storage
+async function saveCustomItems() {
+    try {
+        const response = await fetch('/api/checklist-items', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ items: customItems })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to save checklist items');
+        }
+
+        const selectedPathObj = getSelectedPathObject();
+        if (selectedPathObj) {
+            selectedPathObj.checklist_items = customItems.map(item => ({ ...item }));
+        }
+    } catch (error) {
+        console.error('Error saving checklist items:', error);
+        showNotification('Failed to save checklist items', 'error');
+    }
+
     displayCustomItems(); // Update the management list
+    renderPathPreview(selectedPath);
 }
 
 // Render custom items in the checklist
@@ -669,7 +671,7 @@ function renderCustomItems() {
         itemDiv.innerHTML = `
             <div class="custom-item-header">
                 <label class="checklist-label">${item.icon} ${item.name}</label>
-                <button type="button" class="remove-item-btn" onclick="removeCustomItem(${index})">🗑️ Remove</button>
+                <button type="button" class="remove-item-btn" onclick="removeCustomItem(${index})">Remove</button>
             </div>
             ${generateCustomItemInput(item, index)}
         `;
@@ -729,11 +731,11 @@ function generateCustomItemInput(item, index) {
         case 'rating':
             return `
                 <div class="rating-group">
-                    <label class="rating-option" data-rating="1" onclick="selectCustomRating(${index}, 1)">😞</label>
-                    <label class="rating-option" data-rating="2" onclick="selectCustomRating(${index}, 2)">😐</label>
-                    <label class="rating-option" data-rating="3" onclick="selectCustomRating(${index}, 3)">🙂</label>
-                    <label class="rating-option" data-rating="4" onclick="selectCustomRating(${index}, 4)">😊</label>
-                    <label class="rating-option" data-rating="5" onclick="selectCustomRating(${index}, 5)">😄</label>
+                    <label class="rating-option" data-rating="1" onclick="selectCustomRating(${index}, 1)">1</label>
+                    <label class="rating-option" data-rating="2" onclick="selectCustomRating(${index}, 2)">2</label>
+                    <label class="rating-option" data-rating="3" onclick="selectCustomRating(${index}, 3)">3</label>
+                    <label class="rating-option" data-rating="4" onclick="selectCustomRating(${index}, 4)">4</label>
+                    <label class="rating-option" data-rating="5" onclick="selectCustomRating(${index}, 5)">5</label>
                 </div>
                 <input type="hidden" name="${fieldName}" id="customRating_${index}">
             `;
@@ -778,10 +780,10 @@ function selectCustomRating(index, rating) {
 }
 
 // Remove custom item
-function removeCustomItem(index) {
+async function removeCustomItem(index) {
     if (confirm('Are you sure you want to remove this item?')) {
         customItems.splice(index, 1);
-        saveCustomItems();
+        await saveCustomItems();
         renderCustomItems();
         showNotification('Custom item removed', 'success');
     }
@@ -821,11 +823,334 @@ function closeCustomItemModal() {
     document.getElementById('subResponseConfig').style.display = 'none';
 }
 
+function buildPathEditorDraftFor(pathId) {
+    const targetPath = availablePaths.find(path => path.id === pathId);
+    if (!targetPath) return [];
+    return (targetPath.checklist_items || []).map(item => ({ ...item }));
+}
+
+function renderPathEditorList() {
+    const container = document.getElementById('pathActivitiesList');
+    if (!container) return;
+
+    if (!pathEditorItemsDraft.length) {
+        container.innerHTML = '<div class="no-custom-items">No activities yet. Add one to get started.</div>';
+        return;
+    }
+
+    container.innerHTML = pathEditorItemsDraft.map((item, index) => `
+        <div class="path-activity-row">
+            <div class="path-activity-index">${index + 1}</div>
+            <input class="path-activity-input" type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" oninput="updatePathActivityName(${index}, this.value)">
+            <input class="path-move-slider" type="range" min="1" max="${pathEditorItemsDraft.length}" value="${index + 1}" step="1" onchange="movePathActivityWithSlider(${index}, this)">
+            <button type="button" class="btn btn-secondary" onclick="removePathActivityItem(${index})">Remove</button>
+        </div>
+    `).join('');
+}
+
+function updatePathActivityName(index, value) {
+    if (!pathEditorItemsDraft[index]) return;
+    pathEditorItemsDraft[index].name = value;
+}
+
+function movePathActivityWithSlider(index, sliderElement) {
+    const targetPosition = parseInt(sliderElement.value, 10);
+    if (Number.isNaN(targetPosition)) return;
+
+    const targetIndex = Math.max(0, Math.min(pathEditorItemsDraft.length - 1, targetPosition - 1));
+    if (targetIndex === index) return;
+
+    const [movedItem] = pathEditorItemsDraft.splice(index, 1);
+    pathEditorItemsDraft.splice(targetIndex, 0, movedItem);
+    renderPathEditorList();
+}
+
+function addPathActivityItem() {
+    pathEditorItemsDraft.push({
+        name: 'New Activity',
+        type: 'yes-no',
+        icon: ''
+    });
+    renderPathEditorList();
+}
+
+function removePathActivityItem(index) {
+    pathEditorItemsDraft.splice(index, 1);
+    renderPathEditorList();
+}
+
+function openPathEditorModal() {
+    const selected = document.getElementById('settingsPath')?.value || selectedPath;
+    pathEditorItemsDraft = buildPathEditorDraftFor(selected);
+    renderPathEditorList();
+    document.getElementById('pathEditorModal').style.display = 'block';
+}
+
+function closePathEditorModal() {
+    document.getElementById('pathEditorModal').style.display = 'none';
+}
+
+async function savePathActivitiesFromEditor() {
+    const selected = document.getElementById('settingsPath')?.value || selectedPath;
+    const path = availablePaths.find(item => item.id === selected);
+    if (!path) return;
+
+    try {
+        const response = await fetch(`/api/paths/${selected}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: path.name,
+                checklist_items: pathEditorItemsDraft
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to save path activities');
+        }
+
+        await loadPaths();
+        await loadCustomItems();
+        initializeWizard();
+        displayCustomItems();
+        renderPathPreview(selected);
+        showNotification('Path activities updated', 'success');
+        closePathEditorModal();
+    } catch (error) {
+        console.error('Error updating path activities:', error);
+        showNotification(error.message || 'Failed to update path activities', 'error');
+    }
+}
+
+async function createNewPath() {
+    const pathName = prompt('Enter the new path name:');
+    if (!pathName || !pathName.trim()) return;
+
+    try {
+        const response = await fetch('/api/paths', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: pathName.trim(),
+                checklist_items: []
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to create path');
+        }
+
+        await loadPaths();
+        if (data.path?.id) {
+            await setSelectedPath(data.path.id);
+            await loadPaths();
+            await loadCustomItems();
+            initializeWizard();
+            displayCustomItems();
+        }
+        showNotification('New path created', 'success');
+    } catch (error) {
+        console.error('Error creating path:', error);
+        showNotification(error.message || 'Failed to create path', 'error');
+    }
+}
+
+async function renameSelectedPath() {
+    const targetPath = getSelectedPathObject();
+    if (!targetPath) return;
+
+    const newName = prompt('Enter the new path name:', targetPath.name);
+    if (!newName || !newName.trim() || newName.trim() === targetPath.name) return;
+
+    try {
+        const response = await fetch(`/api/paths/${targetPath.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: newName.trim(),
+                checklist_items: targetPath.checklist_items || []
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to rename path');
+        }
+
+        await loadPaths();
+        showNotification('Path renamed', 'success');
+    } catch (error) {
+        console.error('Error renaming path:', error);
+        showNotification(error.message || 'Failed to rename path', 'error');
+    }
+}
+
+async function deleteSelectedPath() {
+    const targetPath = getSelectedPathObject();
+    if (!targetPath) return;
+
+    if (!confirm(`Delete path "${targetPath.name}"? This cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/paths/${targetPath.id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to delete path');
+        }
+
+        await loadPaths();
+        await loadCustomItems();
+        initializeWizard();
+        displayCustomItems();
+        showNotification('Path deleted', 'success');
+    } catch (error) {
+        console.error('Error deleting path:', error);
+        showNotification(error.message || 'Failed to delete path', 'error');
+    }
+}
+
+function openUserOptionsModal() {
+    const modal = document.getElementById('userOptionsModal');
+    if (!modal) return;
+
+    document.getElementById('settingsUsername').value = currentUsername || '';
+    refreshPathSelector();
+
+    modal.style.display = 'block';
+}
+
+function closeUserOptionsModal() {
+    const modal = document.getElementById('userOptionsModal');
+    if (!modal) return;
+
+    modal.style.display = 'none';
+    const passwordForm = document.getElementById('userPasswordForm');
+    if (passwordForm) {
+        passwordForm.reset();
+    }
+}
+
+async function handleUserProfileUpdate(event) {
+    event.preventDefault();
+
+    const username = document.getElementById('settingsUsername').value.trim();
+    const path = document.getElementById('settingsPath').value;
+
+    if (!username) {
+        showNotification('Username is required', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username,
+                selected_path: path
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showNotification(data.message || 'Failed to update profile', 'error');
+            return;
+        }
+
+        currentUsername = data.username;
+        selectedPath = data.selected_path_id || selectedPath;
+        selectedPathName = data.selected_path || selectedPathName;
+
+        document.getElementById('current-username').textContent = currentUsername;
+
+        await loadPaths();
+        await loadCustomItems();
+        initializeWizard();
+        displayCustomItems();
+        renderPathPreview(selectedPath);
+
+        showNotification('Profile updated successfully', 'success');
+        closeUserOptionsModal();
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        showNotification('Error updating profile', 'error');
+    }
+}
+
+async function handleUserPasswordReset(event) {
+    event.preventDefault();
+
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+    if (newPassword !== confirmNewPassword) {
+        showNotification('New passwords do not match', 'error');
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        showNotification('New password must be at least 6 characters', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/user/reset-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showNotification(data.message || 'Failed to update password', 'error');
+            return;
+        }
+
+        showNotification('Password updated successfully', 'success');
+        document.getElementById('userPasswordForm').reset();
+    } catch (error) {
+        console.error('Error updating password:', error);
+        showNotification('Error updating password', 'error');
+    }
+}
+
 // Close modal when clicking outside
 window.onclick = function(event) {
-    const modal = document.getElementById('customItemModal');
-    if (event.target == modal) {
+    const customItemModal = document.getElementById('customItemModal');
+    const userOptionsModal = document.getElementById('userOptionsModal');
+
+    if (event.target == customItemModal) {
         closeCustomItemModal();
+    }
+    if (event.target == userOptionsModal) {
+        closeUserOptionsModal();
+    }
+    const pathEditorModal = document.getElementById('pathEditorModal');
+    if (event.target == pathEditorModal) {
+        closePathEditorModal();
     }
 }
 
@@ -853,18 +1178,46 @@ function initializeEventListeners() {
             subResponseConfig.style.display = this.checked ? 'block' : 'none';
         });
     }
+
+    const settingsPath = document.getElementById('settingsPath');
+    if (settingsPath) {
+        settingsPath.addEventListener('change', async function() {
+            const pathId = this.value;
+            try {
+                await setSelectedPath(pathId);
+                await loadPaths();
+                await loadCustomItems();
+                initializeWizard();
+                displayCustomItems();
+                renderPathPreview(pathId);
+            } catch (error) {
+                console.error('Error switching path:', error);
+                showNotification(error.message || 'Failed to switch path', 'error');
+            }
+        });
+    }
+
+    const userProfileForm = document.getElementById('userProfileForm');
+    if (userProfileForm) {
+        userProfileForm.addEventListener('submit', handleUserProfileUpdate);
+    }
+
+    const userPasswordForm = document.getElementById('userPasswordForm');
+    if (userPasswordForm) {
+        userPasswordForm.addEventListener('submit', handleUserPasswordReset);
+    }
     
     // Handle custom item form submission
     const customItemForm = document.getElementById('customItemForm');
     if (customItemForm) {
-        customItemForm.addEventListener('submit', function(e) {
+        customItemForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const itemType = document.getElementById('customItemType').value;
             const itemData = {
                 name: document.getElementById('customItemName').value,
                 type: itemType,
-                icon: document.getElementById('customItemIcon').value || '📌',
+                icon: document.getElementById('customItemIcon').value || '',
                 options: itemType === 'time' ? 
                     document.getElementById('customOptions').value.split('\n').filter(opt => opt.trim()) : 
                     []
@@ -891,7 +1244,7 @@ function initializeEventListeners() {
                 showNotification(`Custom item "${itemData.name}" added!`, 'success');
             }
             
-            saveCustomItems();
+            await saveCustomItems();
             renderCustomItems();
             closeCustomItemModal();
         });
@@ -923,30 +1276,18 @@ function initializeEventListeners() {
 // Handle form submission
 async function handleDailyChecklistSubmit(e) {
     e.preventDefault();
-    
-    // Use wizard data directly
-    const checklistData = {
-        wakeTime: wizardData.wakeTime || '',
-        coffee: wizardData.coffee || '',
-        coffeeTime: wizardData.coffeeTime || '',
-        breakfast: wizardData.breakfast || '',
-        breakfastTime: wizardData.breakfastTime || '',
-        exercise: wizardData.exercise || '',
-        exerciseType: wizardData.exerciseType || '',
-        lunch: wizardData.lunch || '',
-        dinner: wizardData.dinner || '',
-        dayRating: wizardData.dayRating || ''
-    };
-    
-    // Gather custom item responses from wizard data
+
+    const checklistData = {};
     const customResponses = {};
+    let ratingValue = 0;
+
     customItems.forEach((item, index) => {
         const fieldName = `custom_${index}`;
         const value = wizardData[fieldName];
         
         if (value) {
             let finalValue = value;
-            
+
             // Check for sub-response
             if (item.type === 'yes-no' && item.subResponse && value === 'Yes') {
                 if (item.subResponse.type === 'checkbox') {
@@ -969,21 +1310,44 @@ async function handleDailyChecklistSubmit(e) {
                     }
                 }
             }
-            
+
             customResponses[item.name] = finalValue;
+            checklistData[fieldName] = finalValue;
+
+            if (item.type === 'rating') {
+                ratingValue = parseInt(value, 10) || ratingValue;
+            }
         }
     });
-    
+
+    if (wizardData.notes) {
+        checklistData.notes = wizardData.notes;
+    }
+
+    // How much of the checklist did the user actually fill in
+    const answeredCount = Object.keys(customResponses).length;
+    const totalCount = customItems.length || 1;
+    const completionPercent = Math.round((answeredCount / totalCount) * 100);
+
     // Create a summary for the activity
-    const activitySummary = createActivitySummary(checklistData, customResponses);
-    
+    const activitySummary = createActivitySummary(customResponses);
+
     const formData = {
         date: document.getElementById('date').value,
         activity_name: 'Daily Checklist',
         description: activitySummary,
         duration: 0,
-        progress_score: parseInt(checklistData.dayRating) * 2 || 0, // Convert 1-5 to 1-10
-        notes: wizardData.notes || ''
+        progress_score: ratingValue * 2 || 0,
+        notes: wizardData.notes || '',
+        checklist_data: {
+            date: document.getElementById('date').value,
+            checklist: checklistData,
+            custom_responses: customResponses,
+            selected_path_id: selectedPath,
+            selected_path_name: selectedPathName,
+            completion_percent: completionPercent,
+            notes: wizardData.notes || ''
+        }
     };
     
     try {
@@ -1007,7 +1371,7 @@ async function handleDailyChecklistSubmit(e) {
             loadActivities();
             updateChart();
             
-            showNotification('Daily log saved successfully! 🎉', 'success');
+            showNotification('Daily log saved successfully!', 'success');
         }
     } catch (error) {
         console.error('Error saving daily log:', error);
@@ -1015,60 +1379,17 @@ async function handleDailyChecklistSubmit(e) {
     }
 }
 
-// Helper function to get radio button value
-function getRadioValue(name) {
-    const radio = document.querySelector(`input[name="${name}"]:checked`);
-    return radio ? radio.value : 'Not answered';
-}
-
-// Create a readable summary from checklist data
-function createActivitySummary(data, customResponses = {}) {
+// Create a readable summary from checklist responses
+function createActivitySummary(customResponses = {}) {
     let summary = [];
-    
-    if (data.wakeTime !== 'Not answered') {
-        summary.push(`⏰ Woke up: ${data.wakeTime}`);
-    }
-    
-    if (data.coffee === 'Yes') {
-        summary.push(`☕ Coffee: Yes (${data.coffeeTime})`);
-    } else if (data.coffee === 'No') {
-        summary.push(`☕ Coffee: No`);
-    }
-    
-    if (data.breakfast === 'Yes') {
-        summary.push(`🍳 Breakfast: Yes (${data.breakfastTime})`);
-    } else if (data.breakfast === 'No') {
-        summary.push(`🍳 Breakfast: No`);
-    }
-    
-    if (data.exercise === 'Yes') {
-        summary.push(`💪 Exercise: Yes (${data.exerciseType})`);
-    } else if (data.exercise === 'No') {
-        summary.push(`💪 Exercise: No`);
-    }
-    
-    if (data.lunch !== 'Not answered') {
-        summary.push(`🍱 Lunch: ${data.lunch}`);
-    }
-    
-    if (data.dinner !== 'Not answered') {
-        summary.push(`🍽️ Dinner: ${data.dinner}`);
-    }
-    
+
     // Add custom item responses
     Object.entries(customResponses).forEach(([itemName, value]) => {
         if (value && value !== 'Not answered') {
-            const item = customItems.find(i => i.name === itemName);
-            const icon = item ? item.icon : '📌';
-            summary.push(`${icon} ${itemName}: ${value}`);
+            summary.push(`${itemName}: ${value}`);
         }
     });
-    
-    if (data.dayRating !== '') {
-        const emoji = ['😞', '😐', '🙂', '😊', '😄'][parseInt(data.dayRating) - 1];
-        summary.push(`⭐ Day Rating: ${emoji} (${data.dayRating}/5)`);
-    }
-    
+
     return summary.join(' | ');
 }
 
@@ -1081,6 +1402,7 @@ async function loadStats() {
         document.getElementById('totalDays').textContent = stats.total_days;
         document.getElementById('totalActivities').textContent = stats.total_activities;
         document.getElementById('avgScore').textContent = stats.avg_score.toFixed(1);
+        document.getElementById('currentStreak').textContent = stats.current_streak || 0;
     } catch (error) {
         console.error('Error loading stats:', error);
     }
@@ -1110,10 +1432,10 @@ async function loadActivities() {
                 </div>
                 ${activity.description ? `<p>${activity.description}</p>` : ''}
                 <div class="activity-meta">
-                    ${activity.duration ? `<span>⏱️ ${activity.duration} min</span>` : ''}
-                    ${activity.progress_score ? `<span>📊 Score: ${activity.progress_score}/10</span>` : ''}
+                    ${activity.duration ? `<span>${activity.duration} min</span>` : ''}
+                    ${activity.progress_score ? `<span>Score: ${activity.progress_score}/10</span>` : ''}
                 </div>
-                ${activity.notes ? `<div style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">💭 ${activity.notes}</div>` : ''}
+                ${activity.notes ? `<div style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">Notes: ${activity.notes}</div>` : ''}
             </div>
         `).join('');
     } catch (error) {
@@ -1207,7 +1529,7 @@ async function checkMilestone(days) {
         container.classList.add('active');
         
         container.innerHTML = `
-            <h3>🎯 ${days}-Day Milestone Insights</h3>
+            <h3>${days}-Day Milestone Insights</h3>
             <div class="insight-grid">
                 <div class="insight-item">
                     <h4>${insights.total_activities}</h4>
@@ -1380,7 +1702,7 @@ function editCustomItem(index) {
     // Populate form with existing values
     document.getElementById('customItemName').value = item.name;
     document.getElementById('customItemType').value = item.type;
-    document.getElementById('customItemIcon').value = item.icon || '📌';
+    document.getElementById('customItemIcon').value = item.icon || '';
     
     // Show/hide options based on type
     const optionsGroup = document.getElementById('customOptionsGroup');
@@ -1415,13 +1737,13 @@ function editCustomItem(index) {
 }
 
 // Delete Custom Item
-function deleteCustomItem(index) {
+async function deleteCustomItem(index) {
     const item = customItems[index];
     if (!item) return;
     
     if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
         customItems.splice(index, 1);
-        saveCustomItems();
+        await saveCustomItems();
         renderCustomItems();
         displayCustomItems();
         showNotification(`Custom item "${item.name}" deleted!`, 'success');

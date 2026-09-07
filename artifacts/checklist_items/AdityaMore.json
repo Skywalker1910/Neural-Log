@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Deep Work Session",
+    "type": "yes-no",
+    "icon": "",
+    "subResponse": {
+      "prompt": "How long?",
+      "type": "radio",
+      "options": [
+        "30 min",
+        "60 min",
+        "90+ min"
+      ]
+    }
+  },
+  {
+    "name": "Skill Training",
+    "type": "yes-no",
+    "icon": "",
+    "subResponse": {
+      "prompt": "Focus area",
+      "type": "radio",
+      "options": [
+        "Coding",
+        "Fitness",
+        "Communication"
+      ]
+    }
+  }
+]

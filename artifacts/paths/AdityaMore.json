@@ -1,0 +1,297 @@
+{
+  "paths": [
+    {
+      "id": "batman-path",
+      "name": "Batman Path",
+      "is_default": true,
+      "checklist_items": [
+        {
+          "id": "cdb16e0f-f2f5-4661-b3f0-cb524f3c2fd9",
+          "name": "What time did you wake up?",
+          "type": "time",
+          "icon": "",
+          "options": [
+            "05:00 - 05:30 AM",
+            "05:30 - 06:30 AM",
+            "06:30 - 07:30 AM",
+            "After 07:30 AM"
+          ]
+        },
+        {
+          "id": "b70a97aa-f995-42a1-90ee-eb3aace6fe09",
+          "name": "Did you hydrate or drink coffee this morning?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "d87b7ed9-b2aa-47cf-865b-d3bb2f21270a",
+          "name": "Did you complete strength training today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "fea25408-a1da-4327-8218-c890a0f2ccbf",
+          "name": "Did you practice a skill today? (coding, martial arts, chess, etc.)",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "80e7bdf2-62c8-4c5b-9edb-e8814061bdcb",
+          "name": "Did you study or learn something new today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "6307289e-a984-43e0-9c27-11fc19f42f65",
+          "name": "Did you spend time reflecting or journaling?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "6a0b9a0f-3db1-4423-b343-943c29b249de",
+          "name": "Did you complete your most important task today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "f52687d5-50bd-4044-bf4d-2c51fc3691f8",
+          "name": "Did you eat balanced meals today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "c6123b70-260b-4e1d-91f2-d1aad18bf6e6",
+          "name": "Did you plan tomorrow’s tasks?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "3cd497d0-f5aa-4619-933c-8fc5a5c8bc1b",
+          "name": "Rate your day (1–5)",
+          "type": "rating",
+          "icon": ""
+        }
+      ]
+    },
+    {
+      "id": "thor-path",
+      "name": "Thor Path",
+      "is_default": true,
+      "checklist_items": [
+        {
+          "id": "5ae86993-869d-49fa-8eeb-1c5e387fabad",
+          "name": "What time did you wake up?",
+          "type": "time",
+          "icon": "",
+          "options": [
+            "05:00 - 05:30 AM",
+            "05:30 - 06:30 AM",
+            "06:30 - 07:30 AM",
+            "After 07:30 AM"
+          ]
+        },
+        {
+          "id": "f697856a-ae54-4296-b0f9-484cd5cc5c08",
+          "name": "Did you drink enough water today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "984b8e21-80fd-4b2a-8fc1-e352f6416d20",
+          "name": "Did you eat a protein-rich breakfast?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "6d27b5f5-6023-4b6c-a49c-7154648b5f97",
+          "name": "Did you complete a strength workout?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "92528b0c-c954-4109-bb66-9317f744cfb4",
+          "name": "Did you do cardio or endurance training?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "c2c23790-6e17-4470-ab46-207cb5f02f9e",
+          "name": "Did you eat a healthy lunch?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "a97c5e5b-01b2-44fa-ae85-6d3551b59de0",
+          "name": "Did you stay physically active today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "76a3a02f-2b29-427a-bfdf-0810f7e09f1d",
+          "name": "Did you stretch or do recovery exercises?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "be44d551-10ed-4693-be59-dfc34744ecb4",
+          "name": "Did you prepare for good sleep tonight?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "42576ad1-5d42-41d7-adfc-d983c281b5d6",
+          "name": "Rate your energy/performance today (1–5)",
+          "type": "rating",
+          "icon": ""
+        }
+      ]
+    },
+    {
+      "id": "captain-america-path",
+      "name": "Captain America Path",
+      "is_default": true,
+      "checklist_items": [
+        {
+          "id": "41816053-0b60-4544-a49b-3a34b93dc91a",
+          "name": "What time did you wake up?",
+          "type": "time",
+          "icon": "",
+          "options": [
+            "05:00 - 05:30 AM",
+            "05:30 - 06:30 AM",
+            "06:30 - 07:30 AM",
+            "After 07:30 AM"
+          ]
+        },
+        {
+          "id": "71976a5b-ebc2-477a-846a-bc9bdd665615",
+          "name": "Did you start your morning in an organized way?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "718a0210-b6ad-4433-9b5d-9a30d694c78c",
+          "name": "Did you eat a healthy breakfast?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "3a67e714-8914-4182-a26f-c0570d2c26b6",
+          "name": "Did you exercise today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "82ee9277-238c-49d5-939d-e5d2b496f5c8",
+          "name": "Did you complete your most important task?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "31232336-1b86-47a2-8027-8f17a8e50b22",
+          "name": "Did you help someone or contribute positively today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "b6ebd4ed-31ba-4c4a-8a94-0740069d5e2c",
+          "name": "Did you keep your workspace clean and organized?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "77f8c9a5-780c-4810-934e-2e8d7f353a9d",
+          "name": "Did you read or learn something new?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "a6442267-12c5-4721-bddd-985c3d703990",
+          "name": "Did you reflect on your day?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "224c68e8-d942-4081-a215-7be4566977ed",
+          "name": "Rate your discipline today (1–5)",
+          "type": "rating",
+          "icon": ""
+        }
+      ]
+    },
+    {
+      "id": "ironman-path",
+      "name": "Ironman Path",
+      "is_default": true,
+      "checklist_items": [
+        {
+          "id": "99434782-eb53-444d-81a7-33d436ca68b7",
+          "name": "What time did you wake up?",
+          "type": "time",
+          "icon": "",
+          "options": [
+            "05:00 - 05:30 AM",
+            "05:30 - 06:30 AM",
+            "06:30 - 07:30 AM",
+            "After 07:30 AM"
+          ]
+        },
+        {
+          "id": "491d692c-3aae-48d3-bd40-baaa300f68d5",
+          "name": "Did you review your daily learning goals?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "acead52e-8d30-43eb-92c7-efb1272f23db",
+          "name": "Did you spend at least 1 hour studying or learning?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "cbcca2fc-e254-40f6-ac6a-878d187c114a",
+          "name": "Did you practice a technical skill (coding, engineering, etc.)?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "58bf8474-8cca-4c22-9b91-a08a8e93b4ae",
+          "name": "Did you read something educational today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "168bcc49-0b91-4533-bcb3-2afeba1a3f88",
+          "name": "Did you work on a project or build something?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "26d7b563-9a84-45d6-833e-9b4b72d8f6fe",
+          "name": "Did you solve a problem or learn a new concept?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "d1406e29-fa68-452e-a3c2-54a2e26cb38a",
+          "name": "Did you document what you learned today?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "b764fcc3-3e45-4c39-9660-dc66d48806ba",
+          "name": "Did you plan tomorrow’s learning tasks?",
+          "type": "yes-no",
+          "icon": ""
+        },
+        {
+          "id": "4d7e24ad-4612-431a-810b-8c3b5efc0e66",
+          "name": "Rate your productivity today (1–5)",
+          "type": "rating",
+          "icon": ""
+        }
+      ]
+    }
+  ],
+  "selected_path_id": "batman-path"
+}

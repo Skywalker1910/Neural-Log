@@ -67,6 +67,27 @@ header h1 {
     margin-bottom: 10px;
 }
 
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.app-name {
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary-color);
+    text-shadow: 0 0 8px rgba(211, 47, 47, 0.9), 0 0 16px rgba(211, 47, 47, 0.75), 0 0 28px rgba(139, 0, 0, 0.6);
+}
+
+.app-logo {
+    width: 125px;
+    height: 125px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 14px rgba(211, 47, 47, 0.55)) drop-shadow(0 0 26px rgba(211, 47, 47, 0.28));
+}
+
 .subtitle {
     font-size: 1.1rem;
     opacity: 0.9;
@@ -276,22 +297,17 @@ header h1 {
 }
 
 .step-icon {
-    width: 80px;
-    height: 80px;
     margin-bottom: 20px;
-    border-radius: 50%;
-    background: rgba(211, 47, 47, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid rgba(211, 47, 47, 0.3);
-    box-shadow: 0 4px 20px rgba(211, 47, 47, 0.2);
 }
 
 .step-icon img {
     width: 50px;
     height: 50px;
     filter: drop-shadow(0 2px 8px rgba(211, 47, 47, 0.5));
+    transform: scale(4);
 }
 
 .step-title {
@@ -911,6 +927,43 @@ textarea:focus {
     align-items: center;
 }
 
+.path-activities-list {
+    max-height: 420px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.path-activity-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 90px 80px;
+    gap: 10px;
+    align-items: center;
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.path-activity-index {
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-light);
+}
+
+.path-activity-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.path-move-slider {
+    width: 80px;
+}
+
 .remove-item-btn {
     background: var(--danger-color);
     color: white;
@@ -1041,4 +1094,192 @@ textarea:focus {
     padding: 30px;
     color: var(--text-light);
     font-style: italic;
+}
+
+.path-preview-list {
+    max-height: 260px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.path-preview-row {
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+.path-preview-index {
+    color: var(--text-light);
+    font-weight: 600;
+    text-align: center;
+}
+
+.path-preview-text {
+    color: #2c3e50;
+    font-size: 0.95rem;
+}
+
+.path-preview-type {
+    color: var(--text-light);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+@keyframes movingBorderSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+button,
+.btn,
+.btn-date-nav,
+.logout-btn,
+.delete-btn,
+.remove-item-btn,
+.btn-edit,
+.btn-delete-custom,
+.action-btn {
+    position: relative;
+    border: 1px solid rgba(211, 47, 47, 0.55);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(14, 14, 14, 0.95), rgba(28, 28, 28, 0.96));
+    color: #fff;
+    overflow: hidden;
+    z-index: 0;
+    box-shadow: 0 0 10px rgba(211, 47, 47, 0.4), 0 0 24px rgba(211, 47, 47, 0.28);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+button::before,
+.btn::before,
+.btn-date-nav::before,
+.logout-btn::before,
+.delete-btn::before,
+.remove-item-btn::before,
+.btn-edit::before,
+.btn-delete-custom::before,
+.action-btn::before {
+    content: '';
+    position: absolute;
+    inset: -180%;
+    border-radius: inherit;
+    background: conic-gradient(from 90deg, transparent 0%, transparent 62%, rgba(255, 90, 90, 0.95) 78%, rgba(211, 47, 47, 0.9) 100%);
+    animation: movingBorderSpin 2.8s linear infinite;
+    filter: blur(3px);
+    z-index: -2;
+}
+
+button::after,
+.btn::after,
+.btn-date-nav::after,
+.logout-btn::after,
+.delete-btn::after,
+.remove-item-btn::after,
+.btn-edit::after,
+.btn-delete-custom::after,
+.action-btn::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(12, 12, 12, 0.96), rgba(30, 30, 30, 0.95));
+    z-index: -1;
+}
+
+button:hover,
+.btn:hover,
+.btn-date-nav:hover,
+.logout-btn:hover,
+.delete-btn:hover,
+.remove-item-btn:hover,
+.btn-edit:hover,
+.btn-delete-custom:hover,
+.action-btn:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 95, 95, 0.95);
+    box-shadow: 0 0 14px rgba(211, 47, 47, 0.6), 0 0 30px rgba(211, 47, 47, 0.48), 0 0 44px rgba(183, 28, 28, 0.32);
+}
+
+button:active,
+.btn:active,
+.btn-date-nav:active,
+.logout-btn:active,
+.delete-btn:active,
+.remove-item-btn:active,
+.btn-edit:active,
+.btn-delete-custom:active,
+.action-btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-milestone,
+.btn-edit,
+.btn-delete-custom,
+.delete-btn,
+.remove-item-btn,
+.btn-date-nav,
+.action-btn,
+.btn-view,
+.btn-toggle-admin,
+.btn-delete,
+.btn-reset-password {
+    background: linear-gradient(135deg, rgba(14, 14, 14, 0.95), rgba(28, 28, 28, 0.96));
+    border-color: rgba(211, 47, 47, 0.55);
+    color: #fff;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-success:hover,
+.btn-milestone:hover,
+.btn-view:hover,
+.btn-toggle-admin:hover,
+.btn-delete:hover,
+.btn-reset-password:hover,
+.delete-btn:hover,
+.remove-item-btn:hover,
+.btn-edit:hover,
+.btn-delete-custom:hover,
+.btn-date-nav:hover,
+.action-btn:hover {
+    background: linear-gradient(135deg, rgba(14, 14, 14, 0.95), rgba(28, 28, 28, 0.96));
+    color: #fff;
+}
+
+.btn-secondary:disabled,
+.btn:disabled,
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-secondary:disabled::before,
+.btn:disabled::before,
+button:disabled::before {
+    animation: none;
+    opacity: 0.25;
+}
+
+.btn-secondary:disabled:hover,
+.btn:disabled:hover,
+button:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(211, 47, 47, 0.55);
 }
