@@ -5,6 +5,13 @@ directly by tests, and later reused by other producers (workouts, sleep,
 learning sessions) without circular imports. Nothing in here imports app.
 """
 from .config import ATTRIBUTES, ScoringConfig, DEFAULT_CONFIG
+from .store import (
+    record_day,
+    recompute_scores,
+    get_attributes,
+    get_attribute_history,
+    get_daily_scores,
+)
 from .engine import (
     extract_signals,
     score_day,
@@ -20,4 +27,9 @@ __all__ = [
     'score_day',
     'aggregate_attribute',
     'ENGINE_VERSION',
+    'record_day',
+    'recompute_scores',
+    'get_attributes',
+    'get_attribute_history',
+    'get_daily_scores',
 ]

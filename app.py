@@ -1509,17 +1509,36 @@ def delete_user(user_id):
         return jsonify({'success': False, 'message': 'Cannot delete your own account'}), 400
     
     conn = get_db_connection()
-    
-    # Delete user's activities and milestones
-    conn.execute('DELETE FROM activities WHERE user_id = ?', (user_id,))
-    conn.execute('DELETE FROM milestones WHERE user_id = ?', (user_id,))
-    
-    # Delete user
+
+    username_row = conn.execute(
+        'SELECT username FROM users WHERE id = ?', (user_id,)
+    ).fetchone()
+    if not username_row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    # Every per-user table. SQLite foreign keys are not enforced here (PRAGMA
+    # foreign_keys is never enabled), so nothing cascades - each new per-user
+    # table added by a later phase must be listed here, or deleting an account
+    # silently leaves that person's data behind.
+    for table in ('activities', 'milestones', 'daily_xp', 'user_badges',
+                  'daily_log', 'attribute_scores', 'daily_scores'):
+        conn.execute(f'DELETE FROM {table} WHERE user_id = ?', (user_id,))
+
     conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
-    
     conn.commit()
     conn.close()
-    
+
+    # Their Path templates and daily submissions live on disk, not in SQL.
+    # Deleting an account has to remove those too, or "delete this user" leaves
+    # their personal log content sitting in artifacts/.
+    for artifact in (get_user_paths_file_path(username_row['username']),
+                     get_checklist_file_path(username_row['username'])):
+        try:
+            artifact.unlink(missing_ok=True)
+        except OSError:
+            app.logger.warning('Could not remove %s for deleted user', artifact)
+
     return jsonify({'success': True})
 
 @app.route('/api/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
