@@ -33,3 +33,19 @@ exports/*.xlsx
 # Environment
 .env
 .env.local
+
+# Local dev server runs (see the run-locally workflow)
+app_run.log
+app_run.pid
+frontend/vite.log
+frontend/vite.pid
+
+# Frontend (Vite + React). dist/ is a build artifact - rebuilt via `npm run build`.
+frontend/node_modules/
+frontend/dist/
+
+# Per-user data written at runtime. Daily submissions are personal log content
+# (wake times, workouts, notes) - not something to publish to a shared repo.
+# NOTE: artifacts/paths/ and artifacts/checklist_items/ were tracked before this
+# rule existed; see docs/ARCHITECTURE.md "Known rough edges".
+artifacts/checklists/

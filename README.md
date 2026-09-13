@@ -34,10 +34,12 @@ today; the roadmap covers what's next.
 
 ## Architecture
 
-Single-process Flask app, server-rendered templates, no build step. SQLite holds
-users/activities/milestones; per-user checklist templates and daily submissions are
-stored as JSON/JSONL files under `artifacts/`. Full write-up, including *why* it's
-split that way: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Flask serves a JSON API plus two frontends during the redesign: the original
+server-rendered Jinja app at `/`, and the React + TypeScript SPA at `/app` that is
+progressively replacing it. SQLite holds users/activities/XP; per-user checklist
+templates and daily submissions are JSON/JSONL files under `artifacts/`. Full
+write-up, including *why* it's split that way:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Setup
 
@@ -51,6 +53,7 @@ split that way: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
+   npm --prefix frontend install
    ```
 4. **Configure environment variables:**
    ```bash
@@ -58,16 +61,30 @@ split that way: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
    # then edit .env - at minimum, set a real SECRET_KEY:
    python -c "import secrets; print(secrets.token_hex(32))"
    ```
-5. **Run it:**
+5. **Run it.** The backend alone is enough for the classic app:
    ```bash
    python app.py
    ```
-   Then open `http://localhost:5000`. The first account you register becomes admin.
+   `http://localhost:5000` - the first account you register becomes admin.
+
+   For the redesigned app, run Vite alongside it in a second terminal:
+   ```bash
+   npm --prefix frontend run dev
+   ```
+   `http://localhost:5173/app` - hot reload, with `/api` proxied to Flask so your
+   session works normally.
+
+   Or build it once and let Flask serve it at `http://localhost:5000/app`:
+   ```bash
+   npm --prefix frontend run build
+   ```
 
 ### Running tests
 
 ```bash
-pytest
+pytest                              # backend
+npm --prefix frontend run lint      # frontend lint
+npm --prefix frontend run typecheck # frontend types
 ```
 
 ## Project structure
@@ -77,23 +94,31 @@ Neural-Log/
 ├── app.py                  # Flask app: routes, auth, DB + Paths persistence
 ├── requirements.txt
 ├── .env.example            # copy to .env - see Setup
-├── templates/              # Jinja templates (index / login / admin)
-├── static/{css,js,images}/ # frontend + generated icon set (images/icons/)
+├── frontend/               # React + Vite + TS SPA (the redesign, served at /app)
+├── migrations/             # numbered SQL migrations + schema_migrations ledger
+├── templates/              # Jinja templates (classic app, being retired)
+├── static/{css,js,images}/ # classic frontend + generated icon set (images/icons/)
 ├── artifacts/              # per-user Paths + checklist submissions (JSON/JSONL),
 │                           # plus the source art scripts/build_icons.py reads from
-├── scripts/build_icons.py  # (re)generates static/images/icons/ from artifacts/
+├── scripts/
+│   ├── build_icons.py      # (re)generates static/images/icons/ from artifacts/
+│   └── shoot.mjs           # authenticated SPA screenshots via DevTools Protocol
 ├── tests/                  # pytest smoke tests
 └── docs/
     ├── ARCHITECTURE.md     # how it's built, and why
+    ├── DESIGN-SYSTEM.md    # tokens, typography, component inventory
+    ├── DATA-MODEL.md       # migrations + planned entities, mapped to phases
     ├── GAMIFICATION.md     # XP/levels/streaks/badges scoring spec
-    ├── ROADMAP.md          # gamification -> AWS -> iOS, in order
+    ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first
 ```
 
 ## Roadmap
 
-AWS deployment next, then an iOS app - see [docs/ROADMAP.md](docs/ROADMAP.md) for the
-current thinking on each.
+Mid-redesign: turning the checklist app into a full personal-development platform -
+ten workspaces, an RPG-style attribute system driven by real behaviour, and analytics
+over it all. Foundation (R1) is done; Home and Today are next, then AWS deployment.
+See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

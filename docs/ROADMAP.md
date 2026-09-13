@@ -1,74 +1,147 @@
 # Roadmap
 
-Neural-Log started as a simple activity log and is becoming something closer to a
-game: complete your daily checklist, earn XP, level up, keep your streak alive,
-compare progress with a small group of friends. This tracks where that's headed,
-in order.
+Neural Log began as a daily checklist with XP attached. It's becoming a personal
+operating system: track the things that actually move your life - training, food,
+sleep, study, goals - and watch a character sheet built from your own behaviour
+grow or shrink accordingly.
+
+This tracks where that's headed, in order.
 
 ## Status
 
 | Phase | What | Status |
-|-------|------|--------|
-| 1 | Foundation - bug fixes, config hardening, docs, smoke tests | ✅ Done |
-| 2 | Gamification system - XP, levels, streaks, badges, leaderboard | ✅ Done |
-| 3 | AWS deployment | 🔲 Not started |
-| 4 | iOS app | 🔲 Not started |
+|---|---|---|
+| - | Foundation - bug fixes, config hardening, tests, docs | Done |
+| - | Gamification - XP, levels, streaks, badges, leaderboards | Done |
+| - | Visual pass - light theme, custom icon set | Superseded by R1 |
+| R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
+| R2 | Home + Today - attributes, radar, daily score, streaks | Not started |
+| - | **AWS deployment** - deploy once R2 makes the app worth using | Not started |
+| R3 | Training - routines, exercise library, set logging, analytics | Not started |
+| R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
+| R5 | Learning - subjects, sessions, knowledge analytics | Not started |
+| R6 | Goals + Habits - milestones, routines, streak sources | Not started |
+| R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
+| R8 | Analytics - long-range trends, calendar, comparisons | Not started |
+| R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
+| R10 | Polish - responsive, animation, a11y, performance | Not started |
 
-## Phase 1 - Foundation (done)
+AWS sits after R2 deliberately: deploying before the redesign means configuring a
+deployment for a stack that's about to be replaced, and waiting until R10 means
+nobody else can use the app for months. After R2 there's something worth logging
+into every day, and the deployment shape (static bundle + Flask API) is settled.
 
-Made the existing app correct and configurable before building on top of it:
+## Done before the redesign
 
-- Fixed the wizard's `completionPercent` bug (checklist submission was throwing
-  client-side and silently failing to record completion %).
-- Removed duplicate `#checklistWizard` legacy markup left over from before the
-  dynamic wizard existed.
-- Moved `SECRET_KEY`, debug mode, and the DB path out of hardcoded source and into
-  environment variables (`.env`, see `.env.example`) - required groundwork for any
-  real deployment.
-- Added a small `pytest` smoke suite covering auth, activities, and the checklist
-  submission path.
-- Wrote this documentation set.
+**Foundation.** Fixed the wizard's `completionPercent` crash, removed duplicate
+`#checklistWizard` markup, moved `SECRET_KEY`/debug/DB path into environment
+variables, added a pytest smoke suite.
 
-## Phase 2 - Gamification system (done)
+**Gamification.** Weighted checklist items award `weight * 10` XP; a level curve of
+`50 * (level-1)^2` cumulative; a streak multiplier of +2%/day capped at +50%; eight
+badges; overall and monthly leaderboards. Full spec:
+[GAMIFICATION.md](GAMIFICATION.md).
 
-The core hook of the app: turned "did I do my checklist today" into a game.
+**Visual pass.** A light minimal theme and a custom icon set generated from hand-made
+artwork. The theme was replaced by R1's dark design system; the artwork survives, now
+reserved for achievements and attributes.
 
-- **XP & levels** - each checklist item has a weight (1-5); completing it awards
-  `weight * 10` XP. A level curve (`50 * (level-1)^2` cumulative) means early levels
-  come fast, later ones take sustained consistency.
-- **Streak multiplier** - `current_streak` (from `/api/stats`) now also scales that
-  day's XP: +2%/day, capped at +50%. Missing a day only resets the streak - no XP or
-  level penalty.
-- **Badges** - 8 code-defined achievements (first log, 7/30-day streaks, 100 days,
-  custom Path created, a perfect day, levels 5 and 10), tracked per-user in
-  `user_badges` and evaluated on every checklist submission.
-- **Two leaderboards** - overall (all-time XP) and monthly (resets each calendar
-  month), both visible to the whole friend group.
-- Full spec: [GAMIFICATION.md](GAMIFICATION.md). Data model: new `daily_xp` and
-  `user_badges` SQL tables (see
-  [ARCHITECTURE.md](ARCHITECTURE.md#why-two-storage-systems) for why this is SQL and
-  not JSON, unlike the Paths system).
+## R1 - Redesign foundation (done)
 
-## Phase 3 - AWS deployment
+The old frontend was 1,791 lines of string-template DOM code in one classic script.
+Ten workspaces built that way is how you get the dead-code bugs the foundation phase
+had to clean up. R1 replaced the *frontend* stack without touching the backend's
+working endpoints:
 
-Not started - to be worked through together rather than pre-decided, since this is
-new territory. Rough shape of the decision:
+- **React + Vite + TypeScript** SPA in `frontend/`, served by Flask at `/app`. Flask
+  becomes a JSON API - 22 of its 26 routes already were.
+- **Design system** - dark charcoal tokens, Inter, a type scale, category accents.
+  See [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md).
+- **App shell** - sidebar on desktop, bottom tab bar on mobile, ten routed sections.
+- **Component library** - cards, metrics, rings, tables, modals, empty states,
+  skeletons, chart wrappers.
+- **Data layer** - typed API client plus TanStack Query, so loading/error/empty/retry
+  is structural rather than per-component.
+- **Migrations** - numbered SQL files and a ledger table, replacing ad-hoc
+  `CREATE TABLE IF NOT EXISTS`. See [DATA-MODEL.md](DATA-MODEL.md).
 
-- **Compute**: simplest option first - a single EC2 instance (or Elastic Beanstalk)
-  running Gunicorn behind Nginx. Containerizing (ECS/Fargate) is a reasonable later
-  step once the deployment story is well understood, not a Phase 3 requirement.
-- **Database**: staying on SQLite for now per the current user count; revisit RDS/
-  Postgres if/when concurrent writes or backups become a real concern.
-- **Storage**: the `artifacts/` JSON files need a persistent volume (EBS) or, later,
-  S3 - plain "ephemeral instance disk" won't survive a redeploy.
-- **Secrets**: `SECRET_KEY` etc. move from `.env` to AWS Secrets Manager or
-  SSM Parameter Store rather than living on the instance as a file.
-- **HTTPS/domain**: needed before sharing the URL with friends outside a VPN/local
-  network.
+The classic Jinja app still serves `/`. R2 flips the default over.
 
-## Phase 4 - iOS app
+## R2 - Home and Today
 
-Later. The current server-rendered HTML approach won't serve a native client -
-this phase likely starts with carving out a clean, versioned JSON API
-(`/api/v1/...`) that both the web app and iOS app consume, rather than the current
-routes that mix HTML rendering and JSON endpoints in the same file.
+The phase that makes the redesign worth using.
+
+- **Scoring engine** - a single configurable module deriving the eight attributes
+  (Discipline, Knowledge, Strength, Stamina, Agility, Recovery, Consistency, Focus)
+  and the daily/discipline scores from logged behaviour. Formulas live in one place
+  with adjustable weights, and use rolling averages so one missed day doesn't crater
+  a score.
+- **Home** - level, XP, discipline score, streaks, the attribute radar, today's
+  progress, weekly trends, active goals, recent achievements, quick actions.
+- **Today** - the full day as sections and a timeline; complete, skip, reschedule.
+- **Seed data** - realistic demo data behind an explicit demo mode, so dashboards can
+  be developed and reviewed without waiting weeks for real history.
+- Flip `/` from the Jinja app to the SPA; port login and admin.
+
+## R3 - Training
+
+Routines and splits, an exercise library organised by muscle group, set-by-set
+logging with previous-performance hints and a rest timer, personal records,
+progressive overload and volume analytics, body measurements. Exercise demo
+animations are designed for from the start (component boundary ready) but not
+shipped - no copyrighted media.
+
+## R4 - Nutrition and Lifestyle
+
+Calories, macros, fibre, hydration; energy balance against an estimated TDEE with
+estimates clearly labelled as estimates. Sleep gets first-class treatment - duration,
+schedule consistency, and a direct contribution to Discipline and Recovery. Steps,
+sunlight, mood, stress, journal.
+
+## R5 - Learning
+
+Areas, topics and skills; tracked study sessions with focus and difficulty ratings;
+study-time and topic-distribution analytics; weekly study goals; learning streaks.
+
+## R6 - Goals and Habits
+
+Goals with milestones, categories, deadlines and linked habits. Reusable habits with
+real schedules (daily, weekdays, N times per week, custom). This is where the Paths
+JSON system converts into `Habit`/`HabitCompletion` - see
+[DATA-MODEL.md](DATA-MODEL.md).
+
+## R7 - Gamification depth
+
+Achievement categories and unlock UI, an auditable per-action XP ledger
+(`XPTransaction`) replacing day-granularity XP, a configurable level curve, and
+anti-gaming rules so XP can't be farmed by trivial repeated actions.
+
+## R8 - Analytics
+
+Period filters from 7 days to all time, trend charts across every tracked dimension,
+a calendar heatmap where each day is coloured by adherence and clicking a date opens
+that day's log, and period-over-period comparison.
+
+## R9 - Onboarding
+
+The seven-step first-run flow: profile, fitness profile, goals, sleep schedule,
+learning intent, goal selection, and computed baselines (BMI, BMR via Mifflin-St
+Jeor, estimated TDEE). Behavioural scores start conservative and from questionnaire
+answers - they are explicitly not derived from height and weight.
+
+## R10 - Polish
+
+Responsive review at every breakpoint, XP/level-up/achievement animations that
+respect reduced motion, accessibility pass, loading and empty states everywhere,
+performance work (pagination, lazy loading, bundle budget).
+
+## Beyond
+
+Architected for, not built now: wearables (Apple Health, Health Connect, Garmin),
+smart scales, calendar integration, nutrition APIs and barcode scanning, AI-generated
+training and learning plans, and natural-language logging ("studied ML for 90 minutes
+and did a chest workout"). The constraint these place on today's decisions is simply
+that structured logs must stay structured - no free-text soup where an entity belongs.
+
+An iOS client remains the long-term goal; the R1 split into a JSON API plus a
+separate frontend is the groundwork that makes it possible.

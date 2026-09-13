@@ -2,6 +2,43 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## Redesign R1 - Foundation
+
+First phase of the product redesign (see [ROADMAP.md](ROADMAP.md)). Builds the
+foundation the remaining nine phases sit on, without breaking the running app.
+
+- **Frontend stack**: React 19 + Vite + TypeScript SPA in `frontend/`, served by
+  Flask at `/app`. The classic Jinja app keeps serving `/` until R2 flips it. In
+  dev, Vite proxies `/api` to Flask so the existing session cookie works unchanged -
+  no CORS, no auth rewrite.
+- **Design system**: dark charcoal token set (surfaces, ink, one brand accent, six
+  category accents), Inter self-hosted, a six-step type scale with tabular numerals.
+  Replaces the light theme from the previous visual pass. See
+  [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md).
+- **App shell**: collapsible sidebar on desktop, thumb-reachable bottom tab bar plus
+  overflow sheet on mobile, ten routed sections with honest "arrives in phase N"
+  placeholders.
+- **Component library**: Card, MetricCard, StatCard, ProgressCard, ProgressRing,
+  AttributeBadge, ArtworkBadge, Button, Badge, EmptyState, Skeleton, Modal,
+  ConfirmationDialog, DataTable, QueryBoundary, plus lazy-loaded radar and trend
+  charts. Browsable at `/app/_design`.
+- **Data layer**: typed fetch client + TanStack Query. `QueryBoundary` makes
+  loading/error/empty/retry structural rather than per-component. The client detects
+  Flask's *redirect*-to-login (rather than a 401) and bounces to sign-in properly.
+- **Migrations**: numbered SQL files + a `schema_migrations` ledger replace the
+  ad-hoc `CREATE TABLE IF NOT EXISTS` block. Resolves `migrations/` from `__file__`,
+  not cwd - the test suite chdirs, so a cwd-relative path would break everything.
+  See [DATA-MODEL.md](DATA-MODEL.md).
+- **Icons**: Lucide for UI chrome; the custom PNG artwork kept for achievements and
+  attributes, now on a light disc since near-black line art disappears on a dark UI.
+- **Performance**: Recharts (~300kB) split into its own lazy chunk - main bundle
+  dropped from 716kB to 316kB.
+- **Tooling**: `scripts/shoot.mjs` captures authenticated SPA screenshots over the
+  DevTools Protocol (injects the session cookie, which plain headless `--screenshot`
+  cannot).
+- Tests: 16 -> 22, covering the migration ledger, idempotency, data preservation,
+  and the SPA mount point.
+
 ## Visual redesign - light theme & icon system
 
 Not one of the numbered roadmap phases - a UI pass that cuts across all of them.

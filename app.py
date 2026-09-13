@@ -1,4 +1,7 @@
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from flask import (
+    Flask, render_template, request, jsonify, send_file, send_from_directory,
+    session, redirect, url_for
+)
 from datetime import datetime, timedelta
 import sqlite3
 import json
@@ -21,6 +24,12 @@ DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 # Database configuration
 DATABASE = os.environ.get('DATABASE', 'neural_log.db')
+
+# Resolved from this file rather than the cwd: the test suite chdirs into a tmp
+# directory (tests/conftest.py), and the app is often started from elsewhere.
+PROJECT_ROOT = Path(__file__).resolve().parent
+MIGRATIONS_DIR = PROJECT_ROOT / 'migrations'
+FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
 
 DEFAULT_PATHS = [
     'Batman Path',
@@ -327,88 +336,49 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
-    """Initialize the database with required tables"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Create users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email TEXT,
-            is_admin INTEGER DEFAULT 0,
-            selected_path TEXT DEFAULT 'Batman Path',
-            custom_path_items TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+def run_migrations(conn):
+    """Apply any migrations/NNN_*.sql files this database hasn't seen yet.
+
+    Deliberately tiny - numbered SQL files plus a schema_migrations ledger. No
+    ORM or migration framework, which keeps the raw-sqlite3 approach intact and
+    ports cleanly to Postgres/RDS later. Each file is applied once, in filename
+    order, and recorded; re-running is a no-op.
+    """
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    conn.commit()
 
-    # Ensure new columns exist for older databases
+    applied = {row[0] for row in conn.execute('SELECT version FROM schema_migrations')}
+
+    for migration_path in sorted(MIGRATIONS_DIR.glob('*.sql')):
+        version = migration_path.stem
+        if version in applied:
+            continue
+
+        conn.executescript(migration_path.read_text(encoding='utf-8'))
+        conn.execute('INSERT INTO schema_migrations (version) VALUES (?)', (version,))
+        conn.commit()
+        app.logger.info('Applied migration %s', version)
+
+
+def init_db():
+    """Bring the database up to date, then backfill columns legacy DBs may lack."""
+    conn = get_db_connection()
+    run_migrations(conn)
+
+    # Pre-dates the migration system: databases created before the Paths feature
+    # are missing these columns. SQLite has no ADD COLUMN IF NOT EXISTS, so this
+    # stays a conditional Python step rather than becoming a migration file.
+    cursor = conn.cursor()
     columns = [row[1] for row in cursor.execute('PRAGMA table_info(users)').fetchall()]
     if 'selected_path' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN selected_path TEXT DEFAULT 'Batman Path'")
     if 'custom_path_items' not in columns:
         cursor.execute('ALTER TABLE users ADD COLUMN custom_path_items TEXT')
-    
-    # Create activities table with user_id
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS activities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            activity_name TEXT NOT NULL,
-            description TEXT,
-            duration INTEGER,
-            progress_score INTEGER,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # Create milestones table with user_id
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            milestone_day INTEGER NOT NULL,
-            insights TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-
-    # One row per user per day a checklist was submitted - the source of truth
-    # for XP/levels/leaderboards. UNIQUE(user_id, date) lets resubmitting today's
-    # checklist recalculate in place instead of double-counting (see award_daily_xp).
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS daily_xp (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            base_xp INTEGER NOT NULL,
-            streak_multiplier_pct INTEGER NOT NULL,
-            total_xp INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, date),
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-
-    # Which badges (see BADGE_DEFINITIONS) each user has unlocked, and when.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_badges (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            badge_code TEXT NOT NULL,
-            earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, badge_code),
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
 
     conn.commit()
     conn.close()
@@ -1081,6 +1051,44 @@ def reset_current_user_password():
 def index():
     """Render the main page"""
     return render_template('index.html')
+
+
+# ---------------------------------------------------------------------------
+# Redesigned SPA (frontend/) - served under /app while the classic Jinja UI
+# above stays the default at /. Phase 2 flips the default over once Home and
+# Today are real; until then both are reachable side by side.
+# ---------------------------------------------------------------------------
+
+SPA_NOT_BUILT_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><title>Neural Log - build required</title>
+<style>body{background:#0b0c0e;color:#f2f4f7;font:15px/1.6 system-ui,sans-serif;
+padding:3rem;max-width:40rem;margin:0 auto}code{background:#1a1d22;padding:.15rem .4rem;
+border-radius:4px}a{color:#e5484d}</style></head><body>
+<h1>The redesigned app hasn't been built yet</h1>
+<p>Run the dev server for hot reload:</p>
+<p><code>cd frontend &amp;&amp; npm run dev</code> then open
+<a href="http://localhost:5173/app">localhost:5173/app</a></p>
+<p>Or build it once so Flask can serve it from here:</p>
+<p><code>cd frontend &amp;&amp; npm run build</code></p>
+<p><a href="/">Back to the classic dashboard</a></p>
+</body></html>"""
+
+
+@app.route('/app/assets/<path:filename>')
+def spa_assets(filename):
+    """Hashed JS/CSS/font bundles. No auth: they hold no user data, and gating
+    them would break the shell whenever a session expires mid-session."""
+    return send_from_directory(FRONTEND_DIST / 'assets', filename)
+
+
+@app.route('/app')
+@app.route('/app/<path:_subpath>')
+@login_required
+def serve_spa(_subpath=''):
+    """Serve the SPA shell; client-side routing handles everything below /app."""
+    if not (FRONTEND_DIST / 'index.html').exists():
+        return SPA_NOT_BUILT_HTML, 200
+    return send_from_directory(FRONTEND_DIST, 'index.html')
 
 @app.route('/api/activities', methods=['GET', 'POST'])
 @login_required
