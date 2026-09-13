@@ -9,7 +9,7 @@
           "id": "cdb16e0f-f2f5-4661-b3f0-cb524f3c2fd9",
           "name": "What time did you wake up?",
           "type": "time",
-          "icon": "default",
+          "icon": "sun",
           "weight": 1,
           "options": [
             "05:00 - 05:30 AM",
@@ -22,29 +22,29 @@
           "id": "b70a97aa-f995-42a1-90ee-eb3aace6fe09",
           "name": "Did you hydrate or drink coffee this morning?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "coffee",
           "weight": 1
         },
         {
           "id": "d87b7ed9-b2aa-47cf-865b-d3bb2f21270a",
           "name": "Did you complete strength training today?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "workout",
+          "weight": 3
         },
         {
           "id": "fea25408-a1da-4327-8218-c890a0f2ccbf",
           "name": "Did you practice a skill today? (coding, martial arts, chess, etc.)",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "chess",
+          "weight": 3
         },
         {
           "id": "80e7bdf2-62c8-4c5b-9edb-e8814061bdcb",
           "name": "Did you study or learn something new today?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "6307289e-a984-43e0-9c27-11fc19f42f65",
@@ -64,7 +64,7 @@
           "id": "f52687d5-50bd-4044-bf4d-2c51fc3691f8",
           "name": "Did you eat balanced meals today?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "breakfast",
           "weight": 1
         },
         {
@@ -79,7 +79,7 @@
           "name": "Rate your day (1–5)",
           "type": "rating",
           "icon": "default",
-          "weight": 1
+          "weight": 0
         }
       ]
     },
@@ -92,7 +92,7 @@
           "id": "5ae86993-869d-49fa-8eeb-1c5e387fabad",
           "name": "What time did you wake up?",
           "type": "time",
-          "icon": "default",
+          "icon": "sun",
           "weight": 1,
           "options": [
             "05:00 - 05:30 AM",
@@ -105,56 +105,56 @@
           "id": "f697856a-ae54-4296-b0f9-484cd5cc5c08",
           "name": "Did you drink enough water today?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "water",
           "weight": 1
         },
         {
           "id": "984b8e21-80fd-4b2a-8fc1-e352f6416d20",
           "name": "Did you eat a protein-rich breakfast?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "breakfast",
           "weight": 1
         },
         {
           "id": "6d27b5f5-6023-4b6c-a49c-7154648b5f97",
           "name": "Did you complete a strength workout?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "workout",
+          "weight": 3
         },
         {
           "id": "92528b0c-c954-4109-bb66-9317f744cfb4",
           "name": "Did you do cardio or endurance training?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "workout",
+          "weight": 3
         },
         {
           "id": "c2c23790-6e17-4470-ab46-207cb5f02f9e",
           "name": "Did you eat a healthy lunch?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "lunch",
           "weight": 1
         },
         {
           "id": "a97c5e5b-01b2-44fa-ae85-6d3551b59de0",
           "name": "Did you stay physically active today?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "workout",
+          "weight": 3
         },
         {
           "id": "76a3a02f-2b29-427a-bfdf-0810f7e09f1d",
           "name": "Did you stretch or do recovery exercises?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "workout",
           "weight": 1
         },
         {
           "id": "be44d551-10ed-4693-be59-dfc34744ecb4",
           "name": "Did you prepare for good sleep tonight?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "sleep",
           "weight": 1
         },
         {
@@ -162,7 +162,7 @@
           "name": "Rate your energy/performance today (1–5)",
           "type": "rating",
           "icon": "default",
-          "weight": 1
+          "weight": 0
         }
       ]
     },
@@ -175,7 +175,7 @@
           "id": "41816053-0b60-4544-a49b-3a34b93dc91a",
           "name": "What time did you wake up?",
           "type": "time",
-          "icon": "default",
+          "icon": "sun",
           "weight": 1,
           "options": [
             "05:00 - 05:30 AM",
@@ -195,22 +195,22 @@
           "id": "718a0210-b6ad-4433-9b5d-9a30d694c78c",
           "name": "Did you eat a healthy breakfast?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "breakfast",
           "weight": 1
         },
         {
           "id": "3a67e714-8914-4182-a26f-c0570d2c26b6",
           "name": "Did you exercise today?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "workout",
+          "weight": 3
         },
         {
           "id": "82ee9277-238c-49d5-939d-e5d2b496f5c8",
           "name": "Did you complete your most important task?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "31232336-1b86-47a2-8027-8f17a8e50b22",
@@ -230,8 +230,8 @@
           "id": "77f8c9a5-780c-4810-934e-2e8d7f353a9d",
           "name": "Did you read or learn something new?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "a6442267-12c5-4721-bddd-985c3d703990",
@@ -245,7 +245,7 @@
           "name": "Rate your discipline today (1–5)",
           "type": "rating",
           "icon": "default",
-          "weight": 1
+          "weight": 0
         }
       ]
     },
@@ -258,7 +258,7 @@
           "id": "99434782-eb53-444d-81a7-33d436ca68b7",
           "name": "What time did you wake up?",
           "type": "time",
-          "icon": "default",
+          "icon": "sun",
           "weight": 1,
           "options": [
             "05:00 - 05:30 AM",
@@ -278,15 +278,15 @@
           "id": "acead52e-8d30-43eb-92c7-efb1272f23db",
           "name": "Did you spend at least 1 hour studying or learning?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "cbcca2fc-e254-40f6-ac6a-878d187c114a",
           "name": "Did you practice a technical skill (coding, engineering, etc.)?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "58bf8474-8cca-4c22-9b91-a08a8e93b4ae",
@@ -299,14 +299,14 @@
           "id": "168bcc49-0b91-4533-bcb3-2afeba1a3f88",
           "name": "Did you work on a project or build something?",
           "type": "yes-no",
-          "icon": "default",
-          "weight": 1
+          "icon": "code",
+          "weight": 3
         },
         {
           "id": "26d7b563-9a84-45d6-833e-9b4b72d8f6fe",
           "name": "Did you solve a problem or learn a new concept?",
           "type": "yes-no",
-          "icon": "default",
+          "icon": "chess",
           "weight": 1
         },
         {
@@ -328,7 +328,7 @@
           "name": "Rate your productivity today (1–5)",
           "type": "rating",
           "icon": "default",
-          "weight": 1
+          "weight": 0
         }
       ]
     }

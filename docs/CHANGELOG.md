@@ -2,6 +2,33 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R2 prerequisites - scoring integrity fixes
+
+Found while mapping the codebase for R2's attribute engine. All three are bugs in
+already-shipped behaviour that would have poisoned any score derived from it.
+
+- **Completion was measured wrong.** The client computes `completion_percent` as
+  *answered* / total, and the wizard refuses to advance without an answer - so it
+  reported 100% for a day answered entirely "No". The `perfect-day` badge keyed off
+  it, so it fired on days that were nothing of the sort (the live account holds one
+  such badge, earned on a 53%-complete day). Completion is now computed server-side
+  in `compute_completion_percent()` from `_item_is_completed` and item weights; the
+  client's number is ignored for scoring.
+- **Stock Paths never received the shipped weights and icons.** A per-user path file
+  is written once and never re-seeded from `DEFAULT_PATH_LIBRARY`, so accounts
+  created before weights/icons existed kept `weight=1, icon='default'` on every
+  item - flattening XP (a weight-3 item scored like a weight-1 one) and showing the
+  same fallback artwork on every wizard step. `repair_default_path_items()` now
+  re-attaches them on load, matching by exact item name and only touching items that
+  still look untouched, so deliberate user edits to a stock Path survive.
+- **Migrations never ran under gunicorn.** `init_db()` was called only under
+  `if __name__ == '__main__'`, so a WSGI-served deployment would start against an
+  unmigrated database. It now runs at import time (it is idempotent).
+- **`pytest` did not work as documented.** Bare `pytest` failed with 32
+  `ModuleNotFoundError` - only `python -m pytest` worked, because it puts the cwd on
+  `sys.path`. Added `pytest.ini` with `pythonpath = .` so the documented command is
+  the working one.
+
 ## Redesign R1 - Foundation
 
 First phase of the product redesign (see [ROADMAP.md](ROADMAP.md)). Builds the

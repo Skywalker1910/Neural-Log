@@ -220,6 +220,48 @@ def build_default_paths():
         })
     return paths
 
+
+def repair_default_path_items(paths):
+    """Re-attach shipped weights/icons to stock paths that predate them.
+
+    A per-user path file is created once and never re-seeded from
+    DEFAULT_PATH_LIBRARY, so accounts made before weights and icons existed
+    keep weight=1 / icon='default' on every item. That flattens XP scoring and
+    makes every wizard step show the same fallback artwork.
+
+    Only fills in items that still look untouched (weight 1 AND no real icon)
+    and whose name matches a shipped item exactly, so a user's own edits to a
+    stock path are never overwritten. Returns True if anything changed.
+    """
+    shipped = {
+        path['id']: {item['name']: item for item in path['checklist_items']}
+        for path in DEFAULT_PATH_LIBRARY
+    }
+
+    changed = False
+    for path in paths or []:
+        if not path.get('is_default'):
+            continue
+        by_name = shipped.get(path.get('id'))
+        if not by_name:
+            continue
+        for item in path.get('checklist_items', []):
+            original = by_name.get(item.get('name'))
+            if not original:
+                continue
+            untouched = (
+                int(item.get('weight', 1) or 1) == 1
+                and item.get('icon') in ('', 'default', None)
+            )
+            if not untouched:
+                continue
+            if (original.get('weight') != item.get('weight')
+                    or original.get('icon') != item.get('icon')):
+                item['weight'] = original.get('weight', 1)
+                item['icon'] = original.get('icon', 'default')
+                changed = True
+    return changed
+
 def resolve_selected_path_id(paths, selected_path_name):
     """Resolve selected path id from legacy/new selected_path values"""
     if not paths:
@@ -263,6 +305,7 @@ def load_user_paths(user_row):
                     })
 
                 if normalized_paths:
+                    repair_default_path_items(normalized_paths)
                     resolved_selected_path_id = resolve_selected_path_id(normalized_paths, selected_path_id or user_row['selected_path'])
                     payload = {
                         'paths': normalized_paths,
@@ -459,6 +502,31 @@ def calculate_daily_xp(checklist_items, custom_responses):
         if _item_is_completed(item, response_value):
             base_xp += int(item.get('weight', 1) or 0) * XP_PER_WEIGHT_POINT
     return base_xp
+
+
+def compute_completion_percent(checklist_items, custom_responses):
+    """Weight-based completion for one day, computed server-side.
+
+    The client sends its own completion_percent, but it counts *answered*
+    items rather than *completed* ones (static/js/app.js), and the wizard
+    refuses to advance without an answer - so it reports 100 even for a day
+    answered entirely "No". Scoring and badges must not trust it.
+
+    Rating items are excluded, matching calculate_daily_xp.
+    """
+    total_weight = 0
+    completed_weight = 0
+    for item in checklist_items or []:
+        if item.get('type') == 'rating':
+            continue
+        weight = int(item.get('weight', 1) or 0)
+        total_weight += weight
+        response_value = (custom_responses or {}).get(item.get('name'))
+        if _item_is_completed(item, response_value):
+            completed_weight += weight
+    if total_weight <= 0:
+        return 0
+    return round(completed_weight * 100 / total_weight)
 
 
 def xp_for_level(level):
@@ -1135,7 +1203,11 @@ def activities():
                     or get_selected_path(paths_payload)
                 checklist_items = used_path.get('checklist_items', []) if used_path else []
                 custom_responses = checklist_payload.get('custom_responses', {}) or {}
-                completion_percent = checklist_payload.get('completion_percent', 0) or 0
+                # Deliberately ignores checklist_payload['completion_percent']: the
+                # client reports answered/total, which is ~always 100 because the
+                # wizard forces an answer to every step. Badges keyed off completion
+                # (perfect-day) need completed/total, weighted, computed here.
+                completion_percent = compute_completion_percent(checklist_items, custom_responses)
 
                 newly_earned = award_daily_xp(
                     conn, user_id, data.get('date'), checklist_items, custom_responses,
@@ -1537,7 +1609,10 @@ def admin_stats():
         'active_users': [dict(row) for row in active_users]
     })
 
+# Applied at import time so migrations run under gunicorn too, not only when
+# this module is executed directly. init_db() is idempotent.
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     app.run(debug=DEBUG, port=int(os.environ.get('PORT', 5000)))
 
