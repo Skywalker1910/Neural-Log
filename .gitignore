@@ -44,8 +44,10 @@ frontend/vite.pid
 frontend/node_modules/
 frontend/dist/
 
-# Per-user data written at runtime. Daily submissions are personal log content
-# (wake times, workouts, notes) - not something to publish to a shared repo.
-# NOTE: artifacts/paths/ and artifacts/checklist_items/ were tracked before this
-# rule existed; see docs/ARCHITECTURE.md "Known rough edges".
+# Per-user data written at runtime - personal log content (wake times, workouts,
+# notes) and the Path templates the app regenerates on demand. This repo is
+# public; none of it belongs here. Source art for the icon set lives directly in
+# artifacts/ and stays tracked.
 artifacts/checklists/
+artifacts/paths/
+artifacts/checklist_items/
