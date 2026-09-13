@@ -4,184 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neural-Log - Login</title>
-    <style>
-        :root {
-            --primary-color: #D32F2F;
-            --secondary-color: #50c878;
-            --danger-color: #e74c3c;
-            --bg-color: #0A0A0A;
-            --card-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --text-light: #b0b0b0;
-            --border-color: rgba(211, 47, 47, 0.3);
-            --shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
-            --dark-red: #8B0000;
-            --accent-orange: #FF6B35;
-            --bat-gold: #FFD700;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0A0A0A 0%, #1a0a0a 50%, #0d0000 100%);
-            color: var(--text-color);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .login-container {
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(20, 20, 20, 0.98) 100%);
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8),
-                        inset 0 1px 0 rgba(211, 47, 47, 0.2);
-            width: 100%;
-            max-width: 450px;
-            border: 1px solid rgba(211, 47, 47, 0.3);
-        }
-
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .login-header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-orange));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-shadow: 0 0 20px rgba(211, 47, 47, 0.5);
-        }
-
-        .login-header p {
-            color: var(--text-light);
-        }
-
-        .tabs {
-            display: flex;
-            margin-bottom: 30px;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .tab {
-            flex: 1;
-            padding: 12px 0;
-            text-align: center;
-            cursor: pointer;
-            font-weight: 500;
-            color: var(--text-light);
-            border-bottom: 3px solid transparent;
-            margin-bottom: -2px;
-            transition: all 0.3s;
-        }
-
-        .tab.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(211, 47, 47, 0.5);
-        }
-
-        .form-container {
-            display: none;
-        }
-
-        .form-container.active {
-            display: block;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--text-color);
-            font-weight: 500;
-        }
-
-        input[type="text"],
-        input[type="password"],
-        input[type="email"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid rgba(211, 47, 47, 0.3);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: rgba(26, 26, 26, 0.8);
-            color: white;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 15px rgba(211, 47, 47, 0.4);
-            background: rgba(26, 26, 26, 0.95);
-        }
-
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: linear-gradient(135deg, var(--dark-red), var(--primary-color));
-            color: white;
-            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
-        }
-
-        .btn:hover {
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-orange));
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(211, 47, 47, 0.7);
-        }
-
-        .error-message {
-            background: rgba(231, 76, 60, 0.2);
-            color: #ff6b6b;
-            border: 1px solid rgba(231, 76, 60, 0.4);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .success-message {
-            background: #e8f5e9;
-            color: var(--secondary-color);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .success-message.show {
-            display: block;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="login-page">
     <div class="login-container">
         <div class="login-header">
-            <h1>� NEURAL-LOG</h1>
+            <h1 class="login-brand">
+                <img src="{{ url_for('static', filename='images/app-logo.png') }}" alt="Neural-Log logo" class="login-logo">
+                <span class="login-app-name">NEURAL-LOG</span>
+            </h1>
             <p>Your Daily Chronicle - Track the Night</p>
         </div>
 
@@ -206,7 +37,7 @@
                     <input type="password" id="login-password" required>
                 </div>
 
-                <button type="submit" class="btn">Login</button>
+                <button type="submit" class="btn btn-primary">Login</button>
             </form>
         </div>
 
@@ -233,7 +64,17 @@
                     <input type="password" id="register-confirm-password" required minlength="6">
                 </div>
 
-                <button type="submit" class="btn">Create Account</button>
+                <div class="form-group">
+                    <label for="register-path">Select Your Path</label>
+                    <select id="register-path" required>
+                        <option value="Batman Path">Batman Path</option>
+                        <option value="Thor Path">Thor Path</option>
+                        <option value="Captain America Path">Captain America Path</option>
+                        <option value="Ironman Path">Ironman Path</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Create Account</button>
             </form>
         </div>
     </div>
@@ -308,6 +149,7 @@
             const email = document.getElementById('register-email').value;
             const password = document.getElementById('register-password').value;
             const confirmPassword = document.getElementById('register-confirm-password').value;
+            const selectedPath = document.getElementById('register-path').value;
 
             if (password !== confirmPassword) {
                 showError('Passwords do not match');
@@ -320,7 +162,12 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, email, password })
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        selected_path: selectedPath
+                    })
                 });
 
                 const data = await response.json();
@@ -337,6 +184,8 @@
                 showError('An error occurred. Please try again.');
             }
         }
+
+        function toggleCustomPathItems() {}
     </script>
 </body>
 </html>

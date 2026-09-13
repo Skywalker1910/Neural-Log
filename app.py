@@ -1,20 +1,377 @@
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from flask import (
+    Flask, render_template, request, jsonify, send_file, send_from_directory,
+    session, redirect, url_for
+)
 from datetime import datetime, timedelta
 import sqlite3
 import json
 from pathlib import Path
+from uuid import uuid4
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
-# Database migration completed - is_admin column added
+# In production, SECRET_KEY must be set via the environment - the fallback below
+# only exists so the app still boots for local/dev use without a .env file.
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-insecure-secret-key')
+DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 # Database configuration
-DATABASE = 'neural_log.db'
+DATABASE = os.environ.get('DATABASE', 'neural_log.db')
+
+# Resolved from this file rather than the cwd: the test suite chdirs into a tmp
+# directory (tests/conftest.py), and the app is often started from elsewhere.
+PROJECT_ROOT = Path(__file__).resolve().parent
+MIGRATIONS_DIR = PROJECT_ROOT / 'migrations'
+FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
+
+DEFAULT_PATHS = [
+    'Batman Path',
+    'Thor Path',
+    'Captain America Path',
+    'Ironman Path'
+]
+
+# Keys map 1:1 to static/images/icons/<key>.png (see scripts/build_icons.py for how
+# those were generated from artifacts/). Any icon value outside this set falls back
+# to 'default' in normalize_checklist_items.
+ICON_KEYS = {
+    'sun', 'coffee', 'workout', 'code', 'chess', 'breakfast', 'lunch', 'water',
+    'sleep', 'default'
+}
+
+def _time_item(name, options, weight=1, icon='default'):
+    return {
+        'name': name,
+        'type': 'time',
+        'icon': icon,
+        'weight': weight,
+        'options': options
+    }
+
+def _yes_no_item(name, weight=1, icon='default'):
+    return {
+        'name': name,
+        'type': 'yes-no',
+        'icon': icon,
+        'weight': weight
+    }
+
+def _rating_item(name):
+    # Rating items are self-reflection, not a completed task - excluded from XP scoring
+    # (see calculate_daily_xp) and have no icon of their own.
+    return {
+        'name': name,
+        'type': 'rating',
+        'icon': 'default',
+        'weight': 0
+    }
+
+DEFAULT_PATH_LIBRARY = [
+    {
+        'id': 'batman-path',
+        'name': 'Batman Path',
+        'is_default': True,
+        'checklist_items': [
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you hydrate or drink coffee this morning?', icon='coffee'),
+            _yes_no_item('Did you complete strength training today?', weight=3, icon='workout'),
+            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)', weight=3, icon='chess'),
+            _yes_no_item('Did you study or learn something new today?', weight=3, icon='code'),
+            _yes_no_item('Did you complete your most important task today?'),
+            _yes_no_item('Did you eat balanced meals today?', icon='breakfast'),
+            _yes_no_item('Did you spend time reflecting or journaling?'),
+            _yes_no_item('Did you plan tomorrow’s tasks?'),
+            _rating_item('Rate your day (1–5)')
+        ]
+    },
+    {
+        'id': 'thor-path',
+        'name': 'Thor Path',
+        'is_default': True,
+        'checklist_items': [
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you drink enough water today?', icon='water'),
+            _yes_no_item('Did you eat a protein-rich breakfast?', icon='breakfast'),
+            _yes_no_item('Did you complete a strength workout?', weight=3, icon='workout'),
+            _yes_no_item('Did you do cardio or endurance training?', weight=3, icon='workout'),
+            _yes_no_item('Did you eat a healthy lunch?', icon='lunch'),
+            _yes_no_item('Did you stay physically active today?', weight=3, icon='workout'),
+            _yes_no_item('Did you stretch or do recovery exercises?', icon='workout'),
+            _yes_no_item('Did you prepare for good sleep tonight?', icon='sleep'),
+            _rating_item('Rate your energy/performance today (1–5)')
+        ]
+    },
+    {
+        'id': 'captain-america-path',
+        'name': 'Captain America Path',
+        'is_default': True,
+        'checklist_items': [
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you start your morning in an organized way?'),
+            _yes_no_item('Did you eat a healthy breakfast?', icon='breakfast'),
+            _yes_no_item('Did you exercise today?', weight=3, icon='workout'),
+            _yes_no_item('Did you complete your most important task?', weight=3, icon='code'),
+            _yes_no_item('Did you help someone or contribute positively today?'),
+            _yes_no_item('Did you keep your workspace clean and organized?'),
+            _yes_no_item('Did you read or learn something new?', weight=3, icon='code'),
+            _yes_no_item('Did you reflect on your day?'),
+            _rating_item('Rate your discipline today (1–5)')
+        ]
+    },
+    {
+        'id': 'ironman-path',
+        'name': 'Ironman Path',
+        'is_default': True,
+        'checklist_items': [
+            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
+            _yes_no_item('Did you review your daily learning goals?'),
+            _yes_no_item('Did you spend at least 1 hour studying or learning?', weight=3, icon='code'),
+            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?', weight=3, icon='code'),
+            _yes_no_item('Did you read something educational today?'),
+            _yes_no_item('Did you work on a project or build something?', weight=3, icon='code'),
+            _yes_no_item('Did you solve a problem or learn a new concept?', icon='chess'),
+            _yes_no_item('Did you document what you learned today?'),
+            _yes_no_item('Did you plan tomorrow’s learning tasks?'),
+            _rating_item('Rate your productivity today (1–5)')
+        ]
+    }
+]
+
+def get_checklist_file_path(username):
+    """Get per-user checklist JSONL file path"""
+    safe_username = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in username)
+    checklist_dir = Path('artifacts') / 'checklists'
+    checklist_dir.mkdir(parents=True, exist_ok=True)
+    return checklist_dir / f'{safe_username}.jsonl'
+
+def get_user_paths_file_path(username):
+    """Get per-user path-system JSON file path"""
+    safe_username = ''.join(c if c.isalnum() or c in ['-', '_'] else '_' for c in username)
+    path_dir = Path('artifacts') / 'paths'
+    path_dir.mkdir(parents=True, exist_ok=True)
+    return path_dir / f'{safe_username}.json'
+
+def normalize_checklist_items(items):
+    """Normalize path checklist items for safe persistence"""
+    normalized_items = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+
+        name = str(item.get('name', '')).strip()
+        if not name:
+            continue
+
+        item_type = str(item.get('type', 'yes-no')).strip() or 'yes-no'
+
+        try:
+            weight = int(item.get('weight', 1))
+        except (TypeError, ValueError):
+            weight = 1
+        weight = max(0, min(5, weight))
+
+        icon = str(item.get('icon', '')).strip()
+        if icon not in ICON_KEYS:
+            icon = 'default'
+
+        normalized_item = {
+            'id': str(item.get('id') or uuid4()),
+            'name': name,
+            'type': item_type,
+            'icon': icon,
+            'weight': weight
+        }
+
+        options = item.get('options')
+        if isinstance(options, list):
+            normalized_item['options'] = [str(option).strip() for option in options if str(option).strip()]
+
+        sub_response = item.get('subResponse')
+        if isinstance(sub_response, dict):
+            sub_options = sub_response.get('options', [])
+            if not isinstance(sub_options, list):
+                sub_options = []
+            normalized_item['subResponse'] = {
+                'prompt': str(sub_response.get('prompt', '')).strip(),
+                'type': str(sub_response.get('type', 'radio')).strip() or 'radio',
+                'options': [str(option).strip() for option in sub_options if str(option).strip()]
+            }
+
+        normalized_items.append(normalized_item)
+
+    return normalized_items
+
+def build_default_paths():
+    """Get cloned and normalized default paths"""
+    paths = []
+    for path in DEFAULT_PATH_LIBRARY:
+        paths.append({
+            'id': path['id'],
+            'name': path['name'],
+            'is_default': True,
+            'checklist_items': normalize_checklist_items(path['checklist_items'])
+        })
+    return paths
+
+
+def repair_default_path_items(paths):
+    """Re-attach shipped weights/icons to stock paths that predate them.
+
+    A per-user path file is created once and never re-seeded from
+    DEFAULT_PATH_LIBRARY, so accounts made before weights and icons existed
+    keep weight=1 / icon='default' on every item. That flattens XP scoring and
+    makes every wizard step show the same fallback artwork.
+
+    Only fills in items that still look untouched (weight 1 AND no real icon)
+    and whose name matches a shipped item exactly, so a user's own edits to a
+    stock path are never overwritten. Returns True if anything changed.
+    """
+    shipped = {
+        path['id']: {item['name']: item for item in path['checklist_items']}
+        for path in DEFAULT_PATH_LIBRARY
+    }
+
+    changed = False
+    for path in paths or []:
+        if not path.get('is_default'):
+            continue
+        by_name = shipped.get(path.get('id'))
+        if not by_name:
+            continue
+        for item in path.get('checklist_items', []):
+            original = by_name.get(item.get('name'))
+            if not original:
+                continue
+            untouched = (
+                int(item.get('weight', 1) or 1) == 1
+                and item.get('icon') in ('', 'default', None)
+            )
+            if not untouched:
+                continue
+            if (original.get('weight') != item.get('weight')
+                    or original.get('icon') != item.get('icon')):
+                item['weight'] = original.get('weight', 1)
+                item['icon'] = original.get('icon', 'default')
+                changed = True
+    return changed
+
+def resolve_selected_path_id(paths, selected_path_name):
+    """Resolve selected path id from legacy/new selected_path values"""
+    if not paths:
+        return None
+
+    normalized_selected_name = (selected_path_name or '').strip()
+
+    for path in paths:
+        if path['id'] == normalized_selected_name or path['name'] == normalized_selected_name:
+            return path['id']
+
+    if normalized_selected_name == 'Thor: God of the Thunder Path':
+        for path in paths:
+            if path['id'] == 'thor-path':
+                return path['id']
+
+    return paths[0]['id']
+
+def load_user_paths(user_row):
+    """Load or initialize per-user path system"""
+    username = user_row['username']
+    file_path = get_user_paths_file_path(username)
+
+    if file_path.exists():
+        try:
+            with file_path.open('r', encoding='utf-8') as file:
+                data = json.load(file)
+
+            paths = data.get('paths', []) if isinstance(data, dict) else []
+            selected_path_id = data.get('selected_path_id') if isinstance(data, dict) else None
+            if isinstance(paths, list) and paths:
+                normalized_paths = []
+                for path in paths:
+                    if not isinstance(path, dict):
+                        continue
+                    normalized_paths.append({
+                        'id': str(path.get('id') or uuid4()),
+                        'name': str(path.get('name', 'Untitled Path')).strip() or 'Untitled Path',
+                        'is_default': bool(path.get('is_default', False)),
+                        'checklist_items': normalize_checklist_items(path.get('checklist_items', []))
+                    })
+
+                if normalized_paths:
+                    repair_default_path_items(normalized_paths)
+                    resolved_selected_path_id = resolve_selected_path_id(normalized_paths, selected_path_id or user_row['selected_path'])
+                    payload = {
+                        'paths': normalized_paths,
+                        'selected_path_id': resolved_selected_path_id
+                    }
+                    save_user_paths(username, payload)
+                    return payload
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    paths = build_default_paths()
+
+    custom_path_items = []
+    if user_row['custom_path_items']:
+        try:
+            parsed = json.loads(user_row['custom_path_items'])
+            if isinstance(parsed, list):
+                custom_path_items = [str(item).strip() for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            custom_path_items = []
+
+    if custom_path_items:
+        paths.append({
+            'id': f'custom-{uuid4().hex[:8]}',
+            'name': 'My Custom Path',
+            'is_default': False,
+            'checklist_items': normalize_checklist_items([
+                {'name': item_name, 'type': 'yes-no', 'icon': ''}
+                for item_name in custom_path_items
+            ])
+        })
+
+    selected_path_id = resolve_selected_path_id(paths, user_row['selected_path'])
+    payload = {
+        'paths': paths,
+        'selected_path_id': selected_path_id
+    }
+    save_user_paths(username, payload)
+    return payload
+
+def save_user_paths(username, payload):
+    """Persist per-user path system JSON"""
+    file_path = get_user_paths_file_path(username)
+    with file_path.open('w', encoding='utf-8') as file:
+        json.dump(payload, file, ensure_ascii=False, indent=2)
+
+def get_selected_path(paths_payload):
+    """Get selected path object from path payload"""
+    for path in paths_payload.get('paths', []):
+        if path['id'] == paths_payload.get('selected_path_id'):
+            return path
+    return paths_payload.get('paths', [None])[0]
+
+def save_checklist_to_file(user_id, username, activity_id, payload):
+    """Append a daily checklist entry to user's JSONL file"""
+    file_path = get_checklist_file_path(username)
+    entry = {
+        'user_id': user_id,
+        'username': username,
+        'activity_id': activity_id,
+        'saved_at': datetime.now().isoformat(),
+        'checklist': payload
+    }
+
+    with file_path.open('a', encoding='utf-8') as file:
+        file.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 def get_db_connection():
     """Create a database connection"""
@@ -22,53 +379,306 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def run_migrations(conn):
+    """Apply any migrations/NNN_*.sql files this database hasn't seen yet.
+
+    Deliberately tiny - numbered SQL files plus a schema_migrations ledger. No
+    ORM or migration framework, which keeps the raw-sqlite3 approach intact and
+    ports cleanly to Postgres/RDS later. Each file is applied once, in filename
+    order, and recorded; re-running is a no-op.
+    """
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+
+    applied = {row[0] for row in conn.execute('SELECT version FROM schema_migrations')}
+
+    for migration_path in sorted(MIGRATIONS_DIR.glob('*.sql')):
+        version = migration_path.stem
+        if version in applied:
+            continue
+
+        conn.executescript(migration_path.read_text(encoding='utf-8'))
+        conn.execute('INSERT INTO schema_migrations (version) VALUES (?)', (version,))
+        conn.commit()
+        app.logger.info('Applied migration %s', version)
+
+
 def init_db():
-    """Initialize the database with required tables"""
+    """Bring the database up to date, then backfill columns legacy DBs may lack."""
     conn = get_db_connection()
+    run_migrations(conn)
+
+    # Pre-dates the migration system: databases created before the Paths feature
+    # are missing these columns. SQLite has no ADD COLUMN IF NOT EXISTS, so this
+    # stays a conditional Python step rather than becoming a migration file.
     cursor = conn.cursor()
-    
-    # Create users table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email TEXT,
-            is_admin INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Create activities table with user_id
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS activities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            activity_name TEXT NOT NULL,
-            description TEXT,
-            duration INTEGER,
-            progress_score INTEGER,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # Create milestones table with user_id
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            milestone_day INTEGER NOT NULL,
-            insights TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
+    columns = [row[1] for row in cursor.execute('PRAGMA table_info(users)').fetchall()]
+    if 'selected_path' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN selected_path TEXT DEFAULT 'Batman Path'")
+    if 'custom_path_items' not in columns:
+        cursor.execute('ALTER TABLE users ADD COLUMN custom_path_items TEXT')
+
     conn.commit()
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Gamification: XP, levels, streak multiplier, badges
+# ---------------------------------------------------------------------------
+
+XP_PER_WEIGHT_POINT = 10       # each weight point on a completed item is worth this much XP
+STREAK_MULTIPLIER_PCT_PER_DAY = 2   # +2% total XP per consecutive day logged...
+STREAK_MULTIPLIER_CAP_PCT = 50      # ...capped at +50% (a 25-day streak)
+
+
+def calculate_current_streak(conn, user_id):
+    """Current consecutive-day streak (today or yesterday must be logged)."""
+    streak_rows = conn.execute('''
+        SELECT DISTINCT date
+        FROM activities
+        WHERE user_id = ?
+        ORDER BY date DESC
+    ''', (user_id,)).fetchall()
+
+    activity_dates = []
+    for row in streak_rows:
+        try:
+            activity_dates.append(datetime.strptime(row['date'], '%Y-%m-%d').date())
+        except (ValueError, TypeError):
+            continue
+
+    if not activity_dates:
+        return 0
+
+    today = datetime.now().date()
+    latest_date = activity_dates[0]
+
+    if latest_date < (today - timedelta(days=1)):
+        return 0
+
+    streak = 1
+    previous_date = latest_date
+    for activity_date in activity_dates[1:]:
+        day_gap = (previous_date - activity_date).days
+        if day_gap == 0:
+            continue
+        if day_gap == 1:
+            streak += 1
+            previous_date = activity_date
+            continue
+        break
+
+    return streak
+
+
+def _item_is_completed(item, response_value):
+    """Whether a single checklist item counts as 'done' for XP purposes."""
+    if response_value is None:
+        return False
+    value = str(response_value).strip()
+    if not value:
+        return False
+    if item.get('type') == 'yes-no':
+        return value.lower().startswith('yes')
+    return True  # time / text / other answered types
+
+
+def calculate_daily_xp(checklist_items, custom_responses):
+    """Base XP for one day's checklist, before the streak multiplier.
+
+    Rating-type items are self-reflection, not a completed task, and are
+    excluded from scoring entirely.
+    """
+    base_xp = 0
+    for item in checklist_items or []:
+        if item.get('type') == 'rating':
+            continue
+        response_value = (custom_responses or {}).get(item.get('name'))
+        if _item_is_completed(item, response_value):
+            base_xp += int(item.get('weight', 1) or 0) * XP_PER_WEIGHT_POINT
+    return base_xp
+
+
+def compute_completion_percent(checklist_items, custom_responses):
+    """Weight-based completion for one day, computed server-side.
+
+    The client sends its own completion_percent, but it counts *answered*
+    items rather than *completed* ones (static/js/app.js), and the wizard
+    refuses to advance without an answer - so it reports 100 even for a day
+    answered entirely "No". Scoring and badges must not trust it.
+
+    Rating items are excluded, matching calculate_daily_xp.
+    """
+    total_weight = 0
+    completed_weight = 0
+    for item in checklist_items or []:
+        if item.get('type') == 'rating':
+            continue
+        weight = int(item.get('weight', 1) or 0)
+        total_weight += weight
+        response_value = (custom_responses or {}).get(item.get('name'))
+        if _item_is_completed(item, response_value):
+            completed_weight += weight
+    if total_weight <= 0:
+        return 0
+    return round(completed_weight * 100 / total_weight)
+
+
+def xp_for_level(level):
+    """Cumulative total XP required to reach a given level. Level 1 is the
+    starting level everyone begins at, so it requires 0 XP."""
+    return 50 * ((level - 1) ** 2)
+
+
+def compute_level(total_xp):
+    """Return (level, xp_into_current_level, xp_needed_for_next_level)."""
+    level = 1
+    while xp_for_level(level + 1) <= total_xp:
+        level += 1
+
+    xp_into_level = total_xp - xp_for_level(level)
+    xp_for_next = xp_for_level(level + 1) - xp_for_level(level)
+    return level, xp_into_level, xp_for_next
+
+
+def get_user_total_xp(conn, user_id):
+    row = conn.execute(
+        'SELECT COALESCE(SUM(total_xp), 0) as total FROM daily_xp WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()
+    return row['total'] if row else 0
+
+
+def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, completion_percent=0):
+    """Score one day's checklist submission, upsert daily_xp, evaluate badges.
+
+    Returns the list of newly-earned badge definitions (empty if none).
+    Safe to call more than once for the same (user_id, date) - it recomputes
+    and replaces rather than accumulating, so editing today's log doesn't
+    double-count XP.
+    """
+    base_xp = calculate_daily_xp(checklist_items, custom_responses)
+    streak = calculate_current_streak(conn, user_id)
+    multiplier_pct = min(streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
+    total_xp = round(base_xp * (1 + multiplier_pct / 100))
+
+    conn.execute('''
+        INSERT INTO daily_xp (user_id, date, base_xp, streak_multiplier_pct, total_xp)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, date) DO UPDATE SET
+            base_xp = excluded.base_xp,
+            streak_multiplier_pct = excluded.streak_multiplier_pct,
+            total_xp = excluded.total_xp
+    ''', (user_id, date, base_xp, multiplier_pct, total_xp))
+    conn.commit()
+
+    return evaluate_badges(conn, user_id, completion_percent_today=completion_percent)
+
+
+BADGE_DEFINITIONS = [
+    {
+        'code': 'first-log',
+        'name': 'First Steps',
+        'description': 'Logged your first daily checklist.',
+        'check': lambda ctx: ctx['total_days'] >= 1
+    },
+    {
+        'code': 'week-streak',
+        'name': 'One Week Strong',
+        'description': 'Reached a 7-day streak.',
+        'check': lambda ctx: ctx['current_streak'] >= 7
+    },
+    {
+        'code': 'month-streak',
+        'name': 'Consistency Master',
+        'description': 'Reached a 30-day streak.',
+        'check': lambda ctx: ctx['current_streak'] >= 30
+    },
+    {
+        'code': 'century',
+        'name': 'Century Club',
+        'description': 'Logged 100 days.',
+        'check': lambda ctx: ctx['total_days'] >= 100
+    },
+    {
+        'code': 'custom-path',
+        'name': 'Path Finder',
+        'description': 'Created your own custom Path.',
+        'check': lambda ctx: ctx['has_custom_path']
+    },
+    {
+        'code': 'perfect-day',
+        'name': 'Perfectionist',
+        'description': 'Completed 100% of a daily checklist.',
+        'check': lambda ctx: ctx['completion_percent_today'] >= 100
+    },
+    {
+        'code': 'level-5',
+        'name': 'Leveling Up',
+        'description': 'Reached level 5.',
+        'check': lambda ctx: ctx['level'] >= 5
+    },
+    {
+        'code': 'level-10',
+        'name': 'Double Digits',
+        'description': 'Reached level 10.',
+        'check': lambda ctx: ctx['level'] >= 10
+    }
+]
+
+
+def evaluate_badges(conn, user_id, completion_percent_today=0):
+    """Check all badge definitions against the user's current stats and
+    unlock any newly-earned ones. Returns the list of newly-earned definitions.
+    """
+    total_days = conn.execute(
+        'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()['count']
+    current_streak = calculate_current_streak(conn, user_id)
+    total_xp = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total_xp)
+
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    has_custom_path = False
+    if user_row:
+        paths_payload = load_user_paths(user_row)
+        has_custom_path = any(not path.get('is_default', False) for path in paths_payload.get('paths', []))
+
+    ctx = {
+        'total_days': total_days,
+        'current_streak': current_streak,
+        'total_xp': total_xp,
+        'level': level,
+        'has_custom_path': has_custom_path,
+        'completion_percent_today': completion_percent_today
+    }
+
+    already_earned = {
+        row['badge_code']
+        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
+    }
+
+    newly_earned = []
+    for badge in BADGE_DEFINITIONS:
+        if badge['code'] in already_earned:
+            continue
+        if badge['check'](ctx):
+            conn.execute(
+                'INSERT OR IGNORE INTO user_badges (user_id, badge_code) VALUES (?, ?)',
+                (user_id, badge['code'])
+            )
+            newly_earned.append(badge)
+
+    if newly_earned:
+        conn.commit()
+
+    return newly_earned
 
 # Decorator for routes that require login
 def login_required(f):
@@ -112,7 +722,16 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = bool(user['is_admin'])
-            return jsonify({'success': True, 'username': user['username'], 'is_admin': bool(user['is_admin'])})
+            paths_payload = load_user_paths(user)
+            selected_path = get_selected_path(paths_payload)
+
+            return jsonify({
+                'success': True,
+                'username': user['username'],
+                'is_admin': bool(user['is_admin']),
+                'selected_path': selected_path['name'] if selected_path else 'Batman Path',
+                'selected_path_id': paths_payload.get('selected_path_id')
+            })
         else:
             return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
     
@@ -126,9 +745,19 @@ def register():
         username = data.get('username')
         password = data.get('password')
         email = data.get('email', '')
+        selected_path = data.get('selected_path', 'Batman Path')
+        custom_path_items = data.get('custom_path_items', [])
         
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
+
+        if selected_path == 'Thor: God of the Thunder Path':
+            selected_path = 'Thor Path'
+
+        if selected_path not in DEFAULT_PATHS:
+            return jsonify({'success': False, 'message': 'Invalid path selection'}), 400
+
+        custom_path_items = [str(item).strip() for item in (custom_path_items or []) if str(item).strip()]
         
         conn = get_db_connection()
         
@@ -146,8 +775,8 @@ def register():
         password_hash = generate_password_hash(password)
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO users (username, password_hash, email, is_admin) VALUES (?, ?, ?, ?)',
-            (username, password_hash, email, is_admin)
+            'INSERT INTO users (username, password_hash, email, is_admin, selected_path, custom_path_items) VALUES (?, ?, ?, ?, ?, ?)',
+            (username, password_hash, email, is_admin, selected_path, json.dumps(custom_path_items))
         )
         conn.commit()
         user_id = cursor.lastrowid
@@ -158,7 +787,12 @@ def register():
         session['username'] = username
         session['is_admin'] = bool(is_admin)
         
-        return jsonify({'success': True, 'username': username, 'is_admin': bool(is_admin)}), 201
+        return jsonify({
+            'success': True,
+            'username': username,
+            'is_admin': bool(is_admin),
+            'selected_path': selected_path
+        }), 201
     
     return render_template('login.html')
 
@@ -172,17 +806,357 @@ def logout():
 @login_required
 def current_user():
     """Get current logged in user"""
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT username, selected_path, custom_path_items FROM users WHERE id = ?',
+        (session.get('user_id'),)
+    ).fetchone()
+    conn.close()
+
+    paths_payload = load_user_paths(user) if user else {'paths': [], 'selected_path_id': None}
+    selected_path = get_selected_path(paths_payload)
+
     return jsonify({
         'user_id': session.get('user_id'),
         'username': session.get('username'),
-        'is_admin': session.get('is_admin', False)
+        'is_admin': session.get('is_admin', False),
+        'selected_path': selected_path['name'] if selected_path else 'Batman Path',
+        'selected_path_id': paths_payload.get('selected_path_id')
     })
+
+@app.route('/api/user/profile', methods=['PUT'])
+@login_required
+def update_user_profile():
+    """Update current user's profile settings"""
+    user_id = session.get('user_id')
+    data = request.json or {}
+
+    new_username = (data.get('username') or '').strip()
+    selected_path_id = (data.get('selected_path') or '').strip()
+
+    if not new_username:
+        return jsonify({'success': False, 'message': 'Username is required'}), 400
+
+    conn = get_db_connection()
+    current_user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    if not current_user_row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    old_username = current_user_row['username']
+
+    # Ensure username uniqueness (excluding current user)
+    existing_user = conn.execute(
+        'SELECT id FROM users WHERE username = ? AND id != ?',
+        (new_username, user_id)
+    ).fetchone()
+    if existing_user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Username already exists'}), 400
+
+    paths_payload = load_user_paths(current_user_row)
+    if selected_path_id and not any(path['id'] == selected_path_id for path in paths_payload['paths']):
+        conn.close()
+        return jsonify({'success': False, 'message': 'Invalid path selection'}), 400
+
+    if selected_path_id:
+        paths_payload['selected_path_id'] = selected_path_id
+
+    selected_path = get_selected_path(paths_payload)
+    selected_path_name = selected_path['name'] if selected_path else 'Batman Path'
+
+    conn.execute(
+        'UPDATE users SET username = ?, selected_path = ? WHERE id = ?',
+        (new_username, selected_path_name, user_id)
+    )
+    conn.commit()
+    conn.close()
+
+    # Keep session in sync with updated username
+    session['username'] = new_username
+
+    # Rename checklist artifact file if username changed
+    if old_username != new_username:
+        old_file = get_checklist_file_path(old_username)
+        new_file = get_checklist_file_path(new_username)
+        if old_file.exists() and not new_file.exists():
+            old_file.rename(new_file)
+
+        old_paths_file = get_user_paths_file_path(old_username)
+        new_paths_file = get_user_paths_file_path(new_username)
+        if old_paths_file.exists() and not new_paths_file.exists():
+            old_paths_file.rename(new_paths_file)
+
+    save_user_paths(new_username, paths_payload)
+
+    return jsonify({
+        'success': True,
+        'username': new_username,
+        'selected_path': selected_path_name,
+        'selected_path_id': paths_payload.get('selected_path_id')
+    })
+
+@app.route('/api/checklist-items', methods=['GET', 'PUT'])
+@login_required
+def checklist_items():
+    """Get or update current user's checklist item definitions"""
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+    user_row = conn.execute(
+        'SELECT username, selected_path, custom_path_items FROM users WHERE id = ?',
+        (user_id,)
+    ).fetchone()
+    conn.close()
+
+    if not user_row:
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    paths_payload = load_user_paths(user_row)
+    selected_path = get_selected_path(paths_payload)
+    if not selected_path:
+        return jsonify({'success': False, 'message': 'No paths available'}), 400
+
+    if request.method == 'GET':
+        items = selected_path.get('checklist_items', [])
+        return jsonify({'success': True, 'items': items})
+
+    data = request.json or {}
+    items = data.get('items')
+
+    if not isinstance(items, list):
+        return jsonify({'success': False, 'message': 'Items must be a list'}), 400
+
+    normalized_items = normalize_checklist_items(items)
+    for path in paths_payload['paths']:
+        if path['id'] == selected_path['id']:
+            path['checklist_items'] = normalized_items
+            break
+
+    save_user_paths(user_row['username'], paths_payload)
+    return jsonify({'success': True, 'items': normalized_items})
+
+@app.route('/api/paths', methods=['GET', 'POST'])
+@login_required
+def paths_collection():
+    """Get all user paths or create a custom path"""
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+
+    if not user_row:
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    paths_payload = load_user_paths(user_row)
+
+    if request.method == 'GET':
+        selected_path = get_selected_path(paths_payload)
+        return jsonify({
+            'success': True,
+            'paths': paths_payload.get('paths', []),
+            'selected_path_id': paths_payload.get('selected_path_id'),
+            'selected_path_name': selected_path['name'] if selected_path else None
+        })
+
+    data = request.json or {}
+    path_name = (data.get('name') or '').strip()
+    checklist_items = data.get('checklist_items', [])
+
+    if not path_name:
+        return jsonify({'success': False, 'message': 'Path name is required'}), 400
+
+    if any(path['name'].lower() == path_name.lower() for path in paths_payload['paths']):
+        return jsonify({'success': False, 'message': 'A path with this name already exists'}), 400
+
+    normalized_items = normalize_checklist_items(checklist_items)
+    new_path = {
+        'id': f'custom-{uuid4().hex[:8]}',
+        'name': path_name,
+        'is_default': False,
+        'checklist_items': normalized_items
+    }
+    paths_payload['paths'].append(new_path)
+    save_user_paths(user_row['username'], paths_payload)
+    return jsonify({'success': True, 'path': new_path}), 201
+
+@app.route('/api/paths/selected', methods=['PUT'])
+@login_required
+def select_path():
+    """Set selected path for current user"""
+    user_id = session.get('user_id')
+    data = request.json or {}
+    selected_path_id = (data.get('path_id') or '').strip()
+
+    if not selected_path_id:
+        return jsonify({'success': False, 'message': 'Path id is required'}), 400
+
+    conn = get_db_connection()
+    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    if not user_row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    paths_payload = load_user_paths(user_row)
+    selected_path = next((path for path in paths_payload['paths'] if path['id'] == selected_path_id), None)
+    if not selected_path:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Path not found'}), 404
+
+    paths_payload['selected_path_id'] = selected_path_id
+    save_user_paths(user_row['username'], paths_payload)
+    conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'selected_path_id': selected_path_id, 'selected_path_name': selected_path['name']})
+
+@app.route('/api/paths/<string:path_id>', methods=['PUT', 'DELETE'])
+@login_required
+def path_detail(path_id):
+    """Update or delete a user path"""
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    if not user_row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    paths_payload = load_user_paths(user_row)
+    paths = paths_payload.get('paths', [])
+    target_index = next((index for index, path in enumerate(paths) if path['id'] == path_id), -1)
+
+    if target_index < 0:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Path not found'}), 404
+
+    target_path = paths[target_index]
+
+    if request.method == 'DELETE':
+        if len(paths) <= 1:
+            conn.close()
+            return jsonify({'success': False, 'message': 'At least one path must remain'}), 400
+
+        deleted_selected = paths_payload.get('selected_path_id') == path_id
+        paths.pop(target_index)
+
+        if deleted_selected:
+            paths_payload['selected_path_id'] = paths[0]['id']
+
+        selected_path = get_selected_path(paths_payload)
+        save_user_paths(user_row['username'], paths_payload)
+        conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+
+    data = request.json or {}
+    new_name = (data.get('name') or target_path['name']).strip()
+    checklist_items = data.get('checklist_items', target_path.get('checklist_items', []))
+
+    if not new_name:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Path name is required'}), 400
+
+    name_exists = any(
+        index != target_index and path['name'].lower() == new_name.lower()
+        for index, path in enumerate(paths)
+    )
+    if name_exists:
+        conn.close()
+        return jsonify({'success': False, 'message': 'A path with this name already exists'}), 400
+
+    target_path['name'] = new_name
+    target_path['checklist_items'] = normalize_checklist_items(checklist_items)
+    paths[target_index] = target_path
+
+    save_user_paths(user_row['username'], paths_payload)
+
+    if paths_payload.get('selected_path_id') == path_id:
+        conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (new_name, user_id))
+        conn.commit()
+
+    conn.close()
+    return jsonify({'success': True, 'path': target_path})
+
+@app.route('/api/user/reset-password', methods=['POST'])
+@login_required
+def reset_current_user_password():
+    """Reset password for currently logged-in user"""
+    user_id = session.get('user_id')
+    data = request.json or {}
+
+    current_password = data.get('current_password', '')
+    new_password = data.get('new_password', '')
+
+    if not current_password or not new_password:
+        return jsonify({'success': False, 'message': 'Current and new password are required'}), 400
+
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'New password must be at least 6 characters'}), 400
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT password_hash FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    if not check_password_hash(user['password_hash'], current_password):
+        conn.close()
+        return jsonify({'success': False, 'message': 'Current password is incorrect'}), 400
+
+    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(new_password), user_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True})
 
 @app.route('/')
 @login_required
 def index():
     """Render the main page"""
     return render_template('index.html')
+
+
+# ---------------------------------------------------------------------------
+# Redesigned SPA (frontend/) - served under /app while the classic Jinja UI
+# above stays the default at /. Phase 2 flips the default over once Home and
+# Today are real; until then both are reachable side by side.
+# ---------------------------------------------------------------------------
+
+SPA_NOT_BUILT_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><title>Neural Log - build required</title>
+<style>body{background:#0b0c0e;color:#f2f4f7;font:15px/1.6 system-ui,sans-serif;
+padding:3rem;max-width:40rem;margin:0 auto}code{background:#1a1d22;padding:.15rem .4rem;
+border-radius:4px}a{color:#e5484d}</style></head><body>
+<h1>The redesigned app hasn't been built yet</h1>
+<p>Run the dev server for hot reload:</p>
+<p><code>cd frontend &amp;&amp; npm run dev</code> then open
+<a href="http://localhost:5173/app">localhost:5173/app</a></p>
+<p>Or build it once so Flask can serve it from here:</p>
+<p><code>cd frontend &amp;&amp; npm run build</code></p>
+<p><a href="/">Back to the classic dashboard</a></p>
+</body></html>"""
+
+
+@app.route('/app/assets/<path:filename>')
+def spa_assets(filename):
+    """Hashed JS/CSS/font bundles. No auth: they hold no user data, and gating
+    them would break the shell whenever a session expires mid-session."""
+    return send_from_directory(FRONTEND_DIST / 'assets', filename)
+
+
+@app.route('/app')
+@app.route('/app/<path:_subpath>')
+@login_required
+def serve_spa(_subpath=''):
+    """Serve the SPA shell; client-side routing handles everything below /app."""
+    if not (FRONTEND_DIST / 'index.html').exists():
+        return SPA_NOT_BUILT_HTML, 200
+    return send_from_directory(FRONTEND_DIST, 'index.html')
 
 @app.route('/api/activities', methods=['GET', 'POST'])
 @login_required
@@ -208,8 +1182,44 @@ def activities():
         ))
         conn.commit()
         activity_id = cursor.lastrowid
+
+        newly_earned_badges = []
+        if data.get('activity_name') == 'Daily Checklist':
+            checklist_payload = data.get('checklist_data') if isinstance(data.get('checklist_data'), dict) else {
+                'date': data.get('date'),
+                'description': data.get('description', ''),
+                'notes': data.get('notes', ''),
+                'progress_score': data.get('progress_score', 0)
+            }
+            save_checklist_to_file(user_id, session.get('username', f'user_{user_id}'), activity_id, checklist_payload)
+
+            # Score this submission for XP/levels/badges against the exact Path
+            # (and its item weights) the user actually used that day.
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+            if user_row:
+                paths_payload = load_user_paths(user_row)
+                path_id = checklist_payload.get('selected_path_id')
+                used_path = next((p for p in paths_payload['paths'] if p['id'] == path_id), None) \
+                    or get_selected_path(paths_payload)
+                checklist_items = used_path.get('checklist_items', []) if used_path else []
+                custom_responses = checklist_payload.get('custom_responses', {}) or {}
+                # Deliberately ignores checklist_payload['completion_percent']: the
+                # client reports answered/total, which is ~always 100 because the
+                # wizard forces an answer to every step. Badges keyed off completion
+                # (perfect-day) need completed/total, weighted, computed here.
+                completion_percent = compute_completion_percent(checklist_items, custom_responses)
+
+                newly_earned = award_daily_xp(
+                    conn, user_id, data.get('date'), checklist_items, custom_responses,
+                    completion_percent=completion_percent
+                )
+                newly_earned_badges = [
+                    {'code': b['code'], 'name': b['name'], 'description': b['description']}
+                    for b in newly_earned
+                ]
+
         conn.close()
-        return jsonify({'success': True, 'id': activity_id}), 201
+        return jsonify({'success': True, 'id': activity_id, 'newly_earned_badges': newly_earned_badges}), 201
     
     # GET request - only return activities for current user
     activities = conn.execute(
@@ -261,15 +1271,98 @@ def stats():
         GROUP BY date
         ORDER BY date
     ''', (user_id,)).fetchall()
-    
+
+    # Calculate current streak based on distinct activity dates
+    current_streak = calculate_current_streak(conn, user_id)
+
     conn.close()
     
     return jsonify({
         'total_days': total_days,
         'total_activities': total_activities,
+        'current_streak': current_streak,
         'avg_score': round(avg_score, 2),
         'activities_by_date': [dict(row) for row in activities_by_date]
     })
+
+@app.route('/api/gamification/summary')
+@login_required
+def gamification_summary():
+    """Current user's XP, level, streak multiplier, and badge progress"""
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+
+    total_xp = get_user_total_xp(conn, user_id)
+    level, xp_into_level, xp_for_next_level = compute_level(total_xp)
+    current_streak = calculate_current_streak(conn, user_id)
+    streak_multiplier_pct = min(current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
+
+    earned_codes = {
+        row['badge_code']
+        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
+    }
+    conn.close()
+
+    badges = [
+        {
+            'code': badge['code'],
+            'name': badge['name'],
+            'description': badge['description'],
+            'earned': badge['code'] in earned_codes
+        }
+        for badge in BADGE_DEFINITIONS
+    ]
+
+    return jsonify({
+        'total_xp': total_xp,
+        'level': level,
+        'xp_into_level': xp_into_level,
+        'xp_for_next_level': xp_for_next_level,
+        'current_streak': current_streak,
+        'streak_multiplier_pct': streak_multiplier_pct,
+        'badges': badges
+    })
+
+@app.route('/api/leaderboard/<string:scope>')
+@login_required
+def leaderboard(scope):
+    """Ranked XP leaderboard across all users - 'overall' or 'monthly'"""
+    if scope not in ('overall', 'monthly'):
+        return jsonify({'error': 'Invalid leaderboard scope'}), 400
+
+    conn = get_db_connection()
+
+    if scope == 'monthly':
+        month_prefix = datetime.now().strftime('%Y-%m')
+        rows = conn.execute('''
+            SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
+            FROM users
+            LEFT JOIN daily_xp ON daily_xp.user_id = users.id AND daily_xp.date LIKE ?
+            GROUP BY users.id
+            ORDER BY total_xp DESC, users.username ASC
+        ''', (f'{month_prefix}%',)).fetchall()
+    else:
+        rows = conn.execute('''
+            SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
+            FROM users
+            LEFT JOIN daily_xp ON daily_xp.user_id = users.id
+            GROUP BY users.id
+            ORDER BY total_xp DESC, users.username ASC
+        ''').fetchall()
+
+    entries = []
+    for rank, row in enumerate(rows, start=1):
+        level, _, _ = compute_level(row['total_xp'])
+        entries.append({
+            'rank': rank,
+            'username': row['username'],
+            'total_xp': row['total_xp'],
+            'level': level,
+            'current_streak': calculate_current_streak(conn, row['user_id'])
+        })
+
+    conn.close()
+    return jsonify({'scope': scope, 'entries': entries})
 
 @app.route('/api/milestones/<int:days>')
 @login_required
@@ -451,6 +1544,30 @@ def toggle_admin(user_id):
     
     return jsonify({'success': True, 'is_admin': bool(new_admin_status)})
 
+@app.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_user_password(user_id):
+    """Reset password for a specific user (admin only)"""
+    data = request.json or {}
+    new_password = data.get('new_password', '')
+
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    password_hash = generate_password_hash(new_password)
+    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (password_hash, user_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True})
+
 @app.route('/api/admin/users/<int:user_id>/activities')
 @admin_required
 def get_user_activities(user_id):
@@ -492,7 +1609,10 @@ def admin_stats():
         'active_users': [dict(row) for row in active_users]
     })
 
+# Applied at import time so migrations run under gunicorn too, not only when
+# this module is executed directly. init_db() is idempotent.
+init_db()
+
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=True, port=5000)
+    app.run(debug=DEBUG, port=int(os.environ.get('PORT', 5000)))
 

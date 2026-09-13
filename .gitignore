@@ -33,3 +33,21 @@ exports/*.xlsx
 # Environment
 .env
 .env.local
+
+# Local dev server runs (see the run-locally workflow)
+app_run.log
+app_run.pid
+frontend/vite.log
+frontend/vite.pid
+
+# Frontend (Vite + React). dist/ is a build artifact - rebuilt via `npm run build`.
+frontend/node_modules/
+frontend/dist/
+
+# Per-user data written at runtime - personal log content (wake times, workouts,
+# notes) and the Path templates the app regenerates on demand. This repo is
+# public; none of it belongs here. Source art for the icon set lives directly in
+# artifacts/ and stays tracked.
+artifacts/checklists/
+artifacts/paths/
+artifacts/checklist_items/

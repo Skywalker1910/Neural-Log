@@ -5,183 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Neural-Log</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-
-        .admin-nav {
-            display: flex;
-            gap: 15px;
-        }
-
-        .admin-nav a {
-            color: white;
-            text-decoration: none;
-            padding: 8px 16px;
-            background: linear-gradient(135deg, rgba(139, 0, 0, 0.6), rgba(211, 47, 47, 0.6));
-            border-radius: 20px;
-            transition: all 0.3s;
-            border: 1px solid rgba(211, 47, 47, 0.3);
-        }
-
-        .admin-nav a:hover {
-            background: linear-gradient(135deg, rgba(211, 47, 47, 0.8), rgba(255, 107, 53, 0.8));
-            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
-        }
-
-        .users-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: rgba(26, 26, 26, 0.95);
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid rgba(211, 47, 47, 0.3);
-        }
-
-        .users-table th {
-            background: linear-gradient(135deg, var(--dark-red), var(--primary-color));
-            color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid rgba(255, 107, 53, 0.5);
-        }
-
-        .users-table td {
-            padding: 15px;
-            border-bottom: 1px solid rgba(211, 47, 47, 0.2);
-            color: white;
-            background: rgba(20, 20, 20, 0.6);
-        }
-
-        .users-table tr:hover {
-            background: rgba(211, 47, 47, 0.1);
-        }
-
-        .users-table tr:hover td {
-            background: rgba(211, 47, 47, 0.1);
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .badge-admin {
-            background: linear-gradient(135deg, var(--accent-orange), var(--bat-gold));
-            color: #000;
-            border: 1px solid var(--bat-gold);
-            font-weight: 600;
-        }
-
-        .badge-user {
-            background: linear-gradient(135deg, rgba(139, 0, 0, 0.8), rgba(211, 47, 47, 0.8));
-            color: white;
-            border: 1px solid rgba(211, 47, 47, 0.5);
-        }
-
-        .action-btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            margin-right: 5px;
-            transition: all 0.2s;
-        }
-
-        .btn-view {
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.9), rgba(50, 50, 50, 0.9));
-            color: white;
-            border: 1px solid rgba(211, 47, 47, 0.3);
-        }
-
-        .btn-view:hover {
-            background: linear-gradient(135deg, rgba(50, 50, 50, 0.9), rgba(70, 70, 70, 0.9));
-            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
-        }
-
-        .btn-toggle-admin {
-            background: linear-gradient(135deg, var(--accent-orange), var(--bat-gold));
-            color: #000;
-            font-weight: 600;
-            border: 1px solid var(--bat-gold);
-        }
-
-        .btn-toggle-admin:hover {
-            background: linear-gradient(135deg, var(--bat-gold), var(--accent-orange));
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
-        }
-
-        .btn-delete {
-            background: linear-gradient(135deg, #8B0000, #D32F2F);
-            color: white;
-            border: 1px solid rgba(139, 0, 0, 0.5);
-        }
-
-        .btn-delete:hover {
-            background: linear-gradient(135deg, #D32F2F, var(--accent-orange));
-            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.6);
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover {
-            color: #000;
-        }
-
-        .activity-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="admin-header">
                 <div>
-                    <h1>🛡️ Admin Dashboard</h1>
+                    <h1 class="admin-brand">
+                        <img src="{{ url_for('static', filename='images/app-logo.png') }}" alt="Neural-Log logo" class="admin-logo">
+                        <span>Admin Dashboard</span>
+                    </h1>
                     <p class="subtitle">Manage Users and System Data</p>
                 </div>
                 <div class="admin-nav">
-                    <a href="/">📊 Main App</a>
+                    <a href="/">Main App</a>
                     <a href="/logout">Logout</a>
                 </div>
             </div>
@@ -205,7 +42,7 @@
 
         <!-- Users Management -->
         <div class="card">
-            <h2>👥 User Management</h2>
+            <h2>User Management</h2>
             <table class="users-table">
                 <thead>
                     <tr>
@@ -227,7 +64,7 @@
 
         <!-- Most Active Users -->
         <div class="card">
-            <h2>📈 Most Active Users</h2>
+            <h2>Most Active Users</h2>
             <div id="activeUsersList"></div>
         </div>
     </div>
@@ -288,7 +125,8 @@
                         <td>${user.email || '-'}</td>
                         <td>
                             <span class="badge ${user.is_admin ? 'badge-admin' : 'badge-user'}">
-                                ${user.is_admin ? '🛡️ Admin' : '👤 User'}
+                                <img src="/static/images/icons/${user.is_admin ? 'admin' : 'user'}.png" alt="">
+                                ${user.is_admin ? 'Admin' : 'User'}
                             </span>
                         </td>
                         <td>${user.activity_count}</td>
@@ -299,6 +137,9 @@
                             </button>
                             <button class="action-btn btn-toggle-admin" onclick="toggleUserAdmin(${user.id})">
                                 ${user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                            </button>
+                            <button class="action-btn btn-reset-password" onclick="resetUserPassword(${user.id}, '${user.username}')">
+                                Reset Password
                             </button>
                             <button class="action-btn btn-delete" onclick="deleteUser(${user.id}, '${user.username}')">
                                 Delete
@@ -335,10 +176,10 @@
                             </div>
                             ${activity.description ? `<p>${activity.description}</p>` : ''}
                             <div class="activity-meta">
-                                ${activity.duration ? `<span>⏱️ ${activity.duration} min</span>` : ''}
-                                ${activity.progress_score ? `<span>📊 Score: ${activity.progress_score}/10</span>` : ''}
+                                ${activity.duration ? `<span>${activity.duration} min</span>` : ''}
+                                ${activity.progress_score ? `<span>Score: ${activity.progress_score}/10</span>` : ''}
                             </div>
-                            ${activity.notes ? `<div style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">💭 ${activity.notes}</div>` : ''}
+                            ${activity.notes ? `<div style="margin-top: 10px; font-size: 0.9rem; color: #7f8c8d;">Notes: ${activity.notes}</div>` : ''}
                         </div>
                     `).join('');
                 }
@@ -404,6 +245,41 @@
             } catch (error) {
                 console.error('Error deleting user:', error);
                 showNotification('Error deleting user', 'error');
+            }
+        }
+
+        // Reset user password
+        async function resetUserPassword(userId, username) {
+            const newPassword = prompt(`Enter a new password for "${username}" (min 6 characters):`);
+
+            if (newPassword === null) {
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                showNotification('Password must be at least 6 characters', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(`Password reset successfully for "${username}"`, 'success');
+                } else {
+                    showNotification(data.message || 'Failed to reset password', 'error');
+                }
+            } catch (error) {
+                console.error('Error resetting password:', error);
+                showNotification('Error resetting password', 'error');
             }
         }
 

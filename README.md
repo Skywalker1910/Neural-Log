@@ -1,175 +1,125 @@
-# Neural-Log - Daily Activity Tracking Application
+# Neural-Log
 
-A web application for tracking daily activities and progress with milestone-based insights.
+A daily-discipline tracker for a small group of friends, built around a simple bet:
+if you make consistency visible - and eventually, game-like - you'll keep showing up.
 
-## Features
+## Motivation
 
-- 📝 **Daily Activity Logging**: Track your activities with details like duration, progress score, and notes
-- 📊 **Progress Visualization**: View your progress over time with interactive charts
-- 🎯 **Milestone Insights**: Get comprehensive insights at 10, 25, 45, 70, and 100-day milestones
-- 📈 **Statistics Dashboard**: See total days logged, activities, and average scores
-- 📥 **Excel Export**: Export all your data to Excel for external analysis
-- 💾 **SQLite Database**: All data is stored locally in a lightweight database
+I wanted a way to actually see whether I'm becoming more disciplined, not just feel
+like I am. Wake time, workouts, meals, sleep, the one important task I said I'd do -
+logged daily, cheaply (one wizard, a minute a day), so patterns show up over weeks
+instead of staying a vague impression. The long-term intent is to make that logging
+itself rewarding: XP, levels, streaks, badges, a small leaderboard among the friends
+using it - see [docs/ROADMAP.md](docs/ROADMAP.md). This README covers what exists
+today; the roadmap covers what's next.
 
-## Technology Stack
+## What it does today
 
-- **Backend**: Python Flask
-- **Database**: SQLite
-- **Frontend**: HTML, CSS, JavaScript
-- **Visualization**: Chart.js
-- **Export**: openpyxl
+- **Daily checklist wizard** - a themed set of daily questions ("Paths": Batman /
+  Thor / Captain America / Ironman, or your own custom one), answered one at a time,
+  keyboard-navigable.
+- **Custom Paths** - create, rename, reorder, and delete your own checklist items and
+  templates per user, each item weighted for XP.
+- **Gamification** - XP and levels for completing your checklist, a streak
+  multiplier, 8 badges, and overall + monthly leaderboards across the group. Full
+  scoring spec: [docs/GAMIFICATION.md](docs/GAMIFICATION.md).
+- **Accounts & admin** - session-based login; the first registered user becomes an
+  admin who can view/manage every other user's account and activity.
+- **Stats & streaks** - days logged, total activities, current streak, average
+  progress score, a Chart.js progress chart.
+- **Milestone insights** - a summary snapshot at 10/25/45/70/100 days logged.
+- **Excel export** - all of your activity history, formatted, one click.
+- **Custom icon set** - each checklist item shows a small circular badge icon,
+  generated from the artwork in `artifacts/` (see `scripts/build_icons.py`).
 
-## Installation
+## Architecture
 
-1. **Clone or navigate to the project directory**:
-   ```bash
-   cd Neural-Log
-   ```
+Flask serves a JSON API plus two frontends during the redesign: the original
+server-rendered Jinja app at `/`, and the React + TypeScript SPA at `/app` that is
+progressively replacing it. SQLite holds users/activities/XP; per-user checklist
+templates and daily submissions are JSON/JSONL files under `artifacts/`. Full
+write-up, including *why* it's split that way:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Setup
+
+1. **Clone and enter the project directory.**
 2. **Create a virtual environment** (recommended):
    ```bash
    python -m venv venv
-   venv\Scripts\activate  # On Windows
-   # source venv/bin/activate  # On macOS/Linux
+   venv\Scripts\activate      # Windows
+   # source venv/bin/activate # macOS/Linux
    ```
-
-3. **Install dependencies**:
+3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
+   npm --prefix frontend install
    ```
-
-## Running the Application
-
-1. **Start the Flask server**:
+4. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   # then edit .env - at minimum, set a real SECRET_KEY:
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+5. **Run it.** The backend alone is enough for the classic app:
    ```bash
    python app.py
    ```
+   `http://localhost:5000` - the first account you register becomes admin.
 
-2. **Open your browser** and navigate to:
+   For the redesigned app, run Vite alongside it in a second terminal:
+   ```bash
+   npm --prefix frontend run dev
    ```
-   http://localhost:5000
+   `http://localhost:5173/app` - hot reload, with `/api` proxied to Flask so your
+   session works normally.
+
+   Or build it once and let Flask serve it at `http://localhost:5000/app`:
+   ```bash
+   npm --prefix frontend run build
    ```
 
-## Usage Guide
+### Running tests
 
-### Adding Activities
+```bash
+pytest                              # backend
+npm --prefix frontend run lint      # frontend lint
+npm --prefix frontend run typecheck # frontend types
+```
 
-1. Fill in the activity form with:
-   - **Date**: When the activity occurred
-   - **Activity Name**: Type of activity (e.g., Exercise, Study, Work)
-   - **Description**: Details about what you did
-   - **Duration**: Time spent in minutes
-   - **Progress Score**: Rate your progress from 1-10
-   - **Notes**: Any additional observations
-
-2. Click "Add Activity" to save
-
-### Viewing Statistics
-
-The dashboard shows:
-- Total days you've been logging
-- Total number of activities
-- Average progress score across all activities
-
-### Checking Milestones
-
-Click any milestone button (10, 25, 45, 70, 100 days) to see:
-- Total activities logged
-- Average progress score
-- Number of unique activity types
-- Total time spent
-- Distribution of activities by type
-
-### Exporting Data
-
-Click "Export to Excel" to download all your activities in an Excel file with:
-- Formatted headers
-- All activity details
-- Proper column widths
-
-## Project Structure
+## Project structure
 
 ```
 Neural-Log/
-├── app.py                  # Flask backend application
-├── requirements.txt        # Python dependencies
-├── neural_log.db          # SQLite database (created automatically)
-├── templates/
-│   └── index.html         # Main HTML template
-├── static/
-│   ├── css/
-│   │   └── style.css      # Stylesheet
-│   └── js/
-│       └── app.js         # Frontend JavaScript
-└── exports/               # Excel exports folder (created automatically)
+├── app.py                  # Flask app: routes, auth, DB + Paths persistence
+├── requirements.txt
+├── .env.example            # copy to .env - see Setup
+├── frontend/               # React + Vite + TS SPA (the redesign, served at /app)
+├── migrations/             # numbered SQL migrations + schema_migrations ledger
+├── templates/              # Jinja templates (classic app, being retired)
+├── static/{css,js,images}/ # classic frontend + generated icon set (images/icons/)
+├── artifacts/              # per-user Paths + checklist submissions (JSON/JSONL),
+│                           # plus the source art scripts/build_icons.py reads from
+├── scripts/
+│   ├── build_icons.py      # (re)generates static/images/icons/ from artifacts/
+│   └── shoot.mjs           # authenticated SPA screenshots via DevTools Protocol
+├── tests/                  # pytest smoke tests
+└── docs/
+    ├── ARCHITECTURE.md     # how it's built, and why
+    ├── DESIGN-SYSTEM.md    # tokens, typography, component inventory
+    ├── DATA-MODEL.md       # migrations + planned entities, mapped to phases
+    ├── GAMIFICATION.md     # XP/levels/streaks/badges scoring spec
+    ├── ROADMAP.md          # the ten redesign phases, in order
+    └── CHANGELOG.md        # what changed, newest first
 ```
 
-## API Endpoints
+## Roadmap
 
-- `GET /` - Main application page
-- `GET /api/activities` - Retrieve all activities
-- `POST /api/activities` - Add new activity
-- `DELETE /api/activities/<id>` - Delete an activity
-- `GET /api/stats` - Get statistics
-- `GET /api/milestones/<days>` - Get milestone insights
-- `GET /api/export/excel` - Export data to Excel
-
-## Database Schema
-
-### Activities Table
-- `id`: Primary key
-- `date`: Activity date
-- `activity_name`: Name of the activity
-- `description`: Detailed description
-- `duration`: Time spent (minutes)
-- `progress_score`: Score from 1-10
-- `notes`: Additional notes
-- `created_at`: Timestamp
-
-### Milestones Table
-- `id`: Primary key
-- `milestone_day`: Day count (10, 25, 45, 70, 100)
-- `insights`: JSON data with insights
-- `created_at`: Timestamp
-
-## Customization
-
-### Changing Milestones
-
-Edit the milestone days in [app.py](app.py) line 102:
-```python
-if days not in [10, 25, 45, 70, 100]:
-```
-
-### Styling
-
-Modify colors and styles in [static/css/style.css](static/css/style.css):
-```css
-:root {
-    --primary-color: #4a90e2;
-    --secondary-color: #50c878;
-    /* ... */
-}
-```
-
-## Future Enhancements
-
-- User authentication
-- Multiple users support
-- Activity categories and tags
-- Goal setting and tracking
-- Email/notification reminders
-- Data visualization improvements
-- Mobile app version
+Mid-redesign: turning the checklist app into a full personal-development platform -
+ten workspaces, an RPG-style attribute system driven by real behaviour, and analytics
+over it all. Foundation (R1) is done; Home and Today are next, then AWS deployment.
+See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 
-MIT License - Feel free to use and modify for your personal use.
-
-## Support
-
-For issues or questions, please create an issue in the repository.
-
----
-
-**Happy Tracking! 🧠**
+MIT License - personal project, feel free to use and adapt for your own tracking.

@@ -10,24 +10,46 @@
 <body>
     <div class="container">
         <header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="header-bar">
                 <div>
-                    <h1>� NEURAL-LOG</h1>
-                    <p class="subtitle">Your Daily Chronicle - Track the Night</p>
+                    <h1 class="app-brand">
+                        <img src="{{ url_for('static', filename='images/app-logo.png') }}" alt="Neural-Log logo" class="app-logo">
+                        <span class="app-name">NEURAL-LOG</span>
+                    </h1>
                 </div>
-                <div style="text-align: right;">
-                    <div style="color: white; margin-bottom: 10px;">
-                        <span style="opacity: 0.9;">👤 </span>
-                        <span id="current-username" style="font-weight: 600;"></span>
-                        <span id="admin-badge" style="display: none; background: rgba(255, 255, 255, 0.3); padding: 2px 8px; border-radius: 10px; margin-left: 8px; font-size: 0.85rem;">🛡️ Admin</span>
+                <div class="header-identity">
+                    <div class="header-user-line">
+                        <img src="{{ url_for('static', filename='images/icons/user.png') }}" alt="" class="icon-badge-sm">
+                        <span id="current-username" class="header-username"></span>
+                        <span id="admin-badge" class="role-badge">
+                            <img src="{{ url_for('static', filename='images/icons/admin.png') }}" alt="">
+                            Admin
+                        </span>
                     </div>
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <div class="header-actions">
                         <a href="/admin" id="admin-link" class="logout-btn" style="display: none;">Admin Panel</a>
+                        <button type="button" class="logout-btn" onclick="openBadgesModal()">Badges</button>
+                        <button type="button" class="logout-btn" onclick="openLeaderboardModal()">Leaderboard</button>
+                        <button type="button" class="logout-btn" onclick="openUserOptionsModal()">User Options</button>
                         <a href="/logout" class="logout-btn">Logout</a>
                     </div>
                 </div>
             </div>
         </header>
+
+        <!-- Level / XP banner -->
+        <div class="card xp-banner">
+            <div class="xp-banner-top">
+                <div class="xp-level-badge">Level <span id="xpLevel">1</span></div>
+                <div id="xpStreakMultiplier" class="xp-streak-multiplier"></div>
+            </div>
+            <div class="progress-bar-container xp-bar-container">
+                <div id="xpBar" class="progress-bar"></div>
+            </div>
+            <div class="xp-banner-bottom">
+                <span id="xpIntoLevel">0</span> / <span id="xpForNextLevel">50</span> XP to next level
+            </div>
+        </div>
 
         <div class="stats-container">
             <div class="stat-card">
@@ -42,13 +64,17 @@
                 <h3 id="avgScore">0</h3>
                 <p>Avg Progress Score</p>
             </div>
+            <div class="stat-card">
+                <h3 id="currentStreak">0</h3>
+                <p>Current Streak</p>
+            </div>
         </div>
 
         <div class="main-content">
             <!-- Daily Checklist Form -->
             <div class="card">
                 <div class="checklist-header">
-                    <h2>📋 Daily Checklist - End of Day Review</h2>
+                    <h2>Daily Checklist - End of Day Review</h2>
                     <div class="progress-indicator">
                         <span id="currentStep">1</span> / <span id="totalSteps">0</span>
                     </div>
@@ -61,7 +87,7 @@
                 
                 <form id="dailyChecklistForm">
                     <div class="form-group date-selector">
-                        <label for="date">Date: <span id="todayIndicator" class="today-badge">📅 Today</span></label>
+                        <label for="date">Date: <span id="todayIndicator" class="today-badge">Today</span></label>
                         <div class="date-navigation">
                             <button type="button" class="btn-date-nav" onclick="navigateDate(-1)" title="Previous Day">
                                 ← Previous Day
@@ -70,156 +96,6 @@
                             <button type="button" class="btn-date-nav" onclick="navigateDate(1)" title="Next Day">
                                 Next Day →
                             </button>
-                        </div>
-                    </div>
-
-                    <!-- Wizard Container for Step-by-Step -->
-                    <div id="checklistWizard" class="wizard-container">
-
-                    <!-- Wake Up Time -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">⏰ Woke up at</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="wakeTime" value="05:00 - 05:30">
-                                <span>05:00 - 05:30 AM</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="wakeTime" value="05:30 - 06:30">
-                                <span>05:30 - 06:30 AM</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="wakeTime" value="06:30 - 07:30">
-                                <span>06:30 - 07:30 AM</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="wakeTime" value="After 07:30">
-                                <span>After 07:30 AM</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Coffee -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">☕ Coffee</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="coffee" value="No" onchange="toggleSubOptions('coffeeTime', false)">
-                                <span>No</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="coffee" value="Yes" onchange="toggleSubOptions('coffeeTime', true)">
-                                <span>Yes</span>
-                            </label>
-                        </div>
-                        <div id="coffeeTime" class="sub-options" style="display: none;">
-                            <label class="sub-label">When?</label>
-                            <label class="radio-option">
-                                <input type="radio" name="coffeeTime" value="Within 30 min">
-                                <span>Within 30 minutes of waking up</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="coffeeTime" value="After 30 min">
-                                <span>After 30 minutes</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Breakfast -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">🍳 Breakfast</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="breakfast" value="No" onchange="toggleSubOptions('breakfastTime', false)">
-                                <span>No</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="breakfast" value="Yes" onchange="toggleSubOptions('breakfastTime', true)">
-                                <span>Yes</span>
-                            </label>
-                        </div>
-                        <div id="breakfastTime" class="sub-options" style="display: none;">
-                            <label class="sub-label">When?</label>
-                            <label class="radio-option">
-                                <input type="radio" name="breakfastTime" value="Within 30 min">
-                                <span>Within 30 minutes of waking up</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="breakfastTime" value="After 30 min">
-                                <span>After 30 minutes</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Exercise -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">💪 Exercise</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="exercise" value="No" onchange="toggleSubOptions('exerciseType', false)">
-                                <span>No</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="exercise" value="Yes" onchange="toggleSubOptions('exerciseType', true)">
-                                <span>Yes</span>
-                            </label>
-                        </div>
-                        <div id="exerciseType" class="sub-options" style="display: none;">
-                            <label class="sub-label">Type:</label>
-                            <label class="radio-option">
-                                <input type="radio" name="exerciseType" value="Cardio">
-                                <span>Cardio (Running, Walking)</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="exerciseType" value="Strength">
-                                <span>Strength Training</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="exerciseType" value="Yoga">
-                                <span>Yoga/Stretching</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="exerciseType" value="Other">
-                                <span>Other</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Lunch -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">🍱 Lunch</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="lunch" value="No">
-                                <span>No</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="lunch" value="Yes - Home cooked">
-                                <span>Yes - Home cooked</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="lunch" value="Yes - Outside">
-                                <span>Yes - Outside</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Dinner -->
-                    <div class="checklist-item">
-                        <label class="checklist-label">🍽️ Dinner</label>
-                        <div class="radio-group">
-                            <label class="radio-option">
-                                <input type="radio" name="dinner" value="No">
-                                <span>No</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="dinner" value="Yes - Home cooked">
-                                <span>Yes - Home cooked</span>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="dinner" value="Yes - Outside">
-                                <span>Yes - Outside</span>
-                            </label>
                         </div>
                     </div>
 
@@ -237,18 +113,18 @@
                             Next →
                         </button>
                         <button type="submit" id="submitBtn" class="btn btn-success" style="display: none;">
-                            ✅ Save Today's Log
+                            Save Today's Log
                         </button>
                     </div>
                     
                     <div class="wizard-hint">
-                        💡 Tip: Use <kbd>Enter</kbd> or <kbd>→</kbd> to go next, <kbd>←</kbd> to go back
+                        Tip: Use <kbd>Enter</kbd> or <kbd>→</kbd> to go next, <kbd>←</kbd> to go back
                     </div>
                 </form>
                 
                 <div style="text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);">
                     <button type="button" class="btn btn-secondary" onclick="openCustomItemModal()">
-                        ⚙️ Manage Custom Checklist Items
+                        Manage Custom Checklist Items
                     </button>
                 </div>
             </div>
@@ -311,8 +187,9 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="customItemIcon">Icon (emoji):</label>
-                            <input type="text" id="customItemIcon" placeholder="📚" maxlength="2">
+                            <label>Icon:</label>
+                            <input type="hidden" id="customItemIcon" value="default">
+                            <div id="customItemIconPicker" class="icon-picker"></div>
                         </div>
                         
                         <div style="display: flex; gap: 10px;">
@@ -320,6 +197,104 @@
                             <button type="button" class="btn btn-secondary" onclick="closeCustomItemModal()">Cancel</button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- User Options Modal -->
+            <div id="userOptionsModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeUserOptionsModal()">&times;</span>
+                    <h2>User Options</h2>
+
+                    <form id="userProfileForm">
+                        <h3 style="margin-top: 10px;">Profile</h3>
+                        <div class="form-group">
+                            <label for="settingsUsername">Username</label>
+                            <input type="text" id="settingsUsername" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settingsPath">Path</label>
+                            <select id="settingsPath" class="form-select"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="button" class="btn btn-secondary" onclick="createNewPath()">Create New Path</button>
+                            <button type="button" class="btn btn-secondary" onclick="renameSelectedPath()">Rename Path</button>
+                            <button type="button" class="btn btn-secondary" onclick="deleteSelectedPath()">Delete Path</button>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="button" class="btn btn-secondary" onclick="openPathEditorModal()">Edit Path Activities</button>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Selected Path Activities</label>
+                            <div id="selectedPathItemsPreview" class="path-preview-list"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Save Profile Changes</button>
+                    </form>
+
+                    <hr style="margin: 25px 0; border-color: var(--border-color);">
+
+                    <form id="userPasswordForm">
+                        <h3 style="margin-top: 10px;">Reset Password</h3>
+                        <div class="form-group">
+                            <label for="currentPassword">Current Password</label>
+                            <input type="password" id="currentPassword" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <input type="password" id="newPassword" minlength="6" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirmNewPassword">Confirm New Password</label>
+                            <input type="password" id="confirmNewPassword" minlength="6" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-secondary">Update Password</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Path Activities Editor Modal -->
+            <div id="pathEditorModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closePathEditorModal()">&times;</span>
+                    <h2>Edit Path Activities</h2>
+                    <p style="margin-bottom: 12px; color: #7f8c8d;">Drag each slider to the target position in the sequence, then release to reorder.</p>
+
+                    <div id="pathActivitiesList" class="path-activities-list"></div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button type="button" class="btn btn-secondary" onclick="addPathActivityItem()">Add Activity</button>
+                        <button type="button" class="btn btn-primary" onclick="savePathActivitiesFromEditor()">Save Sequence</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Badges Modal -->
+            <div id="badgesModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeBadgesModal()">&times;</span>
+                    <h2>Badges</h2>
+                    <div id="badgesGrid" class="badges-grid"></div>
+                </div>
+            </div>
+
+            <!-- Leaderboard Modal -->
+            <div id="leaderboardModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeLeaderboardModal()">&times;</span>
+                    <h2>Leaderboard</h2>
+                    <div class="leaderboard-tabs">
+                        <button type="button" id="leaderboardTabOverall" class="btn btn-secondary leaderboard-tab active" onclick="loadLeaderboard('overall')">Overall</button>
+                        <button type="button" id="leaderboardTabMonthly" class="btn btn-secondary leaderboard-tab" onclick="loadLeaderboard('monthly')">This Month</button>
+                    </div>
+                    <div id="leaderboardTableWrap" class="leaderboard-table-wrap"></div>
                 </div>
             </div>
 
