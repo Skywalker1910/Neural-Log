@@ -14,6 +14,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from dotenv import load_dotenv
 
+import scoring
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -502,6 +504,23 @@ def calculate_daily_xp(checklist_items, custom_responses):
         if _item_is_completed(item, response_value):
             base_xp += int(item.get('weight', 1) or 0) * XP_PER_WEIGHT_POINT
     return base_xp
+
+
+def _extract_self_rating(checklist_items, custom_responses):
+    """The 1-5 self-rating answer, kept as itself rather than folded into a score.
+
+    Note activities.progress_score is NOT this: the client sends rating*2 there,
+    so that column is a doubled self-report and must not be read as a score.
+    """
+    for item in checklist_items or []:
+        if item.get('type') != 'rating':
+            continue
+        value = (custom_responses or {}).get(item.get('name'))
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def compute_completion_percent(checklist_items, custom_responses):
@@ -1218,6 +1237,26 @@ def activities():
                     for b in newly_earned
                 ]
 
+                # Snapshot the day and rebuild the derived attribute series. Runs
+                # after award_daily_xp because that commits internally, so the XP
+                # row is already durable by this point; a failure here costs the
+                # attribute scores for this submission, not the submission itself.
+                selected = get_selected_path(paths_payload)
+                scoring.record_day(
+                    conn, user_id, data.get('date'),
+                    checklist_items, custom_responses,
+                    path_id=(used_path or selected or {}).get('id'),
+                    path_name=(used_path or selected or {}).get('name'),
+                    activity_id=activity_id,
+                    self_rating=_extract_self_rating(checklist_items, custom_responses),
+                    notes=(checklist_payload.get('notes') or None),
+                )
+                conn.commit()
+                # Only from this date forward: earlier days are unaffected by a
+                # later submission, and recomputing them would be wasted work.
+                scoring.recompute_scores(conn, user_id, from_date=data.get('date'))
+                conn.commit()
+
         conn.close()
         return jsonify({'success': True, 'id': activity_id, 'newly_earned_badges': newly_earned_badges}), 201
     
@@ -1322,6 +1361,162 @@ def gamification_summary():
         'streak_multiplier_pct': streak_multiplier_pct,
         'badges': badges
     })
+
+def _attributes_payload(conn, user_id, date=None):
+    """All eight attributes, in radar-axis order, whether or not they have a row.
+
+    scoring.store.get_attributes() returns only rows that exist, so an attribute
+    the user has never had a signal for would simply be missing. The radar needs
+    all eight every time - a chart whose axes appear and disappear is unreadable -
+    so anything absent is filled in with its honest default (locked, or
+    unobserved). unlocks_in / needs_days come from the engine rather than the
+    table, which stores only the numbers.
+    """
+    stored = {row['attribute']: row for row in scoring.get_attributes(conn, user_id, date)}
+
+    payload = []
+    for attribute in scoring.ATTRIBUTES:
+        row = stored.get(attribute)
+        if row is None:
+            payload.append(scoring.aggregate_attribute(attribute, []))
+            continue
+
+        entry = {
+            'attribute': attribute,
+            'status': row['status'],
+            'score': row['score'],
+            'confidence': row['confidence'],
+            'sample_days': row['sample_days'],
+            'raw_value': row['raw_value'],
+        }
+        # Re-derive the explanatory fields the table does not carry.
+        hint = scoring.aggregate_attribute(attribute, [])
+        if entry['status'] == 'locked' and 'unlocks_in' in hint:
+            entry['unlocks_in'] = hint['unlocks_in']
+        if entry['status'] == 'calibrating':
+            entry['needs_days'] = max(
+                scoring.DEFAULT_CONFIG.min_days_for_score - (row['sample_days'] or 0), 0
+            )
+        payload.append(entry)
+    return payload
+
+
+@app.route('/api/attributes')
+@login_required
+def attributes():
+    """The attribute set for the radar, as of a date (default: most recent)."""
+    user_id = session.get('user_id')
+    date = request.args.get('date') or None
+
+    conn = get_db_connection()
+    payload = _attributes_payload(conn, user_id, date)
+    latest = conn.execute(
+        'SELECT MAX(date) AS d FROM attribute_scores WHERE user_id = ?', (user_id,)
+    ).fetchone()
+    conn.close()
+
+    return jsonify({'date': date or (latest['d'] if latest else None),
+                    'attributes': payload})
+
+
+@app.route('/api/days/<string:date>')
+@login_required
+def day_detail(date):
+    """One day's logged checklist - the per-item answers as they were that day.
+
+    Nothing else exposes these: custom_responses are written to the JSONL file
+    and never read back over HTTP. Today reads this to show what is already
+    ticked, so it must come from daily_log's snapshot rather than the live Path.
+    """
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+
+    row = conn.execute(
+        'SELECT * FROM daily_log WHERE user_id = ? AND date = ?', (user_id, date)
+    ).fetchone()
+    scores = conn.execute(
+        'SELECT daily_score, discipline_score, completion_pct FROM daily_scores '
+        'WHERE user_id = ? AND date = ?', (user_id, date)
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        # Not an error: most dates simply have not been logged.
+        return jsonify({'date': date, 'logged': False, 'items': [], 'scores': None})
+
+    try:
+        payload = json.loads(row['payload_json'] or '{}')
+    except (TypeError, ValueError):
+        payload = {}
+
+    return jsonify({
+        'date': date,
+        'logged': True,
+        'path': {'id': row['path_id'], 'name': row['path_name']},
+        'completion_pct': row['completion_pct'],
+        'items_total': row['items_total'],
+        'items_completed': row['items_completed'],
+        'self_rating': row['self_rating'],
+        'notes': row['notes'],
+        'items': payload.get('items', []),
+        'scores': dict(scores) if scores else None,
+    })
+
+
+@app.route('/api/home')
+@login_required
+def home_summary():
+    """Everything the Home dashboard needs, in one response.
+
+    Composed server-side on purpose: QueryBoundary wraps a single query, so five
+    separate calls would mean five independent skeletons and five error states on
+    one screen. One call, one loading state.
+    """
+    user_id = session.get('user_id')
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+
+    total_xp = get_user_total_xp(conn, user_id)
+    level, xp_into_level, xp_for_next_level = compute_level(total_xp)
+    current_streak = calculate_current_streak(conn, user_id)
+
+    recent = scoring.get_daily_scores(conn, user_id, limit=14)
+    latest = recent[-1] if recent else None
+
+    today_row = conn.execute(
+        'SELECT completion_pct, items_total, items_completed FROM daily_log '
+        'WHERE user_id = ? AND date = ?', (user_id, today)
+    ).fetchone()
+
+    days_logged = conn.execute(
+        'SELECT COUNT(*) AS n FROM daily_log WHERE user_id = ?', (user_id,)
+    ).fetchone()['n']
+
+    payload = {
+        'date': today,
+        'level': level,
+        'total_xp': total_xp,
+        'xp_into_level': xp_into_level,
+        'xp_for_next_level': xp_for_next_level,
+        'current_streak': current_streak,
+        'streak_multiplier_pct': min(
+            current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT
+        ),
+        'days_logged': days_logged,
+        'daily_score': latest['daily_score'] if latest else None,
+        'discipline_score': latest['discipline_score'] if latest else None,
+        'today': {
+            'logged': today_row is not None,
+            'completion_pct': today_row['completion_pct'] if today_row else 0,
+            'items_total': today_row['items_total'] if today_row else 0,
+            'items_completed': today_row['items_completed'] if today_row else 0,
+        },
+        'attributes': _attributes_payload(conn, user_id),
+        'trend': recent,
+    }
+    conn.close()
+    return jsonify(payload)
+
 
 @app.route('/api/leaderboard/<string:scope>')
 @login_required
