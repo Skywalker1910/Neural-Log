@@ -426,6 +426,23 @@ def init_db():
         cursor.execute('ALTER TABLE users ADD COLUMN custom_path_items TEXT')
 
     conn.commit()
+
+    # The shipped exercise library lives in data/exercises.json rather than in a
+    # migration: 85 curated rows are unreviewable as SQL, and every wording fix
+    # would otherwise need a new migration file. Syncing here is idempotent and
+    # keeps the JSON as the source of truth. See scoring/library.py.
+    try:
+        added, updated, archived = scoring.sync_library(conn)
+        if added or updated or archived:
+            app.logger.info(
+                'Exercise library synced: %d added, %d updated, %d archived',
+                added, updated, archived,
+            )
+    except sqlite3.Error:
+        # A library that fails to sync is a thin Training page, not a reason to
+        # refuse to boot.
+        app.logger.exception('Could not sync the exercise library')
+
     conn.close()
 
 

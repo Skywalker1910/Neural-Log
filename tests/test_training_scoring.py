@@ -29,6 +29,13 @@ def db(app_module):
 
 
 def _exercise(conn, slug, muscle, category='strength'):
+    """A library exercise for the test to log sets against.
+
+    Prefixed so it can never collide with the 85 real exercises that init_db now
+    seeds from data/exercises.json - an earlier version of this helper picked
+    'rowing-machine', which the shipped library also contains.
+    """
+    slug = f'test-{slug}'
     conn.execute(
         'INSERT INTO exercises (user_id, slug, name, primary_muscle, category) '
         'VALUES (NULL, ?, ?, ?, ?)', (slug, slug.replace('-', ' ').title(), muscle, category))
