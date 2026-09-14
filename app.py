@@ -1960,8 +1960,15 @@ def admin_stats():
 # defined, and injected rather than imported so the module never imports app
 # back (the test suite swaps modules per test).
 from training_api import init_training  # noqa: E402
+from nutrition_api import init_nutrition  # noqa: E402
 
 init_training(app, get_db_connection, login_required)
+
+# Nutrition and Lifestyle also get the recompute function injected: logging a
+# meal or a night's sleep moves attribute scores, so those endpoints have to
+# rescore, and reaching for scoring.recompute_scores directly would be the same
+# import cycle the injection exists to avoid.
+init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.
