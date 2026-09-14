@@ -133,14 +133,18 @@ def test_early_days_are_calibrating_not_zero(db):
     assert all(r['score'] is None for r in rows)
 
 
-def test_locked_attribute_is_stored_as_locked(db):
+def test_attribute_with_no_signal_is_unobserved_not_zero(db):
+    """Agility stopped being locked when R3 added mobility work. With a Path
+    containing no mobility and no logged training it is now 'unobserved' -
+    still no number, but for a different and more accurate reason.
+    """
     conn, user_id, app_module = db
     _log_days(conn, user_id, _items(app_module), 5)
 
     row = conn.execute(
         "SELECT * FROM attribute_scores WHERE user_id = ? AND attribute = 'Agility' "
         "ORDER BY date DESC LIMIT 1", (user_id,)).fetchone()
-    assert row['status'] == 'locked'
+    assert row['status'] == 'unobserved'
     assert row['score'] is None
 
 

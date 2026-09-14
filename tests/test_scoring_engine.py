@@ -124,11 +124,26 @@ def test_attribute_with_no_feeding_item_is_absent_not_zero(app_module):
 
 # --- aggregation and honesty gates ------------------------------------------
 
-def test_locked_attribute_reports_the_phase_that_unlocks_it():
-    result = aggregate_attribute('Agility', [1.0] * 30)
+def test_locked_attribute_reports_the_phase_that_unlocks_it(monkeypatch):
+    """No attribute is locked since R3 unlocked Agility, but the mechanism has
+    to keep working - a future attribute added before the phase that feeds it
+    must report 'locked', not 'unobserved' (which would read as "your Path is
+    missing something" rather than "this does not exist yet").
+    """
+    from scoring import engine
+
+    monkeypatch.setitem(engine.LOCKED_UNTIL, 'Stamina', 'R9')
+    result = aggregate_attribute('Stamina', [1.0] * 30)
     assert result['status'] == 'locked'
     assert result['score'] is None
-    assert result['unlocks_in'] == 'R3'
+    assert result['unlocks_in'] == 'R9'
+
+
+def test_no_attribute_is_locked_now_that_training_exists():
+    """R3 added mobility work, the only thing Agility was waiting for."""
+    from scoring import engine
+
+    assert engine.LOCKED_UNTIL == {}
 
 
 def test_unobserved_when_no_days_have_the_signal():

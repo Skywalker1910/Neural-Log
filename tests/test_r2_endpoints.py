@@ -98,11 +98,15 @@ def test_attributes_for_a_brand_new_user_are_honest_not_zero(logged_in):
         assert attribute['status'] in {'locked', 'unobserved', 'calibrating'}
 
 
-def test_locked_attribute_names_the_phase_that_unlocks_it(logged_in):
+def test_attribute_without_a_signal_reports_unobserved(logged_in):
+    """Agility was locked until R3 added mobility work. Without training data
+    it now reports 'unobserved' - no number either way, but the reason is
+    "nothing you log feeds this" rather than "this does not exist yet".
+    """
     data = logged_in.get('/api/attributes').get_json()
     agility = next(a for a in data['attributes'] if a['attribute'] == 'Agility')
-    assert agility['status'] == 'locked'
-    assert agility['unlocks_in'] == 'R3'
+    assert agility['status'] == 'unobserved'
+    assert agility['score'] is None
 
 
 def test_calibrating_attribute_reports_days_remaining(logged_in):

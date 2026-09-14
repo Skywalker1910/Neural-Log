@@ -16,6 +16,7 @@ rescore everything" safe.
 """
 import json
 
+from . import producers
 from .config import ATTRIBUTES, DEFAULT_CONFIG
 from .engine import (
     ENGINE_VERSION,
@@ -80,6 +81,25 @@ def record_day(conn, user_id, date, checklist_items, custom_responses,
     return scored
 
 
+def _load_training_sets(conn, user_id):
+    """Every completed set the user has logged, with the exercise metadata the
+    producer needs to decide which attribute it feeds."""
+    rows = conn.execute(
+        """
+        SELECT s.date AS date, e.category AS category, e.primary_muscle AS primary_muscle,
+               x.weight AS weight, x.weight_unit AS weight_unit, x.reps AS reps,
+               x.duration_seconds AS duration_seconds, x.is_warmup AS is_warmup,
+               x.completed AS completed
+        FROM exercise_sets x
+        JOIN workout_sessions s ON s.id = x.session_id
+        JOIN exercises e ON e.id = x.exercise_id
+        WHERE s.user_id = ?
+        """,
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _load_history(conn, user_id):
     """Every logged day for a user, oldest first, as (date, {attr: ratio}, completion)."""
     rows = conn.execute(
@@ -119,16 +139,43 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     Returns the number of days recomputed.
     """
     history = _load_history(conn, user_id)
-    if not history:
+
+    # Training is measured over a trailing window rather than per day, so it is
+    # computed for every date up front - including days where the only thing
+    # logged was a workout.
+    checklist_dates = [day for day, _, _ in history]
+    training_sets = _load_training_sets(conn, user_id)
+    training_dates = sorted({row['date'] for row in training_sets})
+    all_dates = sorted(set(checklist_dates) | set(training_dates))
+    if not all_dates:
         return 0
 
+    training = producers.training_ratios(training_sets, all_dates, config)
+
+    # One blended ratio per attribute per day. Where a day has both a ticked box
+    # and logged sets for the same attribute, the measured signal dominates but
+    # the self-report is not discarded - see producers.blend.
+    checklist_by_date = {day: ratios for day, ratios, _ in history}
+    completion_by_date = {day: pct for day, _, pct in history}
+    blended = {}
+    for day in all_dates:
+        reported = checklist_by_date.get(day, {})
+        measured = training.get(day, {})
+        blended[day] = {
+            attribute: producers.blend(attribute, reported.get(attribute), measured.get(attribute), config)
+            for attribute in set(reported) | set(measured)
+        }
+
     recomputed = 0
-    for index, (date, _, completion_pct) in enumerate(history):
+    for index, date in enumerate(all_dates):
         if from_date and date < from_date:
             continue
 
-        window = history[: index + 1]
-        log_dates = [day for day, _, _ in window]
+        completion_pct = completion_by_date.get(date, 0)
+        window_dates = all_dates[: index + 1]
+        # Consistency measures showing up for the daily log specifically, so it
+        # counts checklist days only - a workout is not a substitute for logging.
+        log_dates = [day for day in window_dates if day in checklist_by_date]
 
         results = {}
         for attribute in ATTRIBUTES:
@@ -139,15 +186,15 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
                 )
             else:
                 ratios = [
-                    day_ratios[attribute]
-                    for _, day_ratios, _ in window
-                    if attribute in day_ratios
+                    blended[day][attribute]
+                    for day in window_dates
+                    if blended[day].get(attribute) is not None
                 ]
             results[attribute] = aggregate_attribute(attribute, ratios, config)
 
         for attribute, result in results.items():
             # That day's own observed ratio, distinct from the rolling score.
-            raw_value = window[-1][1].get(attribute)
+            raw_value = blended[date].get(attribute)
             conn.execute(
                 '''
                 INSERT INTO attribute_scores (
