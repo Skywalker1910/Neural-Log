@@ -443,6 +443,17 @@ def init_db():
         # refuse to boot.
         app.logger.exception('Could not sync the exercise library')
 
+    # Same arrangement for the food library (data/foods.json, 233 rows).
+    try:
+        added, updated, archived = scoring.sync_foods(conn)
+        if added or updated or archived:
+            app.logger.info(
+                'Food library synced: %d added, %d updated, %d archived',
+                added, updated, archived,
+            )
+    except sqlite3.Error:
+        app.logger.exception('Could not sync the food library')
+
     conn.close()
 
 

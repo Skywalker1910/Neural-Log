@@ -69,9 +69,16 @@ MUSCLE_ATTRIBUTES = {
 }
 
 # Attributes that a measuring workspace can evidence. Only these are subject to
-# the self-report ceiling: capping Discipline because you did not log a workout
-# would be nonsense - there is nothing to log.
-MEASURABLE_ATTRIBUTES = frozenset({'Strength', 'Stamina', 'Agility'})
+# the self-report ceiling: capping an attribute because you did not log something
+# would be nonsense where there is nothing to log.
+#
+# Recovery joined in R4, because sleep became loggable. Discipline deliberately
+# did NOT, even though R4 gives it measured signals (sleep consistency, hydration
+# and nutrition adherence): the daily checklist is already direct evidence of
+# discipline, so those are ADDITIONAL evidence rather than the only possible
+# evidence. Capping Discipline would punish someone for not using a workspace,
+# which is the opposite of what the ceiling is for.
+MEASURABLE_ATTRIBUTES = frozenset({'Strength', 'Stamina', 'Agility', 'Recovery'})
 
 # Exercise category overrides the muscle map where it disagrees - a mobility
 # movement targeting hamstrings is Agility work, not a hamstring builder.
@@ -146,6 +153,56 @@ class ScoringConfig:
     # dominates the blend - but the checkbox is not discarded either.
     measured_weight: float = 3.0
     self_report_weight: float = 1.0
+
+    # --- Sleep and lifestyle (R4) -------------------------------------------
+    # Sleep is scored per night rather than over a window: unlike training, a
+    # night is not something you can bank. Missing one is a real gap in recovery
+    # on that day, and the EWMA already stops a single bad night from mattering
+    # much.
+    #
+    # Full credit is a BAND, not a threshold. Below target, credit falls off
+    # proportionally. Above it, credit holds for a couple of hours and then
+    # tapers - sleeping eleven hours is not better recovery than eight, but the
+    # evidence that it is actively bad is weak enough that it should not crater
+    # the score either.
+    sleep_target_minutes: int = 480          # the default; the profile overrides it
+    sleep_surplus_tolerance_minutes: int = 120
+    # How long the taper takes to reach the floor once the tolerance is used
+    # up. Named rather than reusing the target as an incidental span: with an
+    # 8h target that reached the floor only at 18h in bed, which scored an
+    # eleven-hour night at 0.95.
+    sleep_oversleep_taper_minutes: int = 240
+    sleep_oversleep_floor: float = 0.6       # credit never falls below this from oversleeping
+
+    # Schedule consistency -> Discipline. Measured as the spread of bedtimes and
+    # wake times across a trailing window. Going to bed at a similar hour is a
+    # behaviour you control, which is exactly what Discipline should be made of.
+    sleep_consistency_window_days: int = 14
+    sleep_consistency_min_nights: int = 3
+    # Spread at which consistency credit reaches zero. 90 minutes is deliberately
+    # forgiving: a weekend lie-in should cost something, not everything.
+    sleep_consistency_tolerance_minutes: float = 90.0
+
+    # Steps -> Stamina, over a trailing window for the same reason training uses
+    # one: a rest day is not a failure.
+    steps_window_days: int = 7
+    daily_step_target: int = 8000
+
+    # Hydration and nutrition adherence -> Discipline. Hitting targets you set
+    # for yourself is adherence behaviour, which is why it feeds Discipline
+    # rather than Recovery or Strength. Eating protein is not training.
+    daily_water_target_ml: int = 2500
+    # How far from the calorie target still counts as hitting it. Nutrition
+    # tracking is approximate at the best of times, and a 2,000 kcal target met
+    # at 2,050 is a hit by any honest reading.
+    calorie_tolerance_fraction: float = 0.10
+
+    # Relative weights of the adherence components inside the Discipline signal.
+    adherence_weights: dict = field(default_factory=lambda: {
+        'water': 1.0,
+        'calories': 1.0,
+        'protein': 1.0,
+    })
 
     # Weights for the composite daily score.
     daily_score_weights: dict = field(default_factory=lambda: {

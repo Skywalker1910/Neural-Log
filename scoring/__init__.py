@@ -6,6 +6,8 @@ learning sessions) without circular imports. Nothing in here imports app.
 """
 from .config import ATTRIBUTES, ScoringConfig, DEFAULT_CONFIG
 from .library import load_library, sync_library
+from .foodlib import load_foods, sync_foods
+from . import nutrition
 from .store import (
     record_day,
     recompute_scores,
@@ -35,4 +37,7 @@ __all__ = [
     'get_daily_scores',
     'load_library',
     'sync_library',
+    'load_foods',
+    'sync_foods',
+    'nutrition',
 ]

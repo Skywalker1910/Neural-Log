@@ -15,8 +15,9 @@ Recomputing never touches daily_log, which is what makes "retune the weights and
 rescore everything" safe.
 """
 import json
+from datetime import date as _date
 
-from . import producers
+from . import nutrition, producers
 from .config import ATTRIBUTES, DEFAULT_CONFIG
 from .engine import (
     ENGINE_VERSION,
@@ -100,6 +101,104 @@ def _load_training_sets(conn, user_id):
     return [dict(row) for row in rows]
 
 
+def _load_sleep(conn, user_id):
+    rows = conn.execute(
+        'SELECT date, duration_minutes, bedtime, wake_time FROM sleep_entries '
+        'WHERE user_id = ? ORDER BY date',
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _load_lifestyle(conn, user_id):
+    rows = conn.execute(
+        'SELECT date, water_ml, steps, sunlight_minutes FROM lifestyle_days '
+        'WHERE user_id = ? ORDER BY date',
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _load_nutrition_totals(conn, user_id):
+    """Per-day macro totals, summed in SQL rather than in Python.
+
+    Macros are derived from the food's per-100g values on every read rather than
+    denormalised onto the entry, so correcting a food's data corrects history
+    instead of leaving a trail of rows frozen at the wrong numbers.
+    """
+    rows = conn.execute(
+        '''
+        SELECT e.date AS date,
+               SUM(f.kcal_per_100g    * e.grams / 100.0) AS calories,
+               SUM(f.protein_per_100g * e.grams / 100.0) AS protein_g,
+               SUM(f.carbs_per_100g   * e.grams / 100.0) AS carbs_g,
+               SUM(f.fat_per_100g     * e.grams / 100.0) AS fat_g,
+               SUM(f.fibre_per_100g   * e.grams / 100.0) AS fibre_g
+        FROM food_entries e
+        JOIN foods f ON f.id = e.food_id
+        WHERE e.user_id = ?
+        GROUP BY e.date
+        ''',
+        (user_id,),
+    ).fetchall()
+    return {row['date']: dict(row) for row in rows}
+
+
+def _load_profile(conn, user_id):
+    row = conn.execute(
+        'SELECT * FROM user_profile WHERE user_id = ?', (user_id,)
+    ).fetchone()
+    return dict(row) if row else {}
+
+
+def _weight_timeline(conn, user_id):
+    """Body weights, oldest first, as (date, kg). Empty when nothing is recorded."""
+    rows = conn.execute(
+        "SELECT date, value FROM body_measurements "
+        "WHERE user_id = ? AND metric = 'weight' ORDER BY date",
+        (user_id,),
+    ).fetchall()
+    return [(row['date'], row['value']) for row in rows]
+
+
+def _weight_on(timeline, iso):
+    """The weight known as of a date.
+
+    Uses the most recent measurement on or before that day, falling back to the
+    earliest one for dates before any weigh-in. The fallback matters: without it
+    every day before the first weigh-in would have no calorie target and so no
+    adherence signal, which would read as "you were not adhering" rather than
+    "nobody knew what you weighed yet".
+    """
+    if not timeline:
+        return None
+    current = None
+    for date, value in timeline:
+        if date <= iso:
+            current = value
+        else:
+            break
+    return current if current is not None else timeline[0][1]
+
+
+def _targets_by_date(conn, user_id, dates):
+    """Each day's nutrition and lifestyle targets, as they would have applied then.
+
+    Body weight is read per-date rather than once, so a calorie target follows
+    the weight it was derived from instead of retroactively rewriting every past
+    day against today's.
+    """
+    profile = _load_profile(conn, user_id)
+    timeline = _weight_timeline(conn, user_id)
+
+    out = {}
+    for iso in dates:
+        out[iso] = nutrition.resolve_targets(
+            profile, _weight_on(timeline, iso), _date.fromisoformat(iso)
+        )
+    return out
+
+
 def _load_history(conn, user_id):
     """Every logged day for a user, oldest first, as (date, {attr: ratio}, completion)."""
     rows = conn.execute(
@@ -164,8 +263,21 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     # logged was a workout.
     checklist_dates = [day for day, _, _ in history]
     training_sets = _load_training_sets(conn, user_id)
-    training_dates = sorted({row['date'] for row in training_sets})
-    all_dates = sorted(set(checklist_dates) | set(training_dates))
+    sleep_rows = _load_sleep(conn, user_id)
+    lifestyle_rows = _load_lifestyle(conn, user_id)
+    nutrition_totals = _load_nutrition_totals(conn, user_id)
+
+    # Every workspace can be the only thing logged on a day - a night's sleep
+    # with no checklist, a meal with no workout - so the date set is the union of
+    # all of them. Anything missing here would silently drop those days from the
+    # series.
+    all_dates = sorted(
+        set(checklist_dates)
+        | {row['date'] for row in training_sets}
+        | {row['date'] for row in sleep_rows}
+        | {row['date'] for row in lifestyle_rows}
+        | set(nutrition_totals)
+    )
 
     # Derived rows for dates that no longer have ANY source data must go, or
     # deleting a workout leaves its scores behind - still crediting training that
@@ -175,7 +287,20 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     if not all_dates:
         return 0
 
-    training = producers.training_ratios(training_sets, all_dates, config)
+    targets = _targets_by_date(conn, user_id, all_dates)
+    sleep_targets = {iso: t.get('sleep_minutes') for iso, t in targets.items()}
+    step_targets = {iso: t.get('steps') for iso, t in targets.items()}
+
+    # Four measured producers now, and two of them (sleep consistency, adherence)
+    # both speak to Discipline while steps and cardio both speak to Stamina.
+    # merge_measured averages by weight where they overlap - a plain dict update
+    # would have let whichever ran last silently win.
+    measured = producers.merge_measured(
+        producers.training_ratios(training_sets, all_dates, config),
+        producers.sleep_ratios(sleep_rows, all_dates, sleep_targets, config),
+        producers.steps_ratios(lifestyle_rows, all_dates, step_targets, config),
+        producers.adherence_ratios(lifestyle_rows, nutrition_totals, targets, config),
+    )
 
     # One blended ratio per attribute per day. Where a day has both a ticked box
     # and logged sets for the same attribute, the measured signal dominates but
@@ -185,10 +310,10 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     blended = {}
     for day in all_dates:
         reported = checklist_by_date.get(day, {})
-        measured = training.get(day, {})
+        observed = measured.get(day, {})
         blended[day] = {
-            attribute: producers.blend(attribute, reported.get(attribute), measured.get(attribute), config)
-            for attribute in set(reported) | set(measured)
+            attribute: producers.blend(attribute, reported.get(attribute), observed.get(attribute), config)
+            for attribute in set(reported) | set(observed)
         }
 
     recomputed = 0
