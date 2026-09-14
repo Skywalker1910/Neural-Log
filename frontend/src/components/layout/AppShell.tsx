@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
+import { AnimatePresence, m } from 'motion/react'
 
+import { pageTransition, reducedVariants } from '../../lib/motion'
+import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 import { BottomNav } from './BottomNav'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
@@ -11,6 +14,8 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === 'true',
   )
+  const location = useLocation()
+  const reduced = usePrefersReducedMotion()
 
   useEffect(() => {
     localStorage.setItem(COLLAPSE_KEY, String(collapsed))
@@ -29,9 +34,25 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
-        {/* Bottom padding clears the mobile tab bar. */}
-        <main id="main" className="flex-1 px-4 pb-24 pt-6 lg:px-6 lg:pb-10">
-          <Outlet />
+        {/* Bottom padding clears the mobile tab bar. Max width so a dashboard
+            doesn't stretch across an ultrawide monitor. */}
+        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-24 pt-6 lg:px-6 lg:pb-10">
+          {/*
+            mode="wait" so the outgoing page finishes before the next arrives -
+            crossfading two dashboards produces a flash of overlapping numbers.
+            Keyed on pathname, so only real navigations animate.
+          */}
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={location.pathname}
+              variants={reduced ? reducedVariants : pageTransition}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <Outlet />
+            </m.div>
+          </AnimatePresence>
         </main>
       </div>
 

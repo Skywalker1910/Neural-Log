@@ -33,6 +33,9 @@ export function Card({
     <section
       className={cn(
         'rounded-lg border border-line bg-surface-card shadow-card',
+        // Quiet hover: the border warms slightly so a dense dashboard still
+        // responds to the cursor without cards jumping around.
+        'transition-colors duration-200 hover:border-line-strong',
         className,
       )}
     >

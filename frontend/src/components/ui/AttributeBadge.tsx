@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react'
 import type { AttributeStatus } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { accentText, type Accent } from '../../navigation'
+import { AnimatedNumber } from './AnimatedNumber'
 import { ProgressRing } from './ProgressRing'
 
 interface AttributeBadgeProps {
@@ -53,9 +54,10 @@ export function AttributeBadge({
         }
         label={
           hasScore ? (
-            <span className={cn('tabular text-section font-bold', accentText[accent])}>
-              {Math.round(score)}
-            </span>
+            <AnimatedNumber
+              value={Math.round(score)}
+              className={cn('tabular text-section font-bold', accentText[accent])}
+            />
           ) : locked ? (
             <Lock className="size-4 text-ink-subtle" aria-hidden />
           ) : (

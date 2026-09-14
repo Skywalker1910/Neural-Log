@@ -10,7 +10,9 @@ import pytest
 
 from conftest import register
 
-TODAY = date(2026, 9, 13)
+# The real current date, not a fixed one: /api/home computes "today" from the
+# server clock, so a hardcoded date here passes only on the day it was written.
+TODAY = date.today()
 
 
 def _items(client):

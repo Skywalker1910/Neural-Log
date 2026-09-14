@@ -16,7 +16,6 @@ This tracks where that's headed, in order.
 | - | Visual pass - light theme, custom icon set | Superseded by R1 |
 | R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
 | R2 | Home + Today - attributes, radar, daily score, streaks | In progress |
-| R2.5 | **Re-platform** - Next.js + Amplify + DynamoDB, then deploy | Not started |
 | R3 | Training - routines, exercise library, set logging, analytics | Not started |
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
 | R5 | Learning - subjects, sessions, knowledge analytics | Not started |
@@ -25,11 +24,23 @@ This tracks where that's headed, in order.
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
+| Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
 
-AWS sits after R2 deliberately: deploying before the redesign means configuring a
-deployment for a stack that's about to be replaced, and waiting until R10 means
-nobody else can use the app for months. After R2 there's something worth logging
-into every day, and the deployment shape (static bundle + Flask API) is settled.
+Shipping is last, and the re-platform goes with it. An earlier plan put both after
+R2, reasoning that the data model needed to stop moving before the DynamoDB key
+design could be done. That reasoning does not survive inspection: the data model
+keeps moving all the way through R6 - R3 adds workouts, exercises and sets, R4 adds
+nutrition and sleep, R5 adds learning sessions, R6 adds goals and habits. Porting
+after R2 would mean revisiting the key design in every one of those phases.
+
+So the app stays on Flask + SQLite for the whole build. That keeps feature velocity
+high (no toolchain switch mid-stream, the Python test suite and scoring engine keep
+working) and defers the port to the point where the schema is actually final. The
+cost is rewriting the Flask endpoints in TypeScript at the end - mechanical work,
+and far less of it than redesigning DynamoDB keys eight times.
+
+The React components are unaffected either way: they carry over to Next.js close to
+unchanged, so everything built in R2-R10 keeps its value.
 
 ## Done before the redesign
 
@@ -82,33 +93,14 @@ The phase that makes the redesign worth using.
 - **Seed data** - realistic demo data behind an explicit demo mode, so dashboards can
   be developed and reviewed without waiting weeks for real history.
 
-Flask endpoints in this phase stay deliberately thin: R2.5 rewrites the backend in
-TypeScript, so anything elaborate built here is thrown away. The React components are
-the opposite - they carry over to Next.js nearly unchanged, so they get built properly.
+- **Motion system** - the animation layer every later phase builds on, added here
+  rather than saved for R10 so eight phases of UI are not retrofitted at the end.
+- **Flip `/`** from the Jinja app to the SPA, once Today can do everything the daily
+  checklist wizard does. Not before: the Jinja app is what actually gets used daily,
+  and flipping early would regress that.
 
-Originally this phase also flipped `/` from the Jinja app to the SPA and ported login
-and admin. That moved to R2.5, which retires the Jinja app wholesale - doing it twice
-would be pure waste.
-
-## R2.5 - Re-platform to serverless
-
-Port the app to the stack already running Tech-Portfolio in production: **Next.js 16
-App Router on AWS Amplify SSR, with DynamoDB and S3**. See [DEPLOYMENT.md](DEPLOYMENT.md).
-
-Why here and not later: every phase after this one adds tables and endpoints, so each
-phase deferred is more code written twice. Why not earlier: the data model has to stop
-moving first, or the DynamoDB key design gets done twice instead.
-
-- Frontend: React 19 + Vite + TypeScript + Tailwind v4 -> Next.js App Router. The
-  components and design tokens carry over; routing and data fetching change.
-- Backend: Flask route handlers -> Next.js route handlers. `scoring/engine.py` is pure
-  functions over plain dicts with no database or framework imports, so it translates
-  mechanically; `scoring/store.py` and the SQL migrations are rewritten for DynamoDB.
-- Storage: SQLite **and** the per-user `artifacts/` JSON files -> DynamoDB. Both have to
-  go: every serverless platform has an ephemeral filesystem.
-- Retires the legacy Jinja app, `/app` mount point, and the 22 unversioned Flask routes.
-- Cost after this lands: ~$0/month within AWS's perpetual Always Free allowances, versus
-  $87/year for the VM this replaced.
+The Flask endpoints are now load-bearing for the whole build rather than throwaway
+(the port moved to the end), so they are built properly - just not elaborately.
 
 ## R3 - Training
 
@@ -161,6 +153,25 @@ answers - they are explicitly not derived from height and weight.
 Responsive review at every breakpoint, XP/level-up/achievement animations that
 respect reduced motion, accessibility pass, loading and empty states everywhere,
 performance work (pagination, lazy loading, bundle budget).
+
+## Ship - Re-platform and deploy
+
+The last phase. Port to the stack already running Tech-Portfolio in production -
+**Next.js 16 App Router on AWS Amplify SSR, with DynamoDB and S3** - then deploy to
+`neurallog.adityamore.dev`. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+- Frontend: React 19 + Vite + TypeScript + Tailwind v4 -> Next.js App Router. The
+  components, tokens and motion system carry over; routing and data fetching change.
+- Backend: Flask route handlers -> Next.js route handlers. `scoring/engine.py` is pure
+  functions over plain dicts with no database or framework imports, so it translates
+  mechanically; the SQL layer and migrations are rewritten for DynamoDB.
+- Storage: SQLite **and** the per-user `artifacts/` JSON files -> DynamoDB. Both have
+  to go: every serverless platform has an ephemeral filesystem.
+- Retires the legacy Jinja app, the `/app` mount point, and the unversioned Flask routes.
+- The security prerequisites in [DEPLOYMENT.md](DEPLOYMENT.md) land here, before the
+  app is reachable: no hard-coded secret fallback, closed registration, login rate
+  limiting, CSRF, session cookie flags.
+- Cost after this lands: ~$0/month within AWS's perpetual Always Free allowances.
 
 ## Beyond
 

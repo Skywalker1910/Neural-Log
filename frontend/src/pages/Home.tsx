@@ -1,16 +1,21 @@
 import { CalendarCheck, ChartLine, Flame, House, Radar, Sparkles, TrendingUp } from 'lucide-react'
 
+import { m } from 'motion/react'
+
 import type { AttributeScore, HomeSummary } from '../api/types'
 import { useHomeSummary } from '../api/queries'
 import { AttributeRadar, TrendChart, type AttributeDatum } from '../components/charts'
 import { PageHeader } from '../components/layout/PageHeader'
+import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { AttributeBadge } from '../components/ui/AttributeBadge'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { MetricCard } from '../components/ui/MetricCard'
 import { ProgressRing } from '../components/ui/ProgressRing'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
+import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
+import { EASE } from '../lib/motion'
 import type { Accent } from '../navigation'
 
 /**
@@ -126,14 +131,16 @@ function TodayPanel({ today }: { today: HomeSummary['today'] }) {
             accent="lifestyle"
             ariaLabel={`Today ${today.completion_pct}% complete`}
             label={
-              <span className="tabular text-section font-bold text-lifestyle">
-                {today.completion_pct}%
-              </span>
+              <AnimatedNumber
+                value={today.completion_pct}
+                suffix="%"
+                className="tabular text-section font-bold text-lifestyle"
+              />
             }
           />
           <div>
             <p className="tabular text-metric text-ink">
-              {today.items_completed}
+              <AnimatedNumber value={today.items_completed} />
               <span className="text-section text-ink-subtle"> / {today.items_total}</span>
             </p>
             <p className="text-label text-ink-muted">items completed</p>
@@ -191,24 +198,28 @@ export function Home() {
 
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(data) => (
-          <div className="flex flex-col gap-4">
+          <RevealGroup className="flex flex-col gap-4" step={0.07}>
+            <Reveal>
             <Card accent="discipline" bodyClassName="flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-4">
                 <span className="flex size-14 items-center justify-center rounded-full bg-discipline/12 text-discipline">
                   <Sparkles size={24} aria-hidden />
                 </span>
                 <div>
-                  <p className="tabular text-metric text-ink">Level {data.level}</p>
+                  <p className="tabular text-metric text-ink">
+                    Level <AnimatedNumber value={data.level} />
+                  </p>
                   <p className="text-label text-ink-muted">
-                    <span className="tabular">{data.xp_into_level}</span> /{' '}
+                    <AnimatedNumber className="tabular" value={data.xp_into_level} /> /{' '}
                     <span className="tabular">{data.xp_for_next_level}</span> XP to next level
                   </p>
                 </div>
               </div>
               <div className="h-2 min-w-40 flex-1 overflow-hidden rounded-full bg-surface-raised">
-                <div
-                  className="h-full rounded-full bg-discipline transition-[width] duration-500"
-                  style={{
+                <m.div
+                  className="h-full rounded-full bg-discipline"
+                  initial={{ width: 0 }}
+                  animate={{
                     width: `${Math.min(
                       100,
                       data.xp_for_next_level
@@ -216,28 +227,30 @@ export function Home() {
                         : 0,
                     )}%`,
                   }}
+                  transition={{ duration: 0.9, ease: EASE }}
                 />
               </div>
             </Card>
+            </Reveal>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
+            <RevealGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" step={0.06}>
+              <Reveal><MetricCard
                 label="Daily score"
-                value={data.daily_score ?? '–'}
+                value={data.daily_score === null ? '–' : <AnimatedNumber value={data.daily_score} />}
                 icon={Sparkles}
                 accent="brand"
                 footer={data.daily_score === null ? 'Log a day to start' : undefined}
-              />
-              <MetricCard
+              /></Reveal>
+              <Reveal><MetricCard
                 label="Discipline"
-                value={data.discipline_score ?? '–'}
+                value={data.discipline_score === null ? '–' : <AnimatedNumber value={data.discipline_score} />}
                 icon={ChartLine}
                 accent="discipline"
                 footer={data.discipline_score === null ? 'Needs a few days' : undefined}
-              />
-              <MetricCard
+              /></Reveal>
+              <Reveal><MetricCard
                 label="Streak"
-                value={data.current_streak}
+                value={<AnimatedNumber value={data.current_streak} />}
                 unit={data.current_streak === 1 ? 'day' : 'days'}
                 icon={Flame}
                 accent="fitness"
@@ -246,22 +259,22 @@ export function Home() {
                     ? `+${data.streak_multiplier_pct}% XP`
                     : undefined
                 }
-              />
-              <MetricCard
+              /></Reveal>
+              <Reveal><MetricCard
                 label="Days logged"
-                value={data.days_logged}
+                value={<AnimatedNumber value={data.days_logged} />}
                 icon={CalendarCheck}
                 accent="lifestyle"
-              />
-            </div>
+              /></Reveal>
+            </RevealGroup>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <TodayPanel today={data.today} />
-              <TrendPanel trend={data.trend} />
-            </div>
+            <RevealGroup className="grid gap-4 lg:grid-cols-2" step={0.06}>
+              <Reveal><TodayPanel today={data.today} /></Reveal>
+              <Reveal><TrendPanel trend={data.trend} /></Reveal>
+            </RevealGroup>
 
-            <AttributePanel attributes={data.attributes} />
-          </div>
+            <Reveal><AttributePanel attributes={data.attributes} /></Reveal>
+          </RevealGroup>
         )}
       </QueryBoundary>
     </>
