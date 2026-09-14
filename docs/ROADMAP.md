@@ -15,8 +15,8 @@ This tracks where that's headed, in order.
 | - | Gamification - XP, levels, streaks, badges, leaderboards | Done |
 | - | Visual pass - light theme, custom icon set | Superseded by R1 |
 | R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
-| R2 | Home + Today - attributes, radar, daily score, streaks | Not started |
-| - | **AWS deployment** - deploy once R2 makes the app worth using | Not started |
+| R2 | Home + Today - attributes, radar, daily score, streaks | In progress |
+| R2.5 | **Re-platform** - Next.js + Amplify + DynamoDB, then deploy | Not started |
 | R3 | Training - routines, exercise library, set logging, analytics | Not started |
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
 | R5 | Learning - subjects, sessions, knowledge analytics | Not started |
@@ -81,7 +81,34 @@ The phase that makes the redesign worth using.
 - **Today** - the full day as sections and a timeline; complete, skip, reschedule.
 - **Seed data** - realistic demo data behind an explicit demo mode, so dashboards can
   be developed and reviewed without waiting weeks for real history.
-- Flip `/` from the Jinja app to the SPA; port login and admin.
+
+Flask endpoints in this phase stay deliberately thin: R2.5 rewrites the backend in
+TypeScript, so anything elaborate built here is thrown away. The React components are
+the opposite - they carry over to Next.js nearly unchanged, so they get built properly.
+
+Originally this phase also flipped `/` from the Jinja app to the SPA and ported login
+and admin. That moved to R2.5, which retires the Jinja app wholesale - doing it twice
+would be pure waste.
+
+## R2.5 - Re-platform to serverless
+
+Port the app to the stack already running Tech-Portfolio in production: **Next.js 16
+App Router on AWS Amplify SSR, with DynamoDB and S3**. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Why here and not later: every phase after this one adds tables and endpoints, so each
+phase deferred is more code written twice. Why not earlier: the data model has to stop
+moving first, or the DynamoDB key design gets done twice instead.
+
+- Frontend: React 19 + Vite + TypeScript + Tailwind v4 -> Next.js App Router. The
+  components and design tokens carry over; routing and data fetching change.
+- Backend: Flask route handlers -> Next.js route handlers. `scoring/engine.py` is pure
+  functions over plain dicts with no database or framework imports, so it translates
+  mechanically; `scoring/store.py` and the SQL migrations are rewritten for DynamoDB.
+- Storage: SQLite **and** the per-user `artifacts/` JSON files -> DynamoDB. Both have to
+  go: every serverless platform has an ephemeral filesystem.
+- Retires the legacy Jinja app, `/app` mount point, and the 22 unversioned Flask routes.
+- Cost after this lands: ~$0/month within AWS's perpetual Always Free allowances, versus
+  $87/year for the VM this replaced.
 
 ## R3 - Training
 
@@ -143,5 +170,10 @@ training and learning plans, and natural-language logging ("studied ML for 90 mi
 and did a chest workout"). The constraint these place on today's decisions is simply
 that structured logs must stay structured - no free-text soup where an entity belongs.
 
-An iOS client remains the long-term goal; the R1 split into a JSON API plus a
-separate frontend is the groundwork that makes it possible.
+A native iOS client is **not planned**. It was dropped once the cost was clear: the
+Apple Developer Program is $99/year purely to distribute to a handful of friends, and
+since iOS 16.4 a Home Screen web app can be installed and receive push notifications for
+$0. A PWA covers what a habit tracker needs; the native-only features that would justify
+the fee - HealthKit, widgets, Siri Shortcuts, background sync - are all in *Beyond*
+rather than planned work. The clean API boundary is still worth keeping, because it is
+what makes a PWA (or a later native client, if HealthKit ever becomes the point) possible.
