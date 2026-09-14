@@ -276,6 +276,32 @@ export interface ExercisesResponse {
   exercises: Exercise[]
 }
 
+export interface RoutineExercise {
+  id?: number
+  exercise_id: number
+  position?: number
+  target_sets: number | null
+  target_reps: number | null
+  notes?: string | null
+  /** Joined from the library so the client never has to look the name up. */
+  name?: string
+  category?: ExerciseCategory
+  primary_muscle?: MuscleGroup
+}
+
+export interface Routine {
+  id: number
+  name: string
+  split_type: string | null
+  notes: string | null
+  archived: boolean
+  exercises: RoutineExercise[]
+}
+
+export interface RoutinesResponse {
+  routines: Routine[]
+}
+
 export interface TrainingSummary {
   total_sessions: number
   total_volume: number

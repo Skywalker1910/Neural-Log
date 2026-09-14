@@ -6,8 +6,13 @@ import { SkeletonGrid } from './components/ui/Skeleton'
 import { Home } from './pages/Home'
 import { NotFound } from './pages/NotFound'
 import { Today } from './pages/Today'
+import { Training } from './pages/Training'
+import { WorkoutSession } from './pages/WorkoutSession'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
+
+/** Sections that have a real page now. Anything else still gets a placeholder. */
+const BUILT = new Set(['/today', '/training'])
 
 // Dev-facing gallery - no reason for it to ride along in the main bundle.
 const DesignSystem = lazy(() =>
@@ -26,8 +31,10 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route index element={<Home />} />
         <Route path="/today" element={<Today />} />
+        <Route path="/training" element={<Training />} />
+        <Route path="/training/:workoutId" element={<WorkoutSession />} />
         {rest
-          .filter((section) => section.path !== '/today')
+          .filter((section) => !BUILT.has(section.path))
           .map((section) => (
             <Route
               key={section.path}

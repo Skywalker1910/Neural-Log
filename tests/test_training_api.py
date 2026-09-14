@@ -194,6 +194,32 @@ def test_history_surfaces_the_last_session(client_with_library):
     assert history['last_session_sets'][0]['weight'] == 80
 
 
+def test_history_can_exclude_the_session_being_edited(client_with_library):
+    """Reopening a saved session must not quote that session back as "last time".
+
+    Without the exclusion the logging screen shows you the sets you are looking
+    at, which is useless for deciding today's weight - and reports today's lift
+    as the all-time best before you have beaten anything.
+    """
+    bench = _exercise(client_with_library)
+    _log(client_with_library, (TODAY - timedelta(days=7)).isoformat(), bench['id'],
+         [{'exercise_id': bench['id'], 'weight': 70, 'reps': 8}])
+    current = _log(client_with_library, TODAY.isoformat(), bench['id'],
+                   [{'exercise_id': bench['id'], 'weight': 80, 'reps': 8}])
+
+    included = client_with_library.get(
+        f"/api/exercises/{bench['id']}/history").get_json()
+    assert included['last_session_date'] == TODAY.isoformat()
+    assert included['heaviest_set']['weight'] == 80
+
+    excluded = client_with_library.get(
+        f"/api/exercises/{bench['id']}/history?exclude_session={current}").get_json()
+    assert excluded['last_session_date'] == (TODAY - timedelta(days=7)).isoformat()
+    assert excluded['last_session_sets'][0]['weight'] == 70
+    assert excluded['heaviest_set']['weight'] == 70
+    assert excluded['best_volume_set']['weight'] == 70
+
+
 def test_history_for_a_never_performed_exercise_is_empty_not_an_error(client_with_library):
     squat = _exercise(client_with_library, 'Back Squat')
     history = client_with_library.get(f"/api/exercises/{squat['id']}/history").get_json()
@@ -245,6 +271,98 @@ def test_measurements_validate(client_with_library):
         '/api/measurements', json={'metric': 'weight'}).status_code == 400
 
 
+# --- routines ---------------------------------------------------------------
+
+def _routine(client, name='Push day', exercises=None):
+    return client.post('/api/routines', json={
+        'name': name, 'split_type': 'push-pull-legs', 'exercises': exercises or [],
+    }).get_json()
+
+
+def test_routine_round_trips_with_its_exercises(client_with_library):
+    bench = _exercise(client_with_library)
+    press = _exercise(client_with_library, 'Barbell Overhead')
+
+    created = _routine(client_with_library, exercises=[
+        {'exercise_id': bench['id'], 'target_sets': 4, 'target_reps': 6},
+        {'exercise_id': press['id'], 'target_sets': 3, 'target_reps': 8},
+    ])
+
+    assert created['name'] == 'Push day'
+    assert [e['name'] for e in created['exercises']] == [bench['name'], press['name']]
+    assert created['exercises'][0]['target_sets'] == 4
+
+    listed = client_with_library.get('/api/routines').get_json()['routines']
+    assert len(listed) == 1
+    assert len(listed[0]['exercises']) == 2
+
+
+def test_updating_a_routine_replaces_its_exercise_list(client_with_library):
+    """Reordering or removing must not leave the old rows behind."""
+    bench = _exercise(client_with_library)
+    press = _exercise(client_with_library, 'Barbell Overhead')
+    created = _routine(client_with_library, exercises=[
+        {'exercise_id': bench['id'], 'target_sets': 4, 'target_reps': 6},
+        {'exercise_id': press['id'], 'target_sets': 3, 'target_reps': 8},
+    ])
+
+    updated = client_with_library.put(f"/api/routines/{created['id']}", json={
+        'name': 'Push day A',
+        'exercises': [{'exercise_id': press['id'], 'target_sets': 5, 'target_reps': 5}],
+    }).get_json()
+
+    assert updated['name'] == 'Push day A'
+    assert len(updated['exercises']) == 1
+    assert updated['exercises'][0]['exercise_id'] == press['id']
+    assert updated['exercises'][0]['target_sets'] == 5
+
+
+def test_deleting_a_routine_keeps_the_sessions_trained_from_it(client_with_library):
+    """A routine is archived, never deleted - history must survive it."""
+    bench = _exercise(client_with_library)
+    routine = _routine(client_with_library, exercises=[
+        {'exercise_id': bench['id'], 'target_sets': 3, 'target_reps': 8}])
+
+    workout = client_with_library.post(
+        '/api/workouts', json={'date': TODAY.isoformat(), 'routine_id': routine['id']},
+    ).get_json()
+    client_with_library.put(f"/api/workouts/{workout['id']}", json={
+        'sets': [{'exercise_id': bench['id'], 'weight': 80, 'reps': 8}]})
+
+    assert client_with_library.delete(f"/api/routines/{routine['id']}").status_code == 200
+    assert client_with_library.get('/api/routines').get_json()['routines'] == []
+
+    sessions = client_with_library.get('/api/workouts').get_json()['workouts']
+    assert len(sessions) == 1
+    assert sessions[0]['total_sets'] == 1
+
+
+def test_session_started_from_a_routine_inherits_its_name(client_with_library):
+    routine = _routine(client_with_library, name='Leg day')
+    workout = client_with_library.post(
+        '/api/workouts', json={'date': TODAY.isoformat(), 'routine_id': routine['id']},
+    ).get_json()
+
+    assert workout['name'] == 'Leg day'
+    assert workout['routine_id'] == routine['id']
+
+
+def test_routines_are_scoped_to_their_owner(client_with_library, client):
+    routine = _routine(client_with_library)
+    client_with_library.get('/logout')
+
+    register(client, username='someone-else')
+    assert client.get('/api/routines').get_json()['routines'] == []
+    assert client.get(f"/api/routines/{routine['id']}").status_code == 404
+    assert client.put(f"/api/routines/{routine['id']}", json={'name': 'mine'}).status_code == 404
+
+
+def test_routine_requires_a_name(client_with_library):
+    assert client_with_library.post('/api/routines', json={}).status_code == 400
+    assert client_with_library.post('/api/routines', json={'name': '  '}).status_code == 400
+
+
 def test_training_endpoints_require_login(client):
-    for url in ('/api/exercises', '/api/workouts', '/api/training', '/api/measurements'):
+    for url in ('/api/exercises', '/api/workouts', '/api/training', '/api/measurements',
+                '/api/routines'):
         assert client.get(url).status_code == 302

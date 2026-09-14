@@ -107,6 +107,25 @@ await send('Page.navigate', { url })
 // Let the bundle boot, queries resolve and lazy chart chunks load.
 await sleep(Number(process.env.SHOOT_WAIT_MS ?? 3500))
 
+// Modals, drawers and timers only exist after a click, so there is no URL that
+// renders them. SHOOT_EVAL runs a snippet in the page first - typically
+// `[...document.querySelectorAll('button')].find(b => b.textContent.includes('Add exercise')).click()`
+// - then waits for the entrance animation to settle.
+if (process.env.SHOOT_EVAL) {
+  const evaluated = await send('Runtime.evaluate', {
+    expression: process.env.SHOOT_EVAL,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  if (evaluated.exceptionDetails) {
+    console.error('SHOOT_EVAL threw:', evaluated.exceptionDetails.exception?.description
+      ?? evaluated.exceptionDetails.text)
+  } else if (evaluated.result?.value !== undefined) {
+    console.log('SHOOT_EVAL ->', JSON.stringify(evaluated.result.value))
+  }
+  await sleep(Number(process.env.SHOOT_EVAL_WAIT_MS ?? 900))
+}
+
 // Grow the viewport to the full page BEFORE capturing, then wait again.
 //
 // The obvious approach - captureScreenshot with captureBeyondViewport: true -

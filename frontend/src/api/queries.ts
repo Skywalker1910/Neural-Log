@@ -7,6 +7,8 @@ import type {
   ExerciseHistory,
   ExercisesResponse,
   LoggedSet,
+  Routine,
+  RoutinesResponse,
   TrainingSummary,
   Workout,
   CurrentUser,
@@ -32,8 +34,11 @@ export const queryKeys = {
   day: (date: string) => ['day', date] as const,
   checklistItems: ['checklist-items'] as const,
   exercises: (filters?: string) => ['exercises', filters ?? 'all'] as const,
-  exerciseHistory: (id: number) => ['exercise-history', id] as const,
+  exerciseHistory: (id: number, excludeSession?: number) =>
+    ['exercise-history', id, excludeSession ?? null] as const,
   training: ['training'] as const,
+  routines: ['routines'] as const,
+  routine: (id: number) => ['routine', id] as const,
   workout: (id: number) => ['workout', id] as const,
 }
 
@@ -103,12 +108,6 @@ export function useChecklistItems() {
   })
 }
 
-/**
- * Saving a day moves almost every number in the app - XP, level, streak,
- * attributes, the leaderboard - so this invalidates broadly rather than
- * surgically. `refetchOnWindowFocus` is off and `staleTime` is 30s, so nothing
- * self-heals; anything not invalidated here shows a stale value.
- */
 export function useExercises(filters: { muscle?: string; category?: string; q?: string } = {}) {
   const params = new URLSearchParams(
     Object.entries(filters).filter(([, value]) => value) as [string, string][],
@@ -123,10 +122,20 @@ export function useExercises(filters: { muscle?: string; category?: string; q?: 
   })
 }
 
-export function useExerciseHistory(exerciseId: number | null) {
+/**
+ * `excludeSession` keeps the session you are editing out of its own history, so
+ * "last time" means the session before this one rather than the sets you just
+ * typed. It is part of the cache key - the answer genuinely differs.
+ */
+export function useExerciseHistory(exerciseId: number | null, excludeSession?: number) {
   return useQuery({
-    queryKey: queryKeys.exerciseHistory(exerciseId ?? 0),
-    queryFn: () => api.get<ExerciseHistory>(`/api/exercises/${exerciseId}/history`),
+    queryKey: queryKeys.exerciseHistory(exerciseId ?? 0, excludeSession),
+    queryFn: () =>
+      api.get<ExerciseHistory>(
+        `/api/exercises/${exerciseId}/history${
+          excludeSession ? `?exclude_session=${excludeSession}` : ''
+        }`,
+      ),
     enabled: exerciseId !== null,
   })
 }
@@ -135,6 +144,61 @@ export function useTrainingSummary() {
   return useQuery({
     queryKey: queryKeys.training,
     queryFn: () => api.get<TrainingSummary>('/api/training'),
+  })
+}
+
+export function useRoutines() {
+  return useQuery({
+    queryKey: queryKeys.routines,
+    queryFn: () => api.get<RoutinesResponse>('/api/routines'),
+  })
+}
+
+export function useRoutine(routineId: number | null) {
+  return useQuery({
+    queryKey: queryKeys.routine(routineId ?? 0),
+    queryFn: () => api.get<Routine>(`/api/routines/${routineId}`),
+    enabled: routineId !== null && routineId > 0,
+  })
+}
+
+export function useSaveRoutine() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<Routine> & { id?: number }) =>
+      id
+        ? api.put<Routine>(`/api/routines/${id}`, body)
+        : api.post<Routine>('/api/routines', body),
+    onSuccess: (routine) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.routines })
+      queryClient.invalidateQueries({ queryKey: queryKeys.routine(routine.id) })
+    },
+  })
+}
+
+export function useDeleteRoutine() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (routineId: number) =>
+      api.delete<{ success: boolean }>(`/api/routines/${routineId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.routines }),
+  })
+}
+
+export function useWorkout(workoutId: number) {
+  return useQuery({
+    queryKey: queryKeys.workout(workoutId),
+    queryFn: () => api.get<Workout>(`/api/workouts/${workoutId}`),
+    enabled: Number.isFinite(workoutId) && workoutId > 0,
+  })
+}
+
+export function useLogMeasurement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { metric: string; date: string; value: number; unit?: string }) =>
+      api.post<{ success: boolean }>('/api/measurements', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.training }),
   })
 }
 
@@ -183,6 +247,12 @@ export function useDeleteWorkout() {
   })
 }
 
+/**
+ * Saving a day moves almost every number in the app - XP, level, streak,
+ * attributes, the leaderboard - so this invalidates broadly rather than
+ * surgically. `refetchOnWindowFocus` is off and `staleTime` is 30s, so nothing
+ * self-heals; anything not invalidated here shows a stale value.
+ */
 export function useSaveDay(date: string) {
   const queryClient = useQueryClient()
 

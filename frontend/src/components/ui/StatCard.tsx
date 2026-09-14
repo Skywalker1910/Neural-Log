@@ -33,11 +33,16 @@ export function StatCard({ label, value, icon: Icon, accent = 'brand', hint, cla
           <Icon size={17} aria-hidden />
         </span>
       )}
-      <div className="min-w-0">
+      {/*
+        The value is the whole point of the card, so it gets the space and the
+        hint gives way. Previously the hint was `shrink-0` and the value could
+        truncate, which rendered a 16,710kg total as "1".
+      */}
+      <div className="min-w-0 flex-1">
         <p className="truncate text-meta text-ink-muted">{label}</p>
         <p className="tabular truncate text-section text-ink">{value}</p>
+        {hint && <p className="truncate text-caption text-ink-subtle">{hint}</p>}
       </div>
-      {hint && <p className="ml-auto shrink-0 text-meta text-ink-subtle">{hint}</p>}
     </div>
   )
 }

@@ -2,6 +2,69 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R3 - Training
+
+The first feature that feeds the attribute engine measured data instead of
+self-report. Full write-up in [TRAINING.md](TRAINING.md).
+
+- **Six new tables** (`migrations/003_training.sql`) at the grain of the
+  individual set. `workout_sessions` deliberately has no `UNIQUE(user_id, date)` -
+  a morning lift and an evening run are two sessions. The exercise library uses
+  two *partial* unique indexes, because SQLite treats `NULL`s as distinct and a
+  plain `UNIQUE(user_id, slug)` would allow ten copies of every shared exercise.
+- **85-exercise library** in `data/exercises.json`, synced on startup. Exercises
+  removed from the file are archived, never deleted - someone may have logged sets
+  against them.
+- **`scoring/producers.py`**, the seam that turns sets into the same
+  `(attribute, ratio)` shape the checklist produces. Agility is no longer `locked`:
+  mobility work feeds it.
+- **Routines** - named, ordered plans with target sets and reps. Starting one
+  inherits its name and pre-fills the session. The plan is never persisted as
+  training data; only what you actually lift is saved, and so only that is scored.
+- **Training UI** - dashboard (volume trend, muscle balance, records, sessions,
+  measurements), focused set logging, library picker, rest timer.
+
+### Scoring problems found and fixed
+
+- **The app paid you to lie.** With self-report capped at 0.75, ticking the
+  "Workout" checkbox scored 75 while honestly logging a light week scored 62. The
+  breakeven is `(4C−1)/3` - 67% of target at C=0.75, 33% at C=0.5. The ceiling is
+  now 0.5 for measurable attributes only, and a test asserts every level of real
+  training beats claiming it.
+- **Starting was punished.** The first training day was measured against a full
+  week's target, scoring a genuine session at 27%. The target is now pro-rated by
+  the observed window.
+- **Deleting all workouts left Strength at 100.** `recompute_scores()` returned
+  early with no source data, orphaning the derived rows. `_prune_orphaned_scores()`
+  removes rows whose source is gone.
+- **Consistency scored a 5-day lapse as 100%.** The window was anchored to the
+  last log rather than to today, so stopping looked identical to never starting.
+
+### Training UI defects caught in verification
+
+- **`StatCard` truncated its own value.** The hint was `shrink-0` while the value
+  was allowed to truncate - exactly backwards - so a 16,710kg total rendered as
+  "1".
+- **Four-figure chart values rendered as "000"**, overflowing the axis gutter.
+  `TrendChart` now compacts at 1,000 (`4.5k`) and the tooltip shows the full
+  number.
+- **The logging form remounted its inputs on every render.** Server sets were
+  remapped through a key-minting function outside `useMemo`, so React saw fresh
+  keys each pass and would have dropped focus mid-typing.
+- **"Last time" quoted the session back at you.** Reopening a saved workout showed
+  its own sets as previous performance, and its own lifts as the all-time best.
+  `/api/exercises/<id>/history` now takes `?exclude_session=<id>`.
+- **Routine-seeded sessions would have saved blank sets.** Planned rows counted
+  toward "working sets" before anything was typed, and would have persisted as
+  real logged sets on finish.
+
+### Tooling
+
+- `scripts/shoot.mjs` gained `SHOOT_EVAL`, which runs a snippet in the page before
+  capture - modals, drawers and timers only exist after a click, so there was no
+  URL that rendered them. It reports exceptions, which immediately caught a
+  malformed snippet that had been silently producing empty screenshots.
+
 ## R2 prerequisites - scoring integrity fixes
 
 Found while mapping the codebase for R2's attribute engine. All three are bugs in

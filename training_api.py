@@ -106,47 +106,54 @@ def exercise_history(exercise_id):
     user_id = session.get('user_id')
     conn = _get_db()
 
+    # The session you are editing must not quote itself back at you as "last
+    # time" - the useful comparison is always what you did *before* today. The
+    # logging screen passes its own id here; a fresh session has nothing to skip.
+    exclude = request.args.get('exclude_session', type=int)
+    skip = ' AND s.id != ?' if exclude else ''
+    scope = (user_id, exercise_id) + ((exclude,) if exclude else ())
+
     recent = conn.execute(
-        '''
+        f'''
         SELECT s.date AS date, x.weight, x.weight_unit, x.reps, x.duration_seconds,
                x.rpe, x.is_warmup
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
-        WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0
+        WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0{skip}
         ORDER BY s.date DESC, x.position
         LIMIT 60
         ''',
-        (user_id, exercise_id),
+        scope,
     ).fetchall()
 
     # Two different records, because "best" means two things in a gym and
     # conflating them is misleading: 82.5kg x 6 is the heavier lift, 80kg x 8 is
     # the bigger set. Both are worth seeing before you pick today's weight.
     heaviest = conn.execute(
-        '''
+        f'''
         SELECT x.weight, x.weight_unit, x.reps, s.date AS date
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
         WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0
-          AND x.weight IS NOT NULL AND x.reps IS NOT NULL
+          AND x.weight IS NOT NULL AND x.reps IS NOT NULL{skip}
         ORDER BY x.weight DESC, x.reps DESC
         LIMIT 1
         ''',
-        (user_id, exercise_id),
+        scope,
     ).fetchone()
 
     best_volume = conn.execute(
-        '''
+        f'''
         SELECT x.weight, x.weight_unit, x.reps, s.date AS date,
                (x.weight * x.reps) AS volume
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
         WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0
-          AND x.weight IS NOT NULL AND x.reps IS NOT NULL
+          AND x.weight IS NOT NULL AND x.reps IS NOT NULL{skip}
         ORDER BY volume DESC
         LIMIT 1
         ''',
-        (user_id, exercise_id),
+        scope,
     ).fetchone()
     conn.close()
 
@@ -216,12 +223,22 @@ def workouts():
             conn.close()
             return jsonify({'error': 'date is required'}), 400
 
+        # A session started from a routine inherits its name unless told otherwise,
+        # so "Push" beats "Workout" in the history without the client restating it.
+        routine_id = data.get('routine_id')
+        name = (data.get('name') or '').strip()
+        if not name and routine_id:
+            routine = conn.execute(
+                'SELECT name FROM routines WHERE id = ? AND user_id = ?',
+                (routine_id, user_id),
+            ).fetchone()
+            name = routine['name'] if routine else ''
+
         cursor = conn.cursor()
         cursor.execute(
             'INSERT INTO workout_sessions (user_id, date, name, routine_id, notes) '
             'VALUES (?, ?, ?, ?, ?)',
-            (user_id, date, data.get('name') or 'Workout', data.get('routine_id'),
-             data.get('notes', '')),
+            (user_id, date, name or 'Workout', routine_id, data.get('notes', '')),
         )
         conn.commit()
         row = conn.execute('SELECT * FROM workout_sessions WHERE id = ?',
@@ -393,6 +410,119 @@ def training_summary():
         'records': [dict(row) for row in records],
         'measurements': [dict(row) for row in measurements],
     }
+    conn.close()
+    return jsonify(payload)
+
+
+def _routine_payload(conn, row):
+    exercises = conn.execute(
+        '''
+        SELECT r.id, r.exercise_id, r.position, r.target_sets, r.target_reps, r.notes,
+               e.name, e.category, e.primary_muscle
+        FROM routine_exercises r
+        JOIN exercises e ON e.id = r.exercise_id
+        WHERE r.routine_id = ? ORDER BY r.position
+        ''',
+        (row['id'],),
+    ).fetchall()
+    return {
+        'id': row['id'],
+        'name': row['name'],
+        'split_type': row['split_type'],
+        'notes': row['notes'],
+        'archived': bool(row['archived']),
+        'exercises': [dict(e) for e in exercises],
+    }
+
+
+def _write_routine_exercises(conn, routine_id, exercises):
+    """Replace the exercise list wholesale.
+
+    Diffing positions against what is already stored buys nothing here - a
+    routine is a handful of rows that the client always sends in full - and a
+    replace cannot leave the order half-applied.
+    """
+    conn.execute('DELETE FROM routine_exercises WHERE routine_id = ?', (routine_id,))
+    for position, entry in enumerate(exercises or []):
+        if not entry.get('exercise_id'):
+            continue
+        conn.execute(
+            'INSERT INTO routine_exercises '
+            '(routine_id, exercise_id, position, target_sets, target_reps, notes) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (routine_id, entry['exercise_id'], position, entry.get('target_sets'),
+             entry.get('target_reps'), entry.get('notes')),
+        )
+
+
+@training.route('/api/routines', methods=['GET', 'POST'])
+@_auth
+def routines():
+    user_id = session.get('user_id')
+    conn = _get_db()
+
+    if request.method == 'POST':
+        data = request.json or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            conn.close()
+            return jsonify({'error': 'name is required'}), 400
+
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO routines (user_id, name, split_type, notes) VALUES (?, ?, ?, ?)',
+            (user_id, name, data.get('split_type'), data.get('notes')),
+        )
+        _write_routine_exercises(conn, cursor.lastrowid, data.get('exercises'))
+        conn.commit()
+        row = conn.execute('SELECT * FROM routines WHERE id = ?',
+                           (cursor.lastrowid,)).fetchone()
+        payload = _routine_payload(conn, row)
+        conn.close()
+        return jsonify(payload), 201
+
+    rows = conn.execute(
+        'SELECT * FROM routines WHERE user_id = ? AND archived = 0 ORDER BY name',
+        (user_id,),
+    ).fetchall()
+    payload = [_routine_payload(conn, row) for row in rows]
+    conn.close()
+    return jsonify({'routines': payload})
+
+
+@training.route('/api/routines/<int:routine_id>', methods=['GET', 'PUT', 'DELETE'])
+@_auth
+def routine_detail(routine_id):
+    user_id = session.get('user_id')
+    conn = _get_db()
+
+    row = conn.execute('SELECT * FROM routines WHERE id = ? AND user_id = ?',
+                       (routine_id, user_id)).fetchone()
+    if row is None:
+        conn.close()
+        return jsonify({'error': 'not found'}), 404
+
+    if request.method == 'DELETE':
+        # Archived, not deleted: workout_sessions.routine_id points here, and a
+        # deleted routine must not erase the history of having trained it.
+        conn.execute('UPDATE routines SET archived = 1 WHERE id = ?', (routine_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+
+    if request.method == 'PUT':
+        data = request.json or {}
+        conn.execute(
+            'UPDATE routines SET name = ?, split_type = ?, notes = ? WHERE id = ?',
+            (data.get('name', row['name']), data.get('split_type', row['split_type']),
+             data.get('notes', row['notes']), routine_id),
+        )
+        if 'exercises' in data:
+            _write_routine_exercises(conn, routine_id, data['exercises'])
+        conn.commit()
+        row = conn.execute('SELECT * FROM routines WHERE id = ?', (routine_id,)).fetchone()
+
+    payload = _routine_payload(conn, row)
     conn.close()
     return jsonify(payload)
 

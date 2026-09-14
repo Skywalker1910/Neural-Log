@@ -109,6 +109,9 @@ Neural-Log/
     ├── DESIGN-SYSTEM.md    # tokens, typography, component inventory
     ├── DATA-MODEL.md       # migrations + planned entities, mapped to phases
     ├── GAMIFICATION.md     # XP/levels/streaks/badges scoring spec
+    ├── SCORING.md          # how behaviour becomes the eight attributes
+    ├── TRAINING.md         # exercise library, set logging, routines, analytics
+    ├── DEPLOYMENT.md       # AWS plan and cost model
     ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first
 ```
@@ -117,7 +120,9 @@ Neural-Log/
 
 Mid-redesign: turning the checklist app into a full personal-development platform -
 ten workspaces, an RPG-style attribute system driven by real behaviour, and analytics
-over it all. Foundation (R1) is done; Home and Today are next, then AWS deployment.
+over it all. Foundation (R1), Home and Today (R2) and Training (R3) are done;
+Nutrition and Lifestyle (R4) are next. Deployment comes last, once the product is
+complete - see [docs/ROADMAP.md](docs/ROADMAP.md).
 See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License

@@ -15,8 +15,8 @@ This tracks where that's headed, in order.
 | - | Gamification - XP, levels, streaks, badges, leaderboards | Done |
 | - | Visual pass - light theme, custom icon set | Superseded by R1 |
 | R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
-| R2 | Home + Today - attributes, radar, daily score, streaks | In progress |
-| R3 | Training - routines, exercise library, set logging, analytics | Not started |
+| R2 | Home + Today - attributes, radar, daily score, streaks | Done |
+| R3 | Training - routines, exercise library, set logging, analytics | Done |
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
 | R5 | Learning - subjects, sessions, knowledge analytics | Not started |
 | R6 | Goals + Habits - milestones, routines, streak sources | Not started |
@@ -128,11 +128,23 @@ redesign, and they share one database, so anything logged in either shows in bot
 
 ## R3 - Training
 
-Routines and splits, an exercise library organised by muscle group, set-by-set
-logging with previous-performance hints and a rest timer, personal records,
-progressive overload and volume analytics, body measurements. Exercise demo
-animations are designed for from the start (component boundary ready) but not
-shipped - no copyrighted media.
+Done. See [TRAINING.md](TRAINING.md) for the full write-up.
+
+Shipped: an 85-exercise library synced from `data/exercises.json`, set-by-set
+logging with previous-performance hints and a timestamp-driven rest timer,
+routines with target sets and reps that pre-fill a session, volume and
+muscle-balance analytics, personal records, and body measurements.
+
+This is also the phase where the attribute engine stopped running on self-report
+alone. `scoring/producers.py` turns logged sets into measured signals for
+Strength, Stamina and Agility - and Agility stopped being `locked`, because
+mobility work now feeds it. Two scoring problems surfaced and were fixed here: a
+perverse incentive where ticking a checkbox outscored an honestly logged light
+week, and a ramp-up penalty that scored a genuine first session at 27% by
+measuring one day against a full week's target.
+
+Exercise demo animations remain designed-for but unshipped - no copyrighted
+media.
 
 ## R4 - Nutrition and Lifestyle
 
