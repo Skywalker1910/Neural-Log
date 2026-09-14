@@ -182,3 +182,23 @@ export interface HomeSummary {
   attributes: AttributeScore[]
   trend: DailyScorePoint[]
 }
+
+export interface ChecklistItemsResponse {
+  success: boolean
+  items: ChecklistItem[]
+}
+
+export interface SaveDayRequest {
+  /** Keyed by item NAME - that is how the backend joins answers to items. */
+  responses: Record<string, string>
+  path_id?: string
+  path_name?: string
+  notes?: string
+  self_rating?: number
+}
+
+export interface SaveDayResponse {
+  date: string
+  completion_pct: number
+  newly_earned_badges: Badge[]
+}

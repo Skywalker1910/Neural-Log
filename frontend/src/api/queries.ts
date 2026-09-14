@@ -1,14 +1,17 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 import type {
   AttributesResponse,
+  ChecklistItemsResponse,
   CurrentUser,
   DayDetail,
   GamificationSummary,
   HomeSummary,
   Leaderboard,
   PathsResponse,
+  SaveDayRequest,
+  SaveDayResponse,
   Stats,
 } from './types'
 
@@ -22,6 +25,7 @@ export const queryKeys = {
   home: ['home'] as const,
   attributes: (date?: string) => ['attributes', date ?? 'latest'] as const,
   day: (date: string) => ['day', date] as const,
+  checklistItems: ['checklist-items'] as const,
 }
 
 export function useCurrentUser() {
@@ -79,5 +83,39 @@ export function useDay(date: string) {
   return useQuery({
     queryKey: queryKeys.day(date),
     queryFn: () => api.get<DayDetail>(`/api/days/${date}`),
+  })
+}
+
+export function useChecklistItems() {
+  return useQuery({
+    queryKey: queryKeys.checklistItems,
+    queryFn: () => api.get<ChecklistItemsResponse>('/api/checklist-items'),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/**
+ * Saving a day moves almost every number in the app - XP, level, streak,
+ * attributes, the leaderboard - so this invalidates broadly rather than
+ * surgically. `refetchOnWindowFocus` is off and `staleTime` is 30s, so nothing
+ * self-heals; anything not invalidated here shows a stale value.
+ */
+export function useSaveDay(date: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (body: SaveDayRequest) => api.put<SaveDayResponse>(`/api/days/${date}`, body),
+    onSuccess: () => {
+      for (const key of [
+        queryKeys.day(date),
+        queryKeys.home,
+        queryKeys.stats,
+        queryKeys.gamification,
+        ['attributes'],
+        ['leaderboard'],
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
   })
 }

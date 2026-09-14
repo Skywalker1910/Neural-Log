@@ -1180,6 +1180,64 @@ def serve_spa(_subpath=''):
         return SPA_NOT_BUILT_HTML, 200
     return send_from_directory(FRONTEND_DIST, 'index.html')
 
+def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None):
+    """Score one logged day: XP, badges, the daily log, and the attribute series.
+
+    Shared by the legacy wizard's POST /api/activities and the SPA's
+    PUT /api/days/<date>, because a day logged from one must score exactly the
+    same as the same day logged from the other.
+
+    Returns (newly_earned_badges, completion_percent).
+    """
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user_row:
+        return [], 0
+
+    paths_payload = load_user_paths(user_row)
+    path_id = checklist_payload.get('selected_path_id')
+    used_path = (
+        next((p for p in paths_payload['paths'] if p['id'] == path_id), None)
+        or get_selected_path(paths_payload)
+        or {}
+    )
+    checklist_items = used_path.get('checklist_items', [])
+    custom_responses = checklist_payload.get('custom_responses', {}) or {}
+
+    # Deliberately ignores any completion_percent in the payload: the legacy
+    # client reports answered/total, which is ~always 100 because the wizard
+    # forces an answer to every step. Badges keyed off completion (perfect-day)
+    # need completed/total, weighted, computed here.
+    completion_percent = compute_completion_percent(checklist_items, custom_responses)
+
+    newly_earned = award_daily_xp(
+        conn, user_id, date, checklist_items, custom_responses,
+        completion_percent=completion_percent,
+    )
+
+    # Snapshot the day and rebuild the derived series. Runs after award_daily_xp
+    # because that commits internally, so the XP row is already durable; a
+    # failure here costs the attribute scores, not the submission.
+    scoring.record_day(
+        conn, user_id, date, checklist_items, custom_responses,
+        path_id=used_path.get('id'),
+        path_name=used_path.get('name'),
+        activity_id=activity_id,
+        self_rating=_extract_self_rating(checklist_items, custom_responses),
+        notes=(checklist_payload.get('notes') or None),
+    )
+    conn.commit()
+    # Only from this date forward: earlier days are unaffected by a later
+    # submission, and recomputing them would be wasted work.
+    scoring.recompute_scores(conn, user_id, from_date=date)
+    conn.commit()
+
+    badges = [
+        {'code': b['code'], 'name': b['name'], 'description': b['description']}
+        for b in newly_earned
+    ]
+    return badges, completion_percent
+
+
 @app.route('/api/activities', methods=['GET', 'POST'])
 @login_required
 def activities():
@@ -1215,50 +1273,9 @@ def activities():
             }
             save_checklist_to_file(user_id, session.get('username', f'user_{user_id}'), activity_id, checklist_payload)
 
-            # Score this submission for XP/levels/badges against the exact Path
-            # (and its item weights) the user actually used that day.
-            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-            if user_row:
-                paths_payload = load_user_paths(user_row)
-                path_id = checklist_payload.get('selected_path_id')
-                used_path = next((p for p in paths_payload['paths'] if p['id'] == path_id), None) \
-                    or get_selected_path(paths_payload)
-                checklist_items = used_path.get('checklist_items', []) if used_path else []
-                custom_responses = checklist_payload.get('custom_responses', {}) or {}
-                # Deliberately ignores checklist_payload['completion_percent']: the
-                # client reports answered/total, which is ~always 100 because the
-                # wizard forces an answer to every step. Badges keyed off completion
-                # (perfect-day) need completed/total, weighted, computed here.
-                completion_percent = compute_completion_percent(checklist_items, custom_responses)
-
-                newly_earned = award_daily_xp(
-                    conn, user_id, data.get('date'), checklist_items, custom_responses,
-                    completion_percent=completion_percent
-                )
-                newly_earned_badges = [
-                    {'code': b['code'], 'name': b['name'], 'description': b['description']}
-                    for b in newly_earned
-                ]
-
-                # Snapshot the day and rebuild the derived attribute series. Runs
-                # after award_daily_xp because that commits internally, so the XP
-                # row is already durable by this point; a failure here costs the
-                # attribute scores for this submission, not the submission itself.
-                selected = get_selected_path(paths_payload)
-                scoring.record_day(
-                    conn, user_id, data.get('date'),
-                    checklist_items, custom_responses,
-                    path_id=(used_path or selected or {}).get('id'),
-                    path_name=(used_path or selected or {}).get('name'),
-                    activity_id=activity_id,
-                    self_rating=_extract_self_rating(checklist_items, custom_responses),
-                    notes=(checklist_payload.get('notes') or None),
-                )
-                conn.commit()
-                # Only from this date forward: earlier days are unaffected by a
-                # later submission, and recomputing them would be wasted work.
-                scoring.recompute_scores(conn, user_id, from_date=data.get('date'))
-                conn.commit()
+            newly_earned_badges, _ = score_checklist_day(
+                conn, user_id, data.get('date'), checklist_payload, activity_id
+            )
 
         conn.close()
         return jsonify({'success': True, 'id': activity_id, 'newly_earned_badges': newly_earned_badges}), 201
@@ -1463,6 +1480,90 @@ def day_detail(date):
         'notes': row['notes'],
         'items': payload.get('items', []),
         'scores': dict(scores) if scores else None,
+    })
+
+
+@app.route('/api/days/<string:date>', methods=['PUT'])
+@login_required
+def save_day(date):
+    """Log or re-log one day from the SPA.
+
+    The legacy wizard posts to /api/activities and APPENDS a row every time,
+    which is why `activities` accumulates duplicates for a re-submitted day.
+    This updates in place instead - one checklist row per date - so editing
+    today corrects the record rather than logging it twice.
+
+    Scoring goes through the same score_checklist_day() the wizard uses, so a
+    day logged here is indistinguishable from one logged there.
+    """
+    user_id = session.get('user_id')
+    username = session.get('username', f'user_{user_id}')
+    data = request.json or {}
+
+    responses = data.get('responses')
+    if not isinstance(responses, dict):
+        return jsonify({'error': 'responses must be an object of item name -> answer'}), 400
+
+    try:
+        datetime.strptime(date, '%Y-%m-%d')
+    except (TypeError, ValueError):
+        return jsonify({'error': 'date must be YYYY-MM-DD'}), 400
+
+    checklist_payload = {
+        'date': date,
+        'checklist': {},
+        'custom_responses': responses,
+        'selected_path_id': data.get('path_id'),
+        'selected_path_name': data.get('path_name'),
+        'notes': data.get('notes', ''),
+        'source': 'spa',
+    }
+
+    conn = get_db_connection()
+
+    answered = sum(1 for value in responses.values() if str(value).strip())
+    description = f'{answered} of {len(responses)} answered'
+    # Mirrors the legacy client, which sends the 1-5 self-rating doubled. Kept
+    # identical so /api/stats keeps meaning one thing across both writers.
+    self_rating = data.get('self_rating')
+    progress_score = int(self_rating) * 2 if str(self_rating or '').strip().isdigit() else 0
+
+    existing = conn.execute(
+        "SELECT id FROM activities WHERE user_id = ? AND date = ? "
+        "AND activity_name = 'Daily Checklist' ORDER BY id DESC LIMIT 1",
+        (user_id, date),
+    ).fetchone()
+
+    if existing:
+        activity_id = existing['id']
+        conn.execute(
+            'UPDATE activities SET description = ?, progress_score = ?, notes = ? WHERE id = ?',
+            (description, progress_score, data.get('notes', ''), activity_id),
+        )
+    else:
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO activities (user_id, date, activity_name, description, '
+            'duration, progress_score, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (user_id, date, 'Daily Checklist', description, 0, progress_score,
+             data.get('notes', '')),
+        )
+        activity_id = cursor.lastrowid
+    conn.commit()
+
+    # The JSONL file stays an append-only audit trail of every submission,
+    # including corrections - daily_log holds the current truth.
+    save_checklist_to_file(user_id, username, activity_id, checklist_payload)
+
+    badges, completion_percent = score_checklist_day(
+        conn, user_id, date, checklist_payload, activity_id
+    )
+    conn.close()
+
+    return jsonify({
+        'date': date,
+        'completion_pct': completion_percent,
+        'newly_earned_badges': badges,
     })
 
 

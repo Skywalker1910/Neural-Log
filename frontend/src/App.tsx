@@ -5,6 +5,7 @@ import { AppShell } from './components/layout/AppShell'
 import { SkeletonGrid } from './components/ui/Skeleton'
 import { Home } from './pages/Home'
 import { NotFound } from './pages/NotFound'
+import { Today } from './pages/Today'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
 
@@ -24,13 +25,16 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Home />} />
-        {rest.map((section) => (
-          <Route
-            key={section.path}
-            path={section.path}
-            element={<PlaceholderPage section={section} />}
-          />
-        ))}
+        <Route path="/today" element={<Today />} />
+        {rest
+          .filter((section) => section.path !== '/today')
+          .map((section) => (
+            <Route
+              key={section.path}
+              path={section.path}
+              element={<PlaceholderPage section={section} />}
+            />
+          ))}
         <Route
           path={SETTINGS_SECTION.path}
           element={<PlaceholderPage section={SETTINGS_SECTION} />}

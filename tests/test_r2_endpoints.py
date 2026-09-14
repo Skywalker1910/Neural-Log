@@ -197,3 +197,83 @@ def test_spa_mount_point_tolerates_a_trailing_slash(logged_in):
     converter does not match an empty string, so this 404'd until R2."""
     for url in ('/app', '/app/'):
         assert logged_in.get(url).status_code == 200, url
+
+
+# --- PUT /api/days/<date> ---------------------------------------------------
+
+def _answers_for(items, yes=True):
+    out = {}
+    for item in items:
+        if item['type'] == 'time':
+            out[item['name']] = item['options'][0 if yes else 3]
+        elif item['type'] == 'yes-no':
+            out[item['name']] = 'Yes' if yes else 'No'
+        elif item['type'] == 'rating':
+            out[item['name']] = '4'
+    return out
+
+
+def test_put_day_logs_and_scores_it(logged_in, app_module):
+    items = _items(logged_in)
+    resp = logged_in.put(f'/api/days/{TODAY.isoformat()}',
+                         json={'responses': _answers_for(items), 'path_id': 'batman-path'})
+    assert resp.status_code == 200
+    assert resp.get_json()['completion_pct'] == 100
+
+    conn = app_module.get_db_connection()
+    for table in ('daily_log', 'attribute_scores', 'daily_scores'):
+        assert conn.execute(f'SELECT COUNT(*) AS n FROM {table}').fetchone()['n'] > 0
+    conn.close()
+
+    day = logged_in.get(f'/api/days/{TODAY.isoformat()}').get_json()
+    assert day['logged'] is True
+    assert day['items']
+
+
+def test_put_day_updates_in_place_instead_of_appending(logged_in, app_module):
+    """The legacy wizard appends an activities row per submission, so a corrected
+    day is logged twice. This endpoint corrects the record instead."""
+    items = _items(logged_in)
+    url = f'/api/days/{TODAY.isoformat()}'
+    logged_in.put(url, json={'responses': _answers_for(items, yes=True)})
+    logged_in.put(url, json={'responses': _answers_for(items, yes=False)})
+
+    conn = app_module.get_db_connection()
+    rows = conn.execute(
+        "SELECT COUNT(*) AS n FROM activities WHERE activity_name = 'Daily Checklist'"
+    ).fetchone()['n']
+    logs = conn.execute('SELECT COUNT(*) AS n FROM daily_log').fetchone()['n']
+    conn.close()
+    assert rows == 1
+    assert logs == 1
+
+    # The correction won, rather than the first answer sticking.
+    assert logged_in.get(url).get_json()['completion_pct'] < 50
+
+
+def test_put_day_scores_the_same_as_the_legacy_wizard(client, app_module):
+    """Both writers must agree - a day logged in the SPA and the same day logged
+    in the old wizard should not produce different XP."""
+    register(client, username='viaput')
+    items = _items(client)
+    client.put(f'/api/days/{TODAY.isoformat()}',
+               json={'responses': _answers_for(items), 'path_id': 'batman-path'})
+    via_put = client.get('/api/gamification/summary').get_json()['total_xp']
+    client.get('/logout')
+
+    register(client, username='viapost')
+    _submit(client, TODAY.isoformat(), _items(client))
+    via_post = client.get('/api/gamification/summary').get_json()['total_xp']
+
+    assert via_put == via_post
+
+
+def test_put_day_rejects_a_bad_payload(logged_in):
+    assert logged_in.put(f'/api/days/{TODAY.isoformat()}', json={}).status_code == 400
+    assert logged_in.put(f'/api/days/{TODAY.isoformat()}',
+                         json={'responses': 'nope'}).status_code == 400
+    assert logged_in.put('/api/days/not-a-date', json={'responses': {}}).status_code == 400
+
+
+def test_put_day_requires_login(client):
+    assert client.put('/api/days/2026-09-14', json={'responses': {}}).status_code == 302
