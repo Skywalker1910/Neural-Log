@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 
 import { AppShell } from './components/layout/AppShell'
 import { SkeletonGrid } from './components/ui/Skeleton'
+import { Home } from './pages/Home'
 import { NotFound } from './pages/NotFound'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
@@ -17,12 +18,12 @@ const DesignSystem = lazy(() =>
  * one of these for the real workspace; the shell around them doesn't change.
  */
 export default function App() {
-  const [home, ...rest] = NAV_SECTIONS
+  const [, ...rest] = NAV_SECTIONS
 
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<PlaceholderPage section={home} />} />
+        <Route index element={<Home />} />
         {rest.map((section) => (
           <Route
             key={section.path}

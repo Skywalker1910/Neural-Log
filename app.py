@@ -1168,7 +1168,10 @@ def spa_assets(filename):
     return send_from_directory(FRONTEND_DIST / 'assets', filename)
 
 
-@app.route('/app')
+# strict_slashes=False so /app and /app/ both work. The <path:> converter does
+# not match an empty string, so without it a trailing slash - exactly what a
+# bookmark or a typed URL tends to have - returns 404.
+@app.route('/app', strict_slashes=False)
 @app.route('/app/<path:_subpath>')
 @login_required
 def serve_spa(_subpath=''):

@@ -8,8 +8,21 @@ import {
   Tooltip,
 } from 'recharts'
 
+import { useMediaQuery } from '../../lib/useMediaQuery'
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 import { axisTick, gridStroke, tooltipStyles } from './chartTheme'
+
+/**
+ * Eight axes on a phone-width card cannot fit "Consistency" either side of the
+ * chart - SVG text has no wrapping or ellipsis, so it simply gets cut off. Every
+ * attribute is also named in full in the badge grid beneath the chart, so
+ * abbreviating here loses nothing.
+ */
+const NARROW = '(max-width: 640px)'
+
+function abbreviate(label: string): string {
+  return label.slice(0, 3).toUpperCase()
+}
 
 export interface AttributeDatum {
   attribute: string
@@ -32,13 +45,18 @@ interface AttributeRadarProps {
  */
 export function AttributeRadar({ data, height = 320, compareLabel = 'Previous' }: AttributeRadarProps) {
   const reducedMotion = usePrefersReducedMotion()
+  const narrow = useMediaQuery(NARROW)
   const hasComparison = data.some((point) => typeof point.previous === 'number')
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <RadarChart data={data} outerRadius="72%">
+      <RadarChart data={data} outerRadius={narrow ? '62%' : '72%'}>
         <PolarGrid stroke={gridStroke} />
-        <PolarAngleAxis dataKey="attribute" tick={axisTick} />
+        <PolarAngleAxis
+          dataKey="attribute"
+          tick={axisTick}
+          tickFormatter={narrow ? abbreviate : undefined}
+        />
         <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
         {hasComparison && (
           <Radar

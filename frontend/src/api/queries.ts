@@ -1,7 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { api } from './client'
-import type { CurrentUser, GamificationSummary, Leaderboard, PathsResponse, Stats } from './types'
+import type {
+  AttributesResponse,
+  CurrentUser,
+  DayDetail,
+  GamificationSummary,
+  HomeSummary,
+  Leaderboard,
+  PathsResponse,
+  Stats,
+} from './types'
 
 /** Query keys live in one place so cache invalidation stays greppable. */
 export const queryKeys = {
@@ -10,6 +19,9 @@ export const queryKeys = {
   gamification: ['gamification', 'summary'] as const,
   leaderboard: (scope: 'overall' | 'monthly') => ['leaderboard', scope] as const,
   paths: ['paths'] as const,
+  home: ['home'] as const,
+  attributes: (date?: string) => ['attributes', date ?? 'latest'] as const,
+  day: (date: string) => ['day', date] as const,
 }
 
 export function useCurrentUser() {
@@ -45,5 +57,27 @@ export function usePaths() {
   return useQuery({
     queryKey: queryKeys.paths,
     queryFn: () => api.get<PathsResponse>('/api/paths'),
+  })
+}
+
+export function useHomeSummary() {
+  return useQuery({
+    queryKey: queryKeys.home,
+    queryFn: () => api.get<HomeSummary>('/api/home'),
+  })
+}
+
+export function useAttributes(date?: string) {
+  return useQuery({
+    queryKey: queryKeys.attributes(date),
+    queryFn: () =>
+      api.get<AttributesResponse>(date ? `/api/attributes?date=${date}` : '/api/attributes'),
+  })
+}
+
+export function useDay(date: string) {
+  return useQuery({
+    queryKey: queryKeys.day(date),
+    queryFn: () => api.get<DayDetail>(`/api/days/${date}`),
   })
 }
