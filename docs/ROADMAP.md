@@ -95,12 +95,36 @@ The phase that makes the redesign worth using.
 
 - **Motion system** - the animation layer every later phase builds on, added here
   rather than saved for R10 so eight phases of UI are not retrofitted at the end.
-- **Flip `/`** from the Jinja app to the SPA, once Today can do everything the daily
-  checklist wizard does. Not before: the Jinja app is what actually gets used daily,
-  and flipping early would regress that.
+The flip of `/` from the Jinja app to the SPA was planned for this phase and has
+been **moved** - see *Retiring the Jinja app* below. Today replaces the checklist
+wizard, but the wizard is only part of what that page does.
 
 The Flask endpoints are now load-bearing for the whole build rather than throwaway
 (the port moved to the end), so they are built properly - just not elaborately.
+
+## Retiring the Jinja app
+
+`/` stays on the legacy Jinja dashboard until the SPA can actually replace it. The
+checklist wizard is the obvious feature, and Today covers that - but the same page
+also carries Path management, custom checklist items, profile and password, the
+badges and leaderboard modals, milestone insights, and Excel export. Flipping after
+R2 would have traded a complete app for a prettier one missing most of its surface.
+
+Parity is reached phase by phase, not in one step:
+
+| Legacy feature | Replaced in |
+|---|---|
+| Daily checklist wizard | R2 (done - Today) |
+| Stats, streaks, progress chart | R2 (done - Home) |
+| Path management, custom items | R6 - Goals and Habits |
+| Badges, leaderboard | R7 - Gamification depth |
+| Milestone insights, Excel export | R8 - Analytics |
+| Profile, password, settings | R9 - Onboarding |
+| Admin dashboard | Ship |
+
+So the flip lands once R9 is done, and the Ship phase removes the Jinja templates
+entirely. Until then both run side by side: `/` is the working app, `/app` is the
+redesign, and they share one database, so anything logged in either shows in both.
 
 ## R3 - Training
 
