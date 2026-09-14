@@ -220,3 +220,26 @@ def test_engine_version_is_stamped(db):
             f'SELECT engine_version FROM {table} WHERE user_id = ? LIMIT 1',
             (user_id,)).fetchone()
         assert row['engine_version'] == scoring.ENGINE_VERSION
+
+
+def test_deleting_the_source_day_removes_its_derived_scores(db):
+    """Regression: recompute_scores returned early when a user had no source data
+    left, so wiping every logged day left the derived attribute and daily scores
+    behind - still reporting scores for days that no longer existed."""
+    conn, user_id, app_module = db
+    _log_days(conn, user_id, _items(app_module), 5)
+
+    assert conn.execute(
+        'SELECT COUNT(*) AS n FROM attribute_scores WHERE user_id = ?',
+        (user_id,)).fetchone()['n'] > 0
+
+    conn.execute('DELETE FROM daily_log WHERE user_id = ?', (user_id,))
+    conn.commit()
+    scoring.recompute_scores(conn, user_id)
+    conn.commit()
+
+    for table in ('attribute_scores', 'daily_scores'):
+        remaining = conn.execute(
+            f'SELECT COUNT(*) AS n FROM {table} WHERE user_id = ?',
+            (user_id,)).fetchone()['n']
+        assert remaining == 0, f'{table} still holds scores for deleted days'

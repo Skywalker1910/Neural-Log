@@ -125,6 +125,25 @@ def _load_history(conn, user_id):
     return history
 
 
+def _prune_orphaned_scores(conn, user_id, live_dates, from_date=None):
+    """Remove derived rows whose source day no longer exists."""
+    existing = conn.execute(
+        'SELECT DISTINCT date FROM daily_scores WHERE user_id = ?', (user_id,)
+    ).fetchall()
+    live = set(live_dates)
+
+    for row in existing:
+        date = row['date']
+        if date in live:
+            continue
+        if from_date and date < from_date:
+            continue
+        conn.execute('DELETE FROM daily_scores WHERE user_id = ? AND date = ?',
+                     (user_id, date))
+        conn.execute('DELETE FROM attribute_scores WHERE user_id = ? AND date = ?',
+                     (user_id, date))
+
+
 def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     """Rebuild the derived attribute and daily score rows.
 
@@ -147,6 +166,12 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     training_sets = _load_training_sets(conn, user_id)
     training_dates = sorted({row['date'] for row in training_sets})
     all_dates = sorted(set(checklist_dates) | set(training_dates))
+
+    # Derived rows for dates that no longer have ANY source data must go, or
+    # deleting a workout leaves its scores behind - still crediting training that
+    # does not exist. The early-return-on-empty version of this function had
+    # exactly that bug: wiping every session left Strength sitting at 100.
+    _prune_orphaned_scores(conn, user_id, all_dates, from_date)
     if not all_dates:
         return 0
 

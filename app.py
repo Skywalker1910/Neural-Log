@@ -1944,6 +1944,14 @@ def admin_stats():
         'active_users': [dict(row) for row in active_users]
     })
 
+# Training endpoints live in their own module - app.py is already long enough,
+# and they are self-contained. Registered after the helpers they depend on are
+# defined, and injected rather than imported so the module never imports app
+# back (the test suite swaps modules per test).
+from training_api import init_training  # noqa: E402
+
+init_training(app, get_db_connection, login_required)
+
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.
 init_db()

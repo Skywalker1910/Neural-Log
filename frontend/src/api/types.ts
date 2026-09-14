@@ -202,3 +202,93 @@ export interface SaveDayResponse {
   completion_pct: number
   newly_earned_badges: Badge[]
 }
+
+/* --- R3: training --------------------------------------------------------- */
+
+export type MuscleGroup =
+  | 'chest' | 'back' | 'shoulders' | 'biceps' | 'triceps' | 'quads'
+  | 'hamstrings' | 'glutes' | 'calves' | 'core' | 'forearms' | 'full-body' | 'cardio'
+
+export type ExerciseCategory = 'strength' | 'cardio' | 'mobility'
+
+export interface Exercise {
+  id: number
+  slug: string
+  name: string
+  primary_muscle: MuscleGroup
+  secondary_muscles: MuscleGroup[]
+  equipment: string
+  category: ExerciseCategory
+  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  is_compound: boolean
+  instructions: string[]
+  is_custom: boolean
+}
+
+export interface LoggedSet {
+  id?: number
+  exercise_id: number
+  exercise_name?: string
+  primary_muscle?: MuscleGroup
+  category?: ExerciseCategory
+  position?: number
+  weight?: number | null
+  weight_unit?: string
+  reps?: number | null
+  duration_seconds?: number | null
+  rpe?: number | null
+  /** Real work, but excluded from volume and records - it is not the signal. */
+  is_warmup?: boolean
+  completed?: boolean
+}
+
+export interface Workout {
+  id: number
+  date: string
+  name: string | null
+  notes: string | null
+  routine_id: number | null
+  duration_seconds: number | null
+  total_volume: number
+  total_sets: number
+  finished_at: string | null
+  sets: LoggedSet[]
+}
+
+export interface SetRecord {
+  weight: number
+  weight_unit: string
+  reps: number
+  date: string
+}
+
+export interface ExerciseHistory {
+  exercise_id: number
+  last_session_date: string | null
+  last_session_sets: LoggedSet[]
+  /** "Best" means two things in a gym, so both are reported. */
+  heaviest_set: SetRecord | null
+  best_volume_set: SetRecord | null
+  recent_sets: LoggedSet[]
+}
+
+export interface ExercisesResponse {
+  exercises: Exercise[]
+}
+
+export interface TrainingSummary {
+  total_sessions: number
+  total_volume: number
+  recent: Workout[]
+  volume_trend: { date: string; volume: number; sessions: number }[]
+  by_muscle: { muscle: MuscleGroup; sets: number; volume: number }[]
+  records: {
+    exercise: string
+    exercise_id: number
+    weight: number
+    weight_unit: string
+    reps: number
+    date: string
+  }[]
+  measurements: { metric: string; value: number; unit: string | null; date: string }[]
+}
