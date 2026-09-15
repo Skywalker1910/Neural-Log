@@ -1,0 +1,98 @@
+name: CI
+
+# Runs on every pull request into main, and on main itself after a merge.
+#
+# The push trigger is not redundant with the pull_request one: a PR is tested
+# against a merge commit that does not exist on main until it lands, so a push
+# run is the only thing that proves main itself is green.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A second push to a branch makes the first run's answer irrelevant. Cancelling
+# it keeps the queue short and the feedback fast.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege. Nothing here writes to the repository, comments on anything,
+# or needs a token beyond checkout.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Matches local development. requirements.txt pins exact versions, so
+          # CI installs precisely what runs on the developer's machine.
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        # No secrets needed: tests/conftest.py points every test at an isolated
+        # temp database and sets its own SECRET_KEY.
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        # `ci` rather than `install`: it installs exactly the lockfile and fails
+        # if package.json and the lock have drifted, which is the whole point of
+        # running this on a build machine.
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  migrations:
+    name: Migration ledger
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check migrations apply cleanly and are idempotent
+        # Deliberately separate from the test suite. The tests run against a
+        # database that migrations already built, so they cannot tell you whether
+        # a migration works on an EMPTY one, or whether running it twice is safe -
+        # and init_db() runs on every gunicorn worker start.
+        run: python scripts/check_migrations.py

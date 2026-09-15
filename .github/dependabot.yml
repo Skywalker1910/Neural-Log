@@ -1,0 +1,36 @@
+# Dependency updates.
+#
+# Monthly rather than weekly, and grouped, because this is a hobby project with
+# a handful of users - a PR per package every week is noise that gets ignored,
+# and an ignored update stream is worse than none because it trains you to skip
+# the security ones too.
+#
+# Every update still has to pass CI and be reviewed like any other PR.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      # One PR for the routine stuff. Majors stay separate, because React,
+      # Tailwind and Vite majors have all needed hand-holding before.
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Pinned action versions go stale silently and are a supply-chain surface.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

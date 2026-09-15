@@ -114,6 +114,7 @@ Neural-Log/
     ├── NUTRITION.md        # food library, recipes, sleep, lifestyle, TDEE
     ├── LEARNING.md         # areas, topics, study sessions, block depth
     ├── HABITS.md           # the Paths-to-Habits migration, schedules, goals
+    ├── CI.md               # what runs on a PR, and what main enforces
     ├── DEPLOYMENT.md       # AWS plan and cost model
     ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first
