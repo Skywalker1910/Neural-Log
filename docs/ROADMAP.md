@@ -19,7 +19,7 @@ This tracks where that's headed, in order.
 | R3 | Training - routines, exercise library, set logging, analytics | Done |
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Done |
 | R5 | Learning - subjects, sessions, knowledge analytics | Done |
-| R6 | Goals + Habits - milestones, routines, streak sources | Not started |
+| R6 | Goals + Habits - milestones, routines, streak sources | Done |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
@@ -196,10 +196,29 @@ R5 the size of R3 and R4.
 
 ## R6 - Goals and Habits
 
-Goals with milestones, categories, deadlines and linked habits. Reusable habits with
-real schedules (daily, weekdays, N times per week, custom). This is where the Paths
-JSON system converts into `Habit`/`HabitCompletion` - see
-[DATA-MODEL.md](DATA-MODEL.md).
+Done. See [HABITS.md](HABITS.md) for the full write-up.
+
+This is where the Paths JSON system converted into `habits` / `habit_completions`,
+and it was the riskiest phase so far: Paths are the one feature used every day,
+and they are consumed by the Jinja app at `/`, `static/js/app.js` and the SPA's
+Today page.
+
+The conversion was deliberately a MOVE. `load_user_paths()` returns the same
+payload it always did, so all three clients kept working untouched. The signal
+that it worked is that the 245 tests predating the migration passed against the
+new storage without modification, and that 40 of 40 item ids on the real account
+survived.
+
+Also shipped: real schedules (daily, weekdays, specific days, N times a week),
+per-habit streaks and adherence, goals with categories, deadlines, milestones and
+linked habits, and thin one-off tasks.
+
+Nothing in Goals feeds an attribute, and that is enforced structurally -
+`goals_api.py` is the only workspace blueprint with no recompute function
+injected. A goal is an intention plus a number you type in; scoring it would pay
+you to declare progress rather than make it. What *is* evidenced is the habits
+underneath, so a goal linked to habits derives its progress from their real
+completions and the UI always says where the number came from.
 
 ## R7 - Gamification depth
 

@@ -15,6 +15,7 @@ from functools import wraps
 from dotenv import load_dotenv
 
 import scoring
+import habits
 
 load_dotenv()
 
@@ -282,8 +283,14 @@ def resolve_selected_path_id(paths, selected_path_name):
 
     return paths[0]['id']
 
-def load_user_paths(user_row):
-    """Load or initialize per-user path system"""
+def _paths_from_json(user_row):
+    """Read a user's legacy paths file, or None if there isn't a usable one.
+
+    R6 moved path storage into SQL. This is no longer the live read path - it is
+    the IMPORT SOURCE, consulted once per user by load_user_paths() and then
+    never again. The file is left on disk rather than deleted, so a bad import
+    can be diagnosed against the original.
+    """
     username = user_row['username']
     file_path = get_user_paths_file_path(username)
 
@@ -308,16 +315,20 @@ def load_user_paths(user_row):
 
                 if normalized_paths:
                     repair_default_path_items(normalized_paths)
-                    resolved_selected_path_id = resolve_selected_path_id(normalized_paths, selected_path_id or user_row['selected_path'])
-                    payload = {
+                    resolved_selected_path_id = resolve_selected_path_id(
+                        normalized_paths, selected_path_id or user_row['selected_path'])
+                    return {
                         'paths': normalized_paths,
                         'selected_path_id': resolved_selected_path_id
                     }
-                    save_user_paths(username, payload)
-                    return payload
         except (json.JSONDecodeError, OSError):
             pass
 
+    return None
+
+
+def _default_paths_payload(user_row):
+    """The stock paths a brand-new account starts with."""
     paths = build_default_paths()
 
     custom_path_items = []
@@ -341,18 +352,77 @@ def load_user_paths(user_row):
         })
 
     selected_path_id = resolve_selected_path_id(paths, user_row['selected_path'])
-    payload = {
+    return {
         'paths': paths,
         'selected_path_id': selected_path_id
     }
-    save_user_paths(username, payload)
-    return payload
 
-def save_user_paths(username, payload):
-    """Persist per-user path system JSON"""
-    file_path = get_user_paths_file_path(username)
-    with file_path.open('w', encoding='utf-8') as file:
-        json.dump(payload, file, ensure_ascii=False, indent=2)
+
+def _resolve_user_id(conn, username):
+    row = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+    return row['id'] if row else None
+
+
+def load_user_paths(user_row, conn=None):
+    """The user's paths, in the shape every caller has always received.
+
+    Storage moved into SQL in R6; the payload did not change, which is what keeps
+    the Jinja app, static/js/app.js and the SPA's Today page working untouched.
+
+    The import is lazy and per-user: the first load for a user reads their legacy
+    JSON file (or builds the stock paths), writes it into SQL, and records that
+    in habit_imports so it never runs again.
+
+    `conn` is threaded through by callers that already hold one open. Opening a
+    second connection while a caller has uncommitted writes - score_checklist_day
+    does exactly that - would block on SQLite's write lock.
+    """
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_db_connection()
+
+    try:
+        user_id = _resolve_user_id(conn, user_row['username'])
+        if user_id is None:
+            return {'paths': [], 'selected_path_id': None}
+
+        payload = habits.load_paths(conn, user_id)
+        if payload is None:
+            seed = _paths_from_json(user_row) or _default_paths_payload(user_row)
+            habits.import_paths(
+                conn, user_id, seed,
+                source=str(get_user_paths_file_path(user_row['username'])),
+            )
+            # Only commit a connection we opened. Committing a caller's would
+            # also commit whatever half-finished work they had in flight.
+            if owns_connection:
+                conn.commit()
+            payload = habits.load_paths(conn, user_id)
+
+        return payload or {'paths': [], 'selected_path_id': None}
+    finally:
+        if owns_connection:
+            conn.close()
+
+
+def save_user_paths(username, payload, conn=None):
+    """Persist a paths payload. Resolves the user by name so the twelve existing
+    call sites keep working unchanged."""
+    owns_connection = conn is None
+    if owns_connection:
+        conn = get_db_connection()
+
+    try:
+        user_id = _resolve_user_id(conn, username)
+        if user_id is None:
+            return payload
+        habits.save_paths(conn, user_id, payload)
+        if owns_connection:
+            conn.commit()
+        return payload
+    finally:
+        if owns_connection:
+            conn.close()
 
 def get_selected_path(paths_payload):
     """Get selected path object from path payload"""
@@ -694,7 +764,7 @@ def evaluate_badges(conn, user_id, completion_percent_today=0):
     user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     has_custom_path = False
     if user_row:
-        paths_payload = load_user_paths(user_row)
+        paths_payload = load_user_paths(user_row, conn)
         has_custom_path = any(not path.get('is_default', False) for path in paths_payload.get('paths', []))
 
     ctx = {
@@ -827,8 +897,18 @@ def register():
         )
         conn.commit()
         user_id = cursor.lastrowid
+
+        # Seed the new account's habits immediately rather than waiting for the
+        # first request that happens to load paths. Without this a just-registered
+        # user has no habit rows at all, so per-habit streaks and adherence read
+        # as empty until they touch the right endpoint.
+        new_user_row = conn.execute(
+            'SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if new_user_row:
+            load_user_paths(new_user_row, conn)
+            conn.commit()
         conn.close()
-        
+
         # Log in the new user
         session['user_id'] = user_id
         session['username'] = username
@@ -902,7 +982,7 @@ def update_user_profile():
         conn.close()
         return jsonify({'success': False, 'message': 'Username already exists'}), 400
 
-    paths_payload = load_user_paths(current_user_row)
+    paths_payload = load_user_paths(current_user_row, conn)
     if selected_path_id and not any(path['id'] == selected_path_id for path in paths_payload['paths']):
         conn.close()
         return jsonify({'success': False, 'message': 'Invalid path selection'}), 400
@@ -1045,14 +1125,14 @@ def select_path():
         conn.close()
         return jsonify({'success': False, 'message': 'User not found'}), 404
 
-    paths_payload = load_user_paths(user_row)
+    paths_payload = load_user_paths(user_row, conn)
     selected_path = next((path for path in paths_payload['paths'] if path['id'] == selected_path_id), None)
     if not selected_path:
         conn.close()
         return jsonify({'success': False, 'message': 'Path not found'}), 404
 
     paths_payload['selected_path_id'] = selected_path_id
-    save_user_paths(user_row['username'], paths_payload)
+    save_user_paths(user_row['username'], paths_payload, conn)
     conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
     conn.commit()
     conn.close()
@@ -1071,7 +1151,7 @@ def path_detail(path_id):
         conn.close()
         return jsonify({'success': False, 'message': 'User not found'}), 404
 
-    paths_payload = load_user_paths(user_row)
+    paths_payload = load_user_paths(user_row, conn)
     paths = paths_payload.get('paths', [])
     target_index = next((index for index, path in enumerate(paths) if path['id'] == path_id), -1)
 
@@ -1093,7 +1173,7 @@ def path_detail(path_id):
             paths_payload['selected_path_id'] = paths[0]['id']
 
         selected_path = get_selected_path(paths_payload)
-        save_user_paths(user_row['username'], paths_payload)
+        save_user_paths(user_row['username'], paths_payload, conn)
         conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
         conn.commit()
         conn.close()
@@ -1119,7 +1199,7 @@ def path_detail(path_id):
     target_path['checklist_items'] = normalize_checklist_items(checklist_items)
     paths[target_index] = target_path
 
-    save_user_paths(user_row['username'], paths_payload)
+    save_user_paths(user_row['username'], paths_payload, conn)
 
     if paths_payload.get('selected_path_id') == path_id:
         conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (new_name, user_id))
@@ -1221,7 +1301,7 @@ def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None
     if not user_row:
         return [], 0
 
-    paths_payload = load_user_paths(user_row)
+    paths_payload = load_user_paths(user_row, conn)
     path_id = checklist_payload.get('selected_path_id')
     used_path = (
         next((p for p in paths_payload['paths'] if p['id'] == path_id), None)
@@ -1245,7 +1325,7 @@ def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None
     # Snapshot the day and rebuild the derived series. Runs after award_daily_xp
     # because that commits internally, so the XP row is already durable; a
     # failure here costs the attribute scores, not the submission.
-    scoring.record_day(
+    scored = scoring.record_day(
         conn, user_id, date, checklist_items, custom_responses,
         path_id=used_path.get('id'),
         path_name=used_path.get('name'),
@@ -1253,6 +1333,12 @@ def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None
         self_rating=_extract_self_rating(checklist_items, custom_responses),
         notes=(checklist_payload.get('notes') or None),
     )
+
+    # The same answers, also written per-habit. record_day's payload snapshot
+    # stays the authority for scoring; this is the queryable index that makes
+    # per-habit streaks and adherence possible at all. Written in the same
+    # transaction so the two cannot disagree.
+    habits.record_completions(conn, user_id, date, scored.get('items', []))
     conn.commit()
     # Only from this date forward: earlier days are unaffected by a later
     # submission, and recomputing them would be wasted work.
@@ -1962,6 +2048,8 @@ def admin_stats():
 from training_api import init_training  # noqa: E402
 from nutrition_api import init_nutrition  # noqa: E402
 from learning_api import init_learning  # noqa: E402
+from habits_api import init_habits  # noqa: E402
+from goals_api import init_goals  # noqa: E402
 
 init_training(app, get_db_connection, login_required)
 
@@ -1973,6 +2061,12 @@ init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
 
 # Learning, same arrangement: logging a study session moves Knowledge and Focus.
 init_learning(app, get_db_connection, login_required, scoring.recompute_scores)
+
+# Habits and Goals take no recompute function, and that absence is deliberate.
+# Editing a habit's schedule does not change what you actually did, and a goal is
+# an intention rather than evidence - neither moves an attribute score.
+init_habits(app, get_db_connection, login_required)
+init_goals(app, get_db_connection, login_required)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.

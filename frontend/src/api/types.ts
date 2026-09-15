@@ -572,3 +572,120 @@ export interface LearningTopicsResponse {
 export interface LearningSessionsResponse {
   sessions: LearningSession[]
 }
+
+/* --- R6: habits, goals and tasks ------------------------------------------ */
+
+export type ScheduleType = 'daily' | 'weekdays' | 'days' | 'times-per-week'
+
+export interface HabitStat {
+  id: number
+  slug: string
+  name: string
+  icon: string
+  weight: number
+  schedule_type: ScheduleType
+  /** Weekday indices, Monday = 0. */
+  schedule_days: number[]
+  target_per_week: number | null
+  group_slug: string
+  group_name: string
+  /** Days with an answer of any kind in the window. */
+  logged: number
+  /** Days the answer counted as done. */
+  done: number
+  avg_credit: number
+  streak: number
+}
+
+export interface HabitsResponse {
+  habits: HabitStat[]
+  window_days: number
+  /** 'selected' is the path you are following; 'all' is every path's items. */
+  scope: 'selected' | 'all'
+}
+
+export type GoalCategory =
+  | 'fitness' | 'learning' | 'lifestyle' | 'career' | 'finance' | 'other'
+
+export type GoalStatus = 'active' | 'paused' | 'achieved' | 'abandoned'
+
+export interface Milestone {
+  id: number
+  goal_id: number
+  title: string
+  target_date: string | null
+  position: number
+  /** Null means not done. A date, so "when did I pass this" stays answerable. */
+  completed_on: string | null
+}
+
+export interface Task {
+  id: number
+  goal_id: number | null
+  title: string
+  notes: string | null
+  due_date: string | null
+  /** 1 high, 2 normal, 3 low. */
+  priority: number
+  completed_on: string | null
+  goal_title?: string | null
+  goal_accent?: string | null
+}
+
+/**
+ * Where a goal's progress number came from, most evidenced first. The UI must
+ * never present a self-reported number as if it were measured - see
+ * migrations/007_goals.sql.
+ */
+export interface GoalProgress {
+  percent: number | null
+  source: 'habits' | 'milestones' | 'metric' | 'none'
+  linked_habits: {
+    habit_id: number
+    name: string
+    done: number
+    elapsed_days: number
+    adherence: number
+  }[]
+}
+
+export interface Goal {
+  id: number
+  title: string
+  description: string | null
+  category: GoalCategory
+  accent: string
+  status: GoalStatus
+  target_date: string | null
+  metric_name: string | null
+  target_value: number | null
+  current_value: number
+  started_on: string | null
+  achieved_on: string | null
+  days_remaining: number | null
+  milestones: Milestone[]
+  tasks: Task[]
+  habit_ids: number[]
+  progress: GoalProgress
+}
+
+export interface GoalsSummary {
+  goals: Goal[]
+  tasks: Task[]
+  habits: { id: number; name: string; icon: string; group_name: string }[]
+  totals: {
+    active: number
+    achieved: number
+    overdue: number
+    due_soon: number
+    open_tasks: number
+  }
+}
+
+export interface GoalsResponse {
+  goals: Goal[]
+}
+
+export interface TasksResponse {
+  tasks: Task[]
+}

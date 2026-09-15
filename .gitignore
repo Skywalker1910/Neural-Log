@@ -13,6 +13,9 @@ build/
 
 # Database
 *.db
+# Database backups taken before a risky migration (R6 took one of these).
+*.bak
+*.db.*
 *.sqlite
 *.sqlite3
 

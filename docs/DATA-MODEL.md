@@ -79,9 +79,9 @@ uses it - an empty table is a liability, not a head start.
 | `DailyLog` | New - the per-day record a calendar cell maps to | 2 |
 | `AttributeScore` | New - time-series of the eight attribute scores | 2 |
 | `DailyScore` | New - daily performance and discipline scores | 2 |
-| `Habit`, `HabitCompletion` | New - **absorbs the Paths JSON system** | 6 |
-| `Goal`, `GoalMilestone` | New | 6 |
-| `Task` | New | 6 |
+| `habit_groups`, `habits`, `habit_completions` | **Absorbed the Paths JSON system** | 6 (done) |
+| `goals`, `goal_milestones`, `goal_habits` | New | 6 (done) |
+| `tasks` | New | 6 (done) |
 | `Workout`, `WorkoutSession` | New | 3 |
 | `Exercise`, `ExerciseSet` | New - library + per-set logging | 3 |
 | `BodyMeasurement` | New | 3 |
@@ -105,10 +105,18 @@ derives from total XP.
 
 ### The Paths system's fate
 
-Paths (the themed daily checklists in `artifacts/paths/*.json`) become `Habit` +
-`HabitCompletion` in Phase 6. They are not duplicated into SQL before then, and the
-JSON files keep working in the meantime. That migration converts each user's path
-items into habits and backfills completions from `artifacts/checklists/*.jsonl`.
+**Done in R6.** Paths became `habit_groups` + `habits` + `habit_completions`.
+
+The conversion kept `load_user_paths()`'s payload identical so the Jinja app, the
+legacy JS and the SPA all kept working, and carried the existing string ids across
+as `slug` so `daily_log.path_id` and `users.selected_path` were never orphaned.
+
+The import is lazy and per-user, recorded in `habit_imports` so it runs exactly
+once - without that marker, removing a path would be undone on the next load by
+re-importing the original file. Completions are backfilled from `daily_log`'s
+snapshots rather than the JSONL files, matched by name.
+
+The JSON files are left on disk rather than deleted. See [HABITS.md](HABITS.md).
 
 ## Time-series
 
