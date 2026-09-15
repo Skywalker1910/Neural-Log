@@ -465,10 +465,14 @@ def goals_summary():
         (user_id,),
     ).fetchall()
 
+    # Scoped to the selected path, like /api/habits: the four stock paths share
+    # most of their items, so the unscoped list offers "What time did you wake
+    # up?" four times and there is no way to tell the copies apart.
     habit_rows = conn.execute(
         'SELECT h.id, h.name, h.icon, g.name AS group_name '
         'FROM habits h JOIN habit_groups g ON g.id = h.group_id '
         'WHERE h.user_id = ? AND h.archived = 0 AND g.archived = 0 '
+        'AND g.is_selected = 1 '
         'ORDER BY g.position, h.position',
         (user_id,),
     ).fetchall()

@@ -35,14 +35,25 @@ def _auth(view):
 @habits_bp.route('/api/habits')
 @_auth
 def list_habits():
-    """Every habit with its adherence and streak over a window."""
+    """Habits with their adherence and streak over a window.
+
+    Scoped to the path you are actually following unless `all=1`. The four stock
+    paths share most of their items, so the unscoped list repeats "What time did
+    you wake up?" once per path.
+    """
     user_id = session.get('user_id')
     days = min(int(request.args.get('days', 30)), 365)
+    only_selected = request.args.get('all') not in ('1', 'true')
 
     conn = _get_db()
-    stats = habits_store.habit_stats(conn, user_id, days=days)
+    stats = habits_store.habit_stats(conn, user_id, days=days,
+                                     only_selected=only_selected)
     conn.close()
-    return jsonify({'habits': stats, 'window_days': days})
+    return jsonify({
+        'habits': stats,
+        'window_days': days,
+        'scope': 'selected' if only_selected else 'all',
+    })
 
 
 @habits_bp.route('/api/habits/due')

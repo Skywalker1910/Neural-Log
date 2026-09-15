@@ -403,17 +403,21 @@ def weekly_progress(conn, user_id, on_date):
 
 # --- stats ------------------------------------------------------------------
 
-def habit_stats(conn, user_id, days=30, on_date=None):
+def habit_stats(conn, user_id, days=30, on_date=None, only_selected=True):
     """Per-habit adherence and current streak.
 
     This is the thing the JSON files could not answer at all, and the reason the
     conversion was worth doing.
+
+    Scoped to the SELECTED group by default. The stock library ships four paths
+    that share most of their items, so returning everything lists "What time did
+    you wake up?" four times - which reads as a bug rather than as four paths you
+    are not currently following. Pass only_selected=False for the whole set.
     """
     today = on_date or _date.today()
     since = (today - _timedelta(days=days - 1)).isoformat()
 
-    rows = conn.execute(
-        '''
+    query = '''
         SELECT h.id, h.slug, h.name, h.icon, h.weight, h.schedule_type,
                h.schedule_days, h.target_per_week, g.slug AS group_slug, g.name AS group_name,
                COUNT(c.id) AS logged,
@@ -423,10 +427,12 @@ def habit_stats(conn, user_id, days=30, on_date=None):
         JOIN habit_groups g ON g.id = h.group_id
         LEFT JOIN habit_completions c ON c.habit_id = h.id AND c.date >= ?
         WHERE h.user_id = ? AND h.archived = 0 AND g.archived = 0
-        GROUP BY h.id ORDER BY h.position, h.id
-        ''',
-        (since, user_id),
-    ).fetchall()
+    '''
+    if only_selected:
+        query += ' AND g.is_selected = 1'
+    query += ' GROUP BY h.id ORDER BY g.position, h.position, h.id'
+
+    rows = conn.execute(query, (since, user_id)).fetchall()
 
     out = []
     for row in rows:

@@ -262,6 +262,27 @@ def test_habits_endpoint_reports_stats(planner):
     assert entry["schedule_type"] == "daily", "migrated path items are daily"
 
 
+def test_habits_are_scoped_to_the_path_you_are_following(planner):
+    """The four stock paths share most of their items. Listing all of them shows
+    "What time did you wake up?" four times, which reads as a bug."""
+    scoped = planner.get("/api/habits").get_json()
+    everything = planner.get("/api/habits?all=1").get_json()
+
+    assert scoped["scope"] == "selected"
+    assert everything["scope"] == "all"
+    assert len(everything["habits"]) > len(scoped["habits"])
+
+    names = [habit["name"] for habit in scoped["habits"]]
+    assert len(names) == len(set(names)), f"duplicate habits in the scoped list: {names}"
+
+
+def test_the_goal_link_picker_offers_no_duplicates(planner):
+    habits = planner.get("/api/goals/summary").get_json()["habits"]
+    names = [habit["name"] for habit in habits]
+    assert names
+    assert len(names) == len(set(names))
+
+
 def test_a_habit_schedule_can_be_changed(planner):
     habit = _first_habit(planner)
     updated = planner.put(f"/api/habits/{habit['id']}", json={

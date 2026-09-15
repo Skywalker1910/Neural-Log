@@ -17,6 +17,16 @@ import type {
   LearningSummary,
   LearningTopic,
   LearningTopicsResponse,
+  Goal,
+  GoalsResponse,
+  GoalStatus,
+  GoalsSummary,
+  HabitsResponse,
+  HabitStat,
+  Milestone,
+  ScheduleType,
+  Task,
+  TasksResponse,
   LifestyleSummary,
   LoggedSet,
   NutritionDay,
@@ -69,6 +79,10 @@ export const queryKeys = {
   learningAreas: ['learning-areas'] as const,
   learningTopics: ['learning-topics'] as const,
   learningSessions: ['learning-sessions'] as const,
+  goals: ['goals'] as const,
+  goalsSummary: ['goals', 'summary'] as const,
+  tasks: ['tasks'] as const,
+  habits: (days?: number) => ['habits', days ?? 'default'] as const,
 }
 
 export function useCurrentUser() {
@@ -616,6 +630,168 @@ export function useDeleteSession() {
         queryClient.invalidateQueries({ queryKey: key })
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+    },
+  })
+}
+
+/* --- R6: habits, goals and tasks ------------------------------------------ */
+
+/**
+ * Nothing here invalidates `attributes` or `home`, and that is deliberate rather
+ * than an oversight: goals and tasks do not move a score. Habit edits do not
+ * either - changing a schedule changes what is expected, not what you did.
+ *
+ * The one exception is the paths/checklist surface, which habit edits DO affect,
+ * because a habit is a checklist item under a different name.
+ */
+const GOAL_KEYS = [queryKeys.goals, queryKeys.goalsSummary, queryKeys.tasks]
+
+export function useGoalsSummary() {
+  return useQuery({
+    queryKey: queryKeys.goalsSummary,
+    queryFn: () => api.get<GoalsSummary>('/api/goals/summary'),
+  })
+}
+
+export function useGoals(status?: GoalStatus) {
+  return useQuery({
+    queryKey: [...queryKeys.goals, status ?? 'all'],
+    queryFn: () =>
+      api.get<GoalsResponse>(`/api/goals${status ? `?status=${status}` : ''}`),
+  })
+}
+
+export function useSaveGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // `milestones` is omitted from Partial<Goal> before being re-added as
+    // strings: creating a goal takes a list of titles, while a stored goal
+    // carries full Milestone objects, and an intersection cannot narrow the
+    // field to the looser type.
+    mutationFn: (
+      { id, ...body }: Omit<Partial<Goal>, 'milestones'> & {
+        id?: number
+        milestones?: string[]
+      },
+    ) =>
+      id
+        ? api.put<Goal>(`/api/goals/${id}`, body)
+        : api.post<Goal>('/api/goals', body),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useDeleteGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (goalId: number) =>
+      api.delete<{ success: boolean }>(`/api/goals/${goalId}`),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useAddMilestone(goalId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string; target_date?: string | null }) =>
+      api.post<Milestone>(`/api/goals/${goalId}/milestones`, body),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useUpdateMilestone() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; completed?: boolean; title?: string }) =>
+      api.put<{ success: boolean }>(`/api/milestones/${id}`, body),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useDeleteMilestone() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (milestoneId: number) =>
+      api.delete<{ success: boolean }>(`/api/milestones/${milestoneId}`),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useTasks() {
+  return useQuery({
+    queryKey: queryKeys.tasks,
+    queryFn: () => api.get<TasksResponse>('/api/tasks'),
+  })
+}
+
+export function useSaveTask() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // Creating returns the task, updating returns {success}. Neither caller uses
+    // the result, but the union has to be stated or the two branches do not
+    // agree on a type.
+    mutationFn: (
+      { id, ...body }: Partial<Task> & { id?: number; completed?: boolean },
+    ): Promise<Task | { success: boolean }> =>
+      id
+        ? api.put<{ success: boolean }>(`/api/tasks/${id}`, body)
+        : api.post<Task>('/api/tasks', body),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useDeleteTask() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: number) =>
+      api.delete<{ success: boolean }>(`/api/tasks/${taskId}`),
+    onSuccess: () => {
+      for (const key of GOAL_KEYS) queryClient.invalidateQueries({ queryKey: key })
+    },
+  })
+}
+
+export function useHabits(days?: number) {
+  return useQuery({
+    queryKey: queryKeys.habits(days),
+    queryFn: () => api.get<HabitsResponse>(`/api/habits${days ? `?days=${days}` : ''}`),
+  })
+}
+
+/**
+ * A habit IS a checklist item under another name, so editing one invalidates the
+ * paths and checklist keys that Today renders from.
+ */
+export function useUpdateHabit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: {
+      id: number
+      name?: string
+      weight?: number
+      schedule_type?: ScheduleType
+      schedule_days?: number[]
+      target_per_week?: number | null
+    }) => api.put<HabitStat>(`/api/habits/${id}`, body),
+    onSuccess: () => {
+      for (const key of [
+        ['habits'], queryKeys.goalsSummary, queryKeys.goals,
+        queryKeys.paths, queryKeys.checklistItems,
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 }

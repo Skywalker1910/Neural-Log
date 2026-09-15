@@ -2,6 +2,72 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R6 - Goals and Habits
+
+The Paths JSON system moved into SQL, and goals were built on top. Full write-up
+in [HABITS.md](HABITS.md).
+
+### R6a - the migration
+
+The riskiest change so far: Paths are the one feature used every single day, and
+three different clients consume them.
+
+- **It was a move, not a rewrite.** `load_user_paths()` returns byte-for-byte the
+  payload it always did, so the Jinja app at `/`, `static/js/app.js` and the SPA's
+  Today page all kept working untouched. The 245 tests predating the migration
+  passed against the new storage without modification.
+- **The string ids were carried across**, not replaced with integers -
+  `daily_log.path_id`, `users.selected_path` and every client already reference
+  them. Verified on the real database: 40 of 40 item ids survived.
+- **The import is lazy, per-user and recorded** in `habit_imports`. Without that
+  marker, a later edit removing a path would be silently undone on the next load.
+- **`habit_completions` does not replace `daily_log.payload_json`.** The snapshot
+  stays the authority for scoring - it is what makes rescoring safe - and the new
+  table is the queryable index a JSON blob cannot be. Written in one transaction.
+- **Schedules**: daily, weekdays, specific days, N times a week. Every migrated
+  item became `daily`, which is what a path item has always been.
+- **Per-habit streaks and adherence**, which is what the conversion was for.
+
+Two bugs the new tests caught:
+
+- A freshly registered account had no habits at all until it happened to hit a
+  path endpoint. Registration now seeds them.
+- The streak counter treated a logged "No" the same as "nothing logged yet". The
+  first is a miss and breaks the streak; the second is just 09:00.
+
+### R6b - goals, milestones, tasks
+
+- **Nothing here feeds an attribute**, enforced structurally: `goals_api.py` is
+  the only workspace blueprint with no recompute function injected, and a test
+  asserts that declaring a goal achieved and completing every milestone moves no
+  score. A goal is an intention plus a number you type in.
+- **Progress has a source** - habits, milestones, metric or none - and the UI
+  always shows which. Linked habits outrank a typed-in metric, so a goal claiming
+  10 of 10 sessions while the habit behind it was never done reads 0%.
+- **`none` returns null, not 0%.** Plenty of real goals have no number, and 0%
+  would read as failure where the honest answer is "nothing to measure".
+- **Abandoned is a status, not a deletion.** Goals you gave up on are the most
+  informative in hindsight.
+- Adherence divides by days elapsed rather than days the habit was due, so a
+  once-a-fortnight habit cannot read as perfect while the goal goes nowhere.
+- Tasks are deliberately thin - no projects, subtasks or dependencies.
+
+### Caught in verification
+
+- **`/api/habits` returned 40 habits**, because the four stock paths share most of
+  their items and the list showed "What time did you wake up?" four times. It is
+  now scoped to the path you are following, with `?all=1` for everything.
+- **The goal cards broke the page on a phone.** Grid items default to
+  `min-width: auto`, so a card would not shrink below its header and pushed the
+  document into horizontal scroll - the same trap R5 hit with topic rows. The DOM
+  probe that found it is worth reaching for on every new page.
+
+### Operational
+
+A database backup was taken before the migration. The existing `*.db` ignore rule
+did not cover `.bak`, so it was briefly staged for commit; `.gitignore` now covers
+database backups.
+
 ## R5 - Learning
 
 Knowledge and Focus stopped running on checklist data alone. Full write-up in
