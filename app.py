@@ -1,5 +1,5 @@
 from flask import (
-    Flask, render_template, request, jsonify, send_file, send_from_directory,
+    Flask, abort, render_template, request, jsonify, send_file, send_from_directory,
     session, redirect, url_for
 )
 from datetime import datetime, timedelta
@@ -1346,52 +1346,83 @@ def reset_current_user_password():
 
     return jsonify({'success': True})
 
-@app.route('/')
-@login_required
-def index():
-    """Render the main page"""
-    return render_template('index.html')
-
-
 # ---------------------------------------------------------------------------
-# Redesigned SPA (frontend/) - served under /app while the classic Jinja UI
-# above stays the default at /. Phase 2 flips the default over once Home and
-# Today are real; until then both are reachable side by side.
+# Routing: the redesigned SPA is the app.
+#
+# It lived at /app through R2-R7 while the classic Jinja dashboard held /, so the
+# two could be compared side by side. That arrangement had one fatal flaw: /login
+# redirects to /, so signing in normally never reached the new UI at all - the
+# only way to see it was to type the URL. The redesign was invisible to the
+# person it was built for.
+#
+# So / is the SPA, and the classic dashboard keeps its own address at /classic
+# until the last few features that only exist there (Excel export, admin) are
+# ported. /app still resolves, because it is in the browser history of everyone
+# who has been testing.
 # ---------------------------------------------------------------------------
 
 SPA_NOT_BUILT_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Neural Log - build required</title>
-<style>body{background:#0b0c0e;color:#f2f4f7;font:15px/1.6 system-ui,sans-serif;
-padding:3rem;max-width:40rem;margin:0 auto}code{background:#1a1d22;padding:.15rem .4rem;
-border-radius:4px}a{color:#e5484d}</style></head><body>
-<h1>The redesigned app hasn't been built yet</h1>
+<style>body{background:#000;color:#f5f5f7;font:15px/1.6 -apple-system,system-ui,sans-serif;
+padding:3rem;max-width:40rem;margin:0 auto}code{background:#1d1d1f;padding:.15rem .4rem;
+border-radius:6px}a{color:#2997ff}</style></head><body>
+<h1>The app hasn't been built yet</h1>
 <p>Run the dev server for hot reload:</p>
 <p><code>cd frontend &amp;&amp; npm run dev</code> then open
-<a href="http://localhost:5173/app">localhost:5173/app</a></p>
+<a href="http://localhost:5173/">localhost:5173</a></p>
 <p>Or build it once so Flask can serve it from here:</p>
 <p><code>cd frontend &amp;&amp; npm run build</code></p>
-<p><a href="/">Back to the classic dashboard</a></p>
+<p><a href="/classic">Back to the classic dashboard</a></p>
 </body></html>"""
 
+# Prefixes Flask owns. Werkzeug already prefers a specific rule over the
+# catch-all, so this only matters for *unknown* paths beneath them: without it
+# GET /api/typo would hand back the SPA shell with a 200, and a fetch() would
+# fail somewhere far away trying to parse HTML as JSON.
+SERVER_PREFIXES = ('api/', 'static/', 'assets/', 'login', 'logout', 'register',
+                   'admin', 'classic')
 
-@app.route('/app/assets/<path:filename>')
+
+@app.route('/assets/<path:filename>')
 def spa_assets(filename):
     """Hashed JS/CSS/font bundles. No auth: they hold no user data, and gating
     them would break the shell whenever a session expires mid-session."""
     return send_from_directory(FRONTEND_DIST / 'assets', filename)
 
 
-# strict_slashes=False so /app and /app/ both work. The <path:> converter does
-# not match an empty string, so without it a trailing slash - exactly what a
-# bookmark or a typed URL tends to have - returns 404.
-@app.route('/app', strict_slashes=False)
-@app.route('/app/<path:_subpath>')
-@login_required
-def serve_spa(_subpath=''):
-    """Serve the SPA shell; client-side routing handles everything below /app."""
+@app.route('/', strict_slashes=False)
+@app.route('/<path:_subpath>')
+def index(_subpath=''):
+    """Serve the SPA shell; client-side routing handles every path below it.
+
+    Not decorated with @login_required, because the 404 has to be decided before
+    the auth check: otherwise a typo in an API path would answer 302-to-login
+    rather than 404, and a fetch() would follow it and try to parse the sign-in
+    page as JSON.
+    """
+    if _subpath.startswith(SERVER_PREFIXES):
+        abort(404)
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     if not (FRONTEND_DIST / 'index.html').exists():
         return SPA_NOT_BUILT_HTML, 200
     return send_from_directory(FRONTEND_DIST, 'index.html')
+
+
+@app.route('/app', strict_slashes=False)
+@app.route('/app/<path:subpath>')
+def spa_legacy_redirect(subpath=''):
+    """/app was the SPA's address until the cutover. Keep the bookmarks working."""
+    return redirect('/' + subpath)
+
+
+@app.route('/classic')
+@login_required
+def classic():
+    """The original Jinja dashboard. Still the only home of the Excel export and
+    a few admin screens, so it stays reachable rather than being deleted."""
+    return render_template('index.html')
+
 
 def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None):
     """Score one logged day: XP, badges, the daily log, and the attribute series.

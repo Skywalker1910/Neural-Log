@@ -58,14 +58,14 @@ def test_migrations_preserve_existing_rows(app_module):
 
 
 def test_spa_route_requires_login(client):
-    resp = client.get("/app")
+    resp = client.get("/")
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]
 
 
 def test_spa_route_serves_shell_for_logged_in_user(client):
     register(client)
-    resp = client.get("/app")
+    resp = client.get("/")
     assert resp.status_code == 200
     # Either the built bundle or the "run npm build" helper page - both mean the
     # route resolved rather than 404ing.
@@ -73,6 +73,31 @@ def test_spa_route_serves_shell_for_logged_in_user(client):
 
 
 def test_spa_client_routes_fall_through_to_the_shell(client):
-    """Deep links like /app/training must serve the shell, not 404."""
+    """Deep links like /training must serve the shell, not 404 - a refresh on any
+    page of the app depends on it."""
     register(client)
-    assert client.get("/app/training").status_code == 200
+    for url in ("/training", "/nutrition", "/training/session/1"):
+        assert client.get(url).status_code == 200, url
+
+
+def test_unknown_api_paths_404_rather_than_serving_the_shell(client):
+    """The catch-all that makes deep links work must not swallow /api. A fetch()
+    following a redirect to the sign-in page and parsing HTML as JSON fails a
+    long way from the cause."""
+    register(client)
+    for url in ("/api/typo", "/static/nope.png", "/assets/nope.js"):
+        assert client.get(url).status_code == 404, url
+
+
+def test_unknown_api_paths_404_before_the_login_check(client):
+    """Signed out too - otherwise the 404 is hidden behind a 302."""
+    assert client.get("/api/typo").status_code == 404
+
+
+def test_the_old_spa_address_still_resolves(client):
+    """/app was the SPA's home through R2-R7. It is in the browser history of
+    everyone who has been testing, so it redirects rather than 404s."""
+    register(client)
+    resp = client.get("/app/training")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/training")

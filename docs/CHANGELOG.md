@@ -2,6 +2,35 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## Interface pass - design language and the cutover
+
+Six phases of redesign were unreachable in normal use. `/login` redirects to `/`,
+which served the classic Jinja dashboard, so signing in always landed there - the
+new workspaces were only visible to someone who typed `/app` by hand. Reported as
+"I don't see the workout library, nutrition option etc", which was accurate.
+
+- **`/` now serves the SPA.** The classic dashboard moves to `/classic`, `/app`
+  redirects so existing bookmarks work, and a root catch-all serves the shell for
+  client-side routes - a refresh on `/training/session/12` no longer 404s. Unknown
+  paths under `/api`, `/static` and `/assets` 404 instead, decided before the auth
+  check so a mistyped API path doesn't answer 302-to-login.
+- **The design tokens were retuned to Apple's design language** - true black
+  ground, frosted translucent chrome with `saturate(180%)`, a tighter bimodal type
+  scale, larger radii, pill buttons, one easing curve. Done at the token layer, so
+  all ten workspaces inherited it at once. The category accents were left alone:
+  they are data identity, not chrome.
+- **The custom PNG artwork is gone**, replaced by Lucide everywhere. It was line
+  art drawn for a light ground and needed a pale disc behind every glyph to be
+  visible, which rendered a checklist as a column of white circles. `ItemIcon`
+  replaces `ArtworkBadge`, takes an accent colour, and infers a glyph from the
+  question text when the server's icon key is `default` - otherwise four stock
+  items drew the same placeholder.
+- **A new sign-in page** in the same language, self-contained rather than pulling
+  in the classic light stylesheet.
+- **Three horizontal-overflow bugs at 390px**, all the `min-width: auto` trap:
+  a `DataTable` inside a `Card`, the Training routine rows, and the Today summary
+  card. `min-w-0` now lives in `Card` itself, since this was its third occurrence.
+
 ## R7 - Gamification depth
 
 XP had only ever come from the daily checklist. Four phases of workspaces awarded

@@ -6,22 +6,38 @@
    Everything visual should come from here rather than being hand-picked per
    component - that's what keeps ten separate workspaces feeling like one app.
    See docs/DESIGN-SYSTEM.md for the rationale behind each group.
+
+   R8 retunes these to Apple's design language. That language is not a colour
+   scheme - it is four habits, and they are what these tokens encode:
+
+     1. Contrast at the extremes. A true black ground, near-white type, and
+        everything between them a neutral grey. No tinted "dark blue" charcoal.
+     2. Chrome is a material, not a panel. Navigation floats translucently over
+        the content scrolling beneath it rather than sitting in its own box.
+     3. Type does the work. Large, tight, heavy headlines; small quiet labels;
+        very little in between, and no decorative border where space will do.
+     4. Motion is physical and brief. One easing curve, used everywhere.
+
+   The category accents survive unchanged: they are data identity, and Apple's
+   restraint applies to chrome, not to a chart that has to distinguish sleep
+   from strength at a glance.
 --------------------------------------------------------------------------- */
 @theme {
-  /* Surfaces: near-black base, progressively lighter as elevation increases. */
-  --color-surface-base: #0b0c0e;
-  --color-surface-card: #131519;
-  --color-surface-raised: #1a1d22;
-  --color-surface-overlay: #21252b;
+  /* Surfaces. Apple's dark palette: a true black ground so an OLED panel can
+     switch those pixels off, then neutral greys for each step of elevation. */
+  --color-surface-base: #000000;
+  --color-surface-card: #1d1d1f;
+  --color-surface-raised: #2c2c2e;
+  --color-surface-overlay: #3a3a3c;
 
-  /* Hairline borders - visible enough to separate, quiet enough to ignore. */
-  --color-line: #23272e;
-  --color-line-strong: #323841;
+  /* Hairline separators - visible enough to separate, quiet enough to ignore. */
+  --color-line: #2a2a2c;
+  --color-line-strong: #48484a;
 
-  /* Type. Off-white rather than pure white: less glare on a dark ground. */
-  --color-ink: #f2f4f7;
-  --color-ink-muted: #9ba3af;
-  --color-ink-subtle: #6b7280;
+  /* Type. Apple's three levels of emphasis - primary, secondary, tertiary. */
+  --color-ink: #f5f5f7;
+  --color-ink-muted: #a1a1a6;
+  --color-ink-subtle: #6e6e73;
 
   /* One primary accent, used for interactive intent (buttons, focus, active nav). */
   --color-brand: #e5484d;
@@ -37,41 +53,50 @@
   --color-discipline: #e0a93b;
   --color-recovery: #38bec9;
 
-  /* The hand-made artwork (static/images/icons/) is near-black line art drawn for
-     a light ground, so it needs a light disc behind it to read on a dark UI. */
-  --color-artwork-disc: #dfe3e8;
-
   /* Semantic status. */
   --color-success: #3dbe72;
   --color-warning: #e0a93b;
   --color-danger: #e5484d;
   --color-info: #5b7cfa;
 
-  /* Typography (brief §4): metric -> heading -> section -> label -> meta -> caption. */
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Typography. The SF faces first, so this renders in Apple's own type on Apple
+     hardware; Inter is the fallback everywhere else, because it shares SF's
+     proportions closely enough that the layout does not shift between them. */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Inter Variable', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
 
-  --text-metric-xl: 3.25rem;
+  /* Apple's scale is bimodal: headlines are big, tight and heavy, labels are
+     small and quiet, and almost nothing lives in the middle. Tracking goes
+     negative as size goes up - at display sizes, default spacing looks loose. */
+  --text-display: 3.5rem;
+  --text-display--line-height: 1.05;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.03em;
+
+  --text-metric-xl: 3rem;
   --text-metric-xl--line-height: 1.05;
   --text-metric-xl--font-weight: 700;
-  --text-metric-xl--letter-spacing: -0.02em;
+  --text-metric-xl--letter-spacing: -0.025em;
 
-  --text-metric: 2.25rem;
+  --text-metric: 2.125rem;
   --text-metric--line-height: 1.1;
   --text-metric--font-weight: 700;
-  --text-metric--letter-spacing: -0.02em;
+  --text-metric--letter-spacing: -0.022em;
 
   --text-heading: 1.75rem;
-  --text-heading--line-height: 1.2;
+  --text-heading--line-height: 1.15;
   --text-heading--font-weight: 650;
-  --text-heading--letter-spacing: -0.01em;
+  --text-heading--letter-spacing: -0.02em;
 
-  --text-section: 1.125rem;
+  --text-section: 1.0625rem;
   --text-section--line-height: 1.35;
   --text-section--font-weight: 600;
+  --text-section--letter-spacing: -0.01em;
 
   --text-label: 0.8125rem;
   --text-label--line-height: 1.4;
   --text-label--font-weight: 500;
+  --text-label--letter-spacing: -0.005em;
 
   --text-meta: 0.75rem;
   --text-meta--line-height: 1.4;
@@ -80,16 +105,24 @@
   --text-caption--line-height: 1.3;
   --text-caption--letter-spacing: 0.06em;
 
-  /* Radii. */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* Radii. Noticeably rounder than before: Apple's cards are 12-18px and its
+     buttons are full pills, and that softness is most of what reads as "Apple"
+     before a single colour has been compared. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 980px;
 
   /* Elevation is carried mostly by surface colour; shadows stay restrained. */
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-raised: 0 4px 16px rgb(0 0 0 / 0.45);
-  --shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.6);
+  --shadow-raised: 0 8px 28px rgb(0 0 0 / 0.5);
+  --shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.65);
+
+  /* One easing curve for the whole app - Apple's. It leaves immediately and
+     settles slowly, which is what makes their interfaces feel unhurried even
+     though the durations themselves are short. */
+  --ease-apple: cubic-bezier(0.28, 0.11, 0.32, 1);
 }
 
 @layer base {
@@ -102,6 +135,7 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
@@ -141,6 +175,41 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+    Frosted chrome. Apple's navigation is a *material*: you can see the page
+    scrolling underneath it, blurred and slightly over-saturated so colour still
+    shows through. The saturate() is the part everyone forgets, and it is why
+    their bars look alive rather than like sheets of grey glass.
+
+    The fallback matters - without backdrop-filter this has to be opaque, or
+    content scrolls illegibly underneath it.
+  */
+  .material-chrome {
+    background-color: rgb(0 0 0 / 0.92);
+  }
+
+  /* Same material one step lighter, for sheets and popovers that sit on top of
+     content rather than being pinned to an edge. */
+  .material-panel {
+    background-color: rgb(29 29 31 / 0.97);
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .material-chrome {
+      background-color: rgb(0 0 0 / 0.72);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+    }
+
+    .material-panel {
+      background-color: rgb(29 29 31 / 0.82);
+      -webkit-backdrop-filter: saturate(180%) blur(28px);
+      backdrop-filter: saturate(180%) blur(28px);
     }
   }
 }

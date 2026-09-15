@@ -14,8 +14,8 @@ const VARIANTS: Record<Variant, string> = {
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-meta gap-1.5',
-  md: 'h-10 px-4 text-label gap-2',
+  sm: 'h-8 px-3.5 text-meta gap-1.5',
+  md: 'h-10 px-5 text-label gap-2',
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -40,8 +40,14 @@ export function Button({
       type="button"
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center rounded-md border font-medium',
-        'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        // Pill, not a rounded rectangle. Apple has used a full-radius button
+        // everywhere for years, and it is the first thing the eye reads as
+        // theirs - before colour, before type.
+        'inline-flex items-center justify-center rounded-pill border font-medium tracking-tight',
+        'transition-all duration-200 ease-apple disabled:cursor-not-allowed disabled:opacity-50',
+        // A press should be felt. Scale rather than a colour flip, so it reads
+        // the same on every variant.
+        'active:scale-[0.97] disabled:active:scale-100',
         VARIANTS[variant],
         SIZES[size],
         className,

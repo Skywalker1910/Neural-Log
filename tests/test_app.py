@@ -105,10 +105,14 @@ def test_daily_checklist_submission_persists_completion_percent(client, app_modu
     assert '"completion_percent": 50' in saved_line
 
 
-def test_index_page_renders_for_logged_in_user(client):
-    """Catches template errors in index.html (Jinja syntax, broken tags, etc.)."""
+def test_classic_page_renders_for_logged_in_user(client):
+    """Catches template errors in index.html (Jinja syntax, broken tags, etc.).
+
+    R8 moved this off / - the SPA is the app now - but the classic dashboard is
+    still the only home of the Excel export, so it keeps its own address and
+    keeps being checked."""
     register(client)
-    resp = client.get("/")
+    resp = client.get("/classic")
     assert resp.status_code == 200
     assert b"checklistWizard" in resp.data
 

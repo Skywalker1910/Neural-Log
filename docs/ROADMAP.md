@@ -21,6 +21,7 @@ This tracks where that's headed, in order.
 | R5 | Learning - subjects, sessions, knowledge analytics | Done |
 | R6 | Goals + Habits - milestones, routines, streak sources | Done |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Done |
+| UI | Interface pass - design language, the `/` cutover, standard icons | Done |
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
@@ -122,9 +123,18 @@ Parity is reached phase by phase, not in one step:
 | Profile, password, settings | R9 - Onboarding |
 | Admin dashboard | Ship |
 
-So the flip lands once R9 is done, and the Ship phase removes the Jinja templates
-entirely. Until then both run side by side: `/` is the working app, `/app` is the
-redesign, and they share one database, so anything logged in either shows in both.
+**This plan was wrong, and the interface pass corrected it.** Waiting for parity
+assumed the two apps were equally discoverable. They were not: `/login` redirects
+to `/`, so signing in normally always landed on the classic dashboard, and the only
+way to reach the redesign was to type `/app` by hand. Six phases of work were
+invisible to the person they were built for, who reasonably reported the new
+workspaces as missing.
+
+Discoverability beat parity. `/` is now the SPA; the classic dashboard keeps its
+own address at `/classic` for the handful of features that still only exist there,
+and `/app` redirects so existing bookmarks keep working. Both still share one
+database, so anything logged in either shows in both. The Ship phase removes the
+Jinja templates entirely.
 
 ## R3 - Training
 
@@ -241,6 +251,30 @@ visible rather than an unexplained number.
 
 Achievements stopped being lambdas and became a metric plus a threshold, which is
 what lets a locked one say "8 of 10" instead of sitting greyed out.
+
+## Interface pass
+
+Not in the original plan. It happened because the redesign was unreachable in
+normal use - see the cutover note above - and because the visual language had
+drifted from what was asked for.
+
+- **`/` serves the SPA.** The classic dashboard moves to `/classic`, `/app`
+  redirects, and a catch-all serves the shell for client-side routes so a refresh
+  on `/training/session/12` works. Unknown paths under `/api`, `/static` and
+  `/assets` return 404 rather than the shell, decided *before* the auth check -
+  otherwise a mistyped API path answers 302-to-login and a `fetch()` follows it
+  and tries to parse the sign-in page as JSON.
+- **Apple's design language**, applied to the tokens rather than page by page, so
+  all ten workspaces inherited it at once. True black, frosted chrome, tight
+  display type, pill buttons, one easing curve. See
+  [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md).
+- **The custom PNG artwork is gone**, replaced by Lucide throughout. It was line
+  art drawn for a light ground, so every glyph needed a pale disc to survive on a
+  black UI.
+- **A new sign-in page** in the same language, self-contained rather than linked
+  to the classic light stylesheet.
+- **Three horizontal-overflow bugs** fixed at 390px, all the same `min-width: auto`
+  trap. `min-w-0` now lives in `Card` itself.
 
 ## R8 - Analytics
 

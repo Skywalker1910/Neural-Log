@@ -29,7 +29,7 @@ export function PlaceholderPage({ section }: { section: NavSection }) {
             <>
               This workspace arrives in phase {section.phase} of the redesign. The daily
               checklist you use today is still running at{' '}
-              <a href="/" className="text-brand underline underline-offset-2">
+              <a href="/classic" className="text-brand underline underline-offset-2">
                 the classic dashboard
               </a>
               .
