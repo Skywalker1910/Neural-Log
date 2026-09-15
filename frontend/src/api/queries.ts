@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 import type {
+  AnalyticsPeriod,
+  AnalyticsResponse,
   AttributesResponse,
   ChecklistItemsResponse,
   ExerciseHistory,
@@ -85,6 +87,7 @@ export const queryKeys = {
   tasks: ['tasks'] as const,
   habits: (days?: number) => ['habits', days ?? 'default'] as const,
   xpLedger: ['xp-ledger'] as const,
+  analytics: (period: string) => ['analytics', period] as const,
 }
 
 export function useCurrentUser() {
@@ -805,5 +808,17 @@ export function useXpLedger(limit?: number) {
     queryKey: queryKeys.xpLedger,
     queryFn: () =>
       api.get<XpLedger>(`/api/gamification/ledger${limit ? `?limit=${limit}` : ''}`),
+  })
+}
+
+/* --- R8: analytics -------------------------------------------------------- */
+
+export function useAnalytics(period: AnalyticsPeriod) {
+  return useQuery({
+    queryKey: queryKeys.analytics(period),
+    queryFn: () => api.get<AnalyticsResponse>(`/api/analytics?period=${period}`),
+    // Keep the previous period's data on screen while the next one loads, so
+    // switching from 30 to 90 days redraws rather than collapsing to skeletons.
+    placeholderData: (previous) => previous,
   })
 }

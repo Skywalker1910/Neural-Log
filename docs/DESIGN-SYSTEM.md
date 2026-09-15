@@ -154,6 +154,7 @@ Primitives live in `frontend/src/components/ui/`, charts in
 | `DataTable` | Typed columns, responsive column hiding, row highlighting |
 | `QueryBoundary` | Loading / error / empty / retry around any query |
 | `AttributeRadar` | The attribute radar chart, with previous-period overlay |
+| `CalendarHeatmap` | Adherence grid, one square per day. Plain CSS, not Recharts |
 | `TrendChart` | Single-series trend over time |
 
 ### QueryBoundary
@@ -276,8 +277,17 @@ Charts animate in JS rather than CSS, so they take `isAnimationActive` from
 **`min-width: auto`.** A grid or flex item refuses to shrink below its content by
 default. A `Card` holding a `DataTable` therefore widened past the viewport and
 scrolled the whole page sideways - the table's own `overflow-x-auto` never got a
-chance to engage. This has now been the cause three separate times (R5, R6, R8),
-so `min-w-0` is baked into `Card` itself rather than remembered per call site.
+chance to engage. This has now been the cause four separate times, so `min-w-0` is
+baked into both `Card` and `Reveal` rather than remembered per call site.
+
+`Reveal` needed it separately: it sits *between* a `Card` and the grid, so it is
+the element that actually inherits `min-width: auto`, and `Card`'s own floor does
+nothing from behind it.
+
+`PageHeader`'s action slot is the related case. `shrink-0` is right - a pair of
+buttons should not be squeezed to fit a long title - but alone it also lets the
+actions grow past the viewport, and a `flex-wrap` inside them never fires because
+the container is never the thing under pressure. It carries `max-w-full` too.
 
 Any *other* row that is a grid item and holds fixed-width controls needs the same
 floor; the Training routine rows are the current example.

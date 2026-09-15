@@ -6,7 +6,12 @@ import { axisTick, gridStroke, tooltipStyles } from './chartTheme'
 
 export interface TrendPoint {
   label: string
-  value: number
+  /**
+   * null is *unobserved*, not zero. Recharts breaks the line at a null, which is
+   * the honest rendering: a day you did not log is a gap in what we know, and
+   * plotting it at 0 would draw a crash that never happened.
+   */
+  value: number | null
 }
 
 interface TrendChartProps {
@@ -76,6 +81,9 @@ export function TrendChart({
           strokeWidth={2}
           fill={`url(#${gradientId})`}
           isAnimationActive={!reducedMotion}
+          /* Leave the gaps. connectNulls would draw a straight line across the
+             days with no data, inventing a trend through them. */
+          connectNulls={false}
         />
       </AreaChart>
     </ResponsiveContainer>

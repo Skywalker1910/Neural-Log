@@ -10,9 +10,14 @@ interface MetricCardProps {
   unit?: string
   icon?: LucideIcon
   accent?: Accent
-  /** Change versus the previous period. Sign drives the arrow and colour. */
+  /** Change versus the previous period. Sign drives the arrow and colour.
+   *  Leave undefined when there is nothing to compare against - the label is
+   *  suppressed with it, because "vs previous" beside no number reads as a
+   *  comparison that came out flat rather than one that could not be made. */
   delta?: number
   deltaLabel?: string
+  /** Appended to the delta, e.g. '%' when the change is a percentage. */
+  deltaUnit?: string
   /** For metrics where down is good (body weight when cutting, resting HR...). */
   invertDelta?: boolean
   footer?: ReactNode
@@ -28,6 +33,7 @@ export function MetricCard({
   accent = 'brand',
   delta,
   deltaLabel,
+  deltaUnit = '',
   invertDelta = false,
   footer,
   className,
@@ -71,10 +77,11 @@ export function MetricCard({
               <span className="tabular">
                 {delta > 0 ? '+' : ''}
                 {delta}
+                {deltaUnit}
               </span>
             </span>
           )}
-          {deltaLabel && <span className="text-ink-subtle">{deltaLabel}</span>}
+          {hasDelta && deltaLabel && <span className="text-ink-subtle">{deltaLabel}</span>}
           {footer}
         </div>
       )}

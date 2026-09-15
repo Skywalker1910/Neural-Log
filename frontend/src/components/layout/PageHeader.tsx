@@ -32,7 +32,17 @@ export function PageHeader({ title, description, icon: Icon, accent = 'brand', a
           {description && <p className="mt-0.5 text-label text-ink-muted">{description}</p>}
         </div>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {/*
+        max-w-full alongside shrink-0. shrink-0 is right - a pair of buttons
+        should not be squeezed to fit a long title - but on its own it also means
+        the actions can grow past the viewport, and any flex-wrap inside them
+        never fires because the container is never the thing under pressure.
+        Bounding the width lets wide action groups (a five-item period picker)
+        wrap or scroll instead of widening the page.
+      */}
+      {actions && (
+        <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>
+      )}
     </div>
   )
 }

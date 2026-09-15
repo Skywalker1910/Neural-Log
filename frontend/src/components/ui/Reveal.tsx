@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { m, type Variants } from 'motion/react'
 
+import { cn } from '../../lib/cn'
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 import { reducedVariants, rise, stagger } from '../../lib/motion'
 
@@ -24,7 +25,11 @@ export function Reveal({ children, variants = rise, delay, className }: RevealPr
 
   return (
     <m.div
-      className={className}
+      // min-w-0 for the same reason Card carries it: a Reveal is almost always
+      // the direct child of a grid or flex container, so it is the element that
+      // inherits min-width:auto and refuses to shrink. Card's own min-w-0 does
+      // nothing when this wrapper sits between it and the grid.
+      className={cn('min-w-0', className)}
       variants={reduced ? reducedVariants : variants}
       initial="hidden"
       animate="visible"
@@ -53,7 +58,7 @@ export function RevealGroup({ children, step = 0.05, delay = 0, className }: Rev
 
   return (
     <m.div
-      className={className}
+      className={cn('min-w-0', className)}
       variants={reduced ? reducedVariants : stagger(step, delay)}
       initial="hidden"
       animate="visible"
