@@ -126,14 +126,37 @@ looks like deployment is ready when it is not.
 
 When the Ship phase arrives, CD gets added here.
 
-## Dependency updates
+## Dependency updates - currently off
 
-`.github/dependabot.yml` opens grouped update PRs monthly for npm, pip and the
-GitHub Actions themselves.
+`.github/dependabot.yml` is configured but **disabled**
+(`open-pull-requests-limit: 0`). Set it to 1 per ecosystem to switch it on.
 
-Monthly and grouped on purpose: a PR per package per week is noise that gets
-ignored, and an ignored update stream is worse than none, because it trains you
-to skip the security ones too. Every Dependabot PR still has to pass CI.
+It is off because the first version of that file opened seven pull requests in
+two hours. Three mistakes compounded:
+
+- The grouping only covered `minor` and `patch`, and everything that actually
+  arrived was a major bump, so each got its own PR.
+- `open-pull-requests-limit` is **per ecosystem**, not total - three ecosystems
+  at three each is nine.
+- `interval: monthly` is how often Dependabot *checks*, not a delay before it
+  starts. It ran the moment the file reached `main`.
+
+Two of the three major bumps failed CI, which is the system working - but they
+needed deliberate work rather than a merge, and they landed mid-phase as pure
+distraction.
+
+The config now groups **everything, majors included**, into one PR per ecosystem
+per month. The right time to enable it is the Ship phase: until then the stack
+moves under its own steam every phase, and a dependency PR competes with real
+work.
+
+Dependabot **security** alerts are a separate repository setting and are
+unaffected. Those should stay on - they are rare and worth interrupting for.
+
+### If a Dependabot PR ever has conflicts
+
+Do not resolve it by hand. Comment `@dependabot rebase` on the PR and it rebases
+itself.
 
 ## Reproducing CI locally
 
