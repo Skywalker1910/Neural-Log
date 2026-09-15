@@ -22,7 +22,7 @@ This tracks where that's headed, in order.
 | R6 | Goals + Habits - milestones, routines, streak sources | Done |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Done |
 | UI | Interface pass - design language, the `/` cutover, standard icons | Done |
-| R8 | Analytics - long-range trends, calendar, comparisons | Not started |
+| R8 | Analytics - long-range trends, calendar, comparisons | Done |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
 | Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
@@ -119,7 +119,7 @@ Parity is reached phase by phase, not in one step:
 | Stats, streaks, progress chart | R2 (done - Home) |
 | Path management, custom items | R6 - Goals and Habits |
 | Badges, leaderboard | R7 - Gamification depth |
-| Milestone insights, Excel export | R8 - Analytics |
+| Milestone insights, Excel export | R8 - Analytics (export surfaced; insights still `/classic`) |
 | Profile, password, settings | R9 - Onboarding |
 | Admin dashboard | Ship |
 
@@ -280,7 +280,24 @@ drifted from what was asked for.
 
 Period filters from 7 days to all time, trend charts across every tracked dimension,
 a calendar heatmap where each day is coloured by adherence and clicking a date opens
-that day's log, and period-over-period comparison.
+that day's log, and period-over-period comparison. Full write-up in
+[ANALYTICS.md](ANALYTICS.md).
+
+The phase is really about one distinction. Every other workspace answers "what did
+I do today"; this one answers "am I getting better", and the easy way to answer it
+is to treat a day you did not log as a day you scored zero. Nine logged nights
+summed and divided by thirty reports an average of 2h20m, which describes nothing
+that happened. So unobserved days stay `null` all the way to the chart, averages
+divide by observed days, and every figure carries the denominator it was computed
+with.
+
+That rule caught a real bug in live data: the engine writes `daily_score = 0` for
+every unsubmitted day, so a user who had logged twice - scoring 100 and 95 - was
+being shown a 30-day average of 13.0.
+
+The Excel export and milestone insights that the parity table assigned to this
+phase are reachable here rather than rebuilt: Export is a button on the page,
+pointing at the endpoint the classic dashboard already used.
 
 ## R9 - Onboarding
 

@@ -5,6 +5,7 @@
  * step would be more machinery than it's worth. Revisit if the API grows past
  * what's comfortable to keep in sync by hand.
  */
+import type { Accent } from '../navigation'
 
 export interface CurrentUser {
   user_id: number
@@ -737,4 +738,63 @@ export interface XpLedger {
     per_source: Record<string, number>
     daily_total: number
   }
+}
+
+/* --- R8: analytics -------------------------------------------------------- */
+
+export type MetricAggregate = 'sum' | 'avg'
+
+export interface MetricPoint {
+  date: string
+  /** null means *unobserved*, never zero. Charts must gap rather than plot 0. */
+  value: number | null
+}
+
+export interface AnalyticsMetric {
+  key: string
+  label: string
+  unit: string
+  accent: Accent
+  aggregate: MetricAggregate
+  /** Fixed y-axis range for bounded scales, e.g. [0, 100]. */
+  domain: [number, number] | null
+  value: number | null
+  previous: number | null
+  delta: number | null
+  delta_pct: number | null
+  /** Days with data, out of `days`. The denominator an average should be read with. */
+  observed_days: number
+  previous_observed_days: number
+  days: number
+  series: MetricPoint[]
+}
+
+export interface CalendarCell {
+  date: string
+  logged: boolean
+  completion_pct: number | null
+  items_completed: number | null
+  items_total: number | null
+  daily_score: number | null
+}
+
+export interface AttributeComparison {
+  attribute: string
+  score: number | null
+  previous: number | null
+  delta: number | null
+  status: string
+  sample_days: number
+}
+
+export type AnalyticsPeriod = '7' | '30' | '90' | '365' | 'all'
+
+export interface AnalyticsResponse {
+  period: AnalyticsPeriod
+  range: { start: string; end: string; days: number; label: string }
+  previous: { start: string; end: string; days: number }
+  metrics: AnalyticsMetric[]
+  calendar: CalendarCell[]
+  attributes: AttributeComparison[]
+  days_logged: number
 }

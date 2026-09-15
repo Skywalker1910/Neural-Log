@@ -35,5 +35,11 @@ export function TrendChart(props: ComponentProps<typeof LazyTrendChart>) {
   )
 }
 
+/* CalendarHeatmap is a CSS grid of divs, not a Recharts chart - it carries no
+   library weight, so lazy-loading it would add a network round trip and a
+   skeleton flash to save nothing. Re-exported here only so every chart has one
+   import path. */
+export { CalendarHeatmap } from './CalendarHeatmap'
+
 export type { AttributeDatum } from './AttributeRadar'
 export type { TrendPoint } from './TrendChart'

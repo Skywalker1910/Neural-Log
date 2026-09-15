@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
 import {
   CalendarCheck,
@@ -218,7 +219,25 @@ function BadgeCelebration({ badges, onDismiss }: { badges: BadgeType[]; onDismis
 
 export function Today() {
   const today = todayISO()
-  const [date, setDate] = useState(today)
+
+  /*
+    The date lives in the URL rather than in local state alone, because it is
+    now something another page links to: Analytics' adherence heatmap opens a
+    day by clicking its square. It also makes one day shareable and lets it
+    survive a refresh, neither of which local state managed.
+
+    Validated rather than trusted - ?date=nonsense should show today, not send a
+    malformed key into the query cache and render an error card.
+  */
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('date')
+  const date = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today
+
+  const setDate = (next: string) => {
+    // Today is the default, so it stays a clean /today rather than /today?date=…
+    setParams(next === today ? {} : { date: next }, { replace: true })
+  }
+
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [editingDate, setEditingDate] = useState(date)
   const [celebrating, setCelebrating] = useState<BadgeType[]>([])
@@ -300,13 +319,13 @@ export function Today() {
             <Button
               size="sm"
               icon={ChevronLeft}
-              onClick={() => setDate((value) => shiftISO(value, -1))}
+              onClick={() => setDate(shiftISO(date, -1))}
               aria-label="Previous day"
             />
             <Button
               size="sm"
               icon={ChevronRight}
-              onClick={() => setDate((value) => shiftISO(value, 1))}
+              onClick={() => setDate(shiftISO(date, 1))}
               disabled={date >= today}
               aria-label="Next day"
             />

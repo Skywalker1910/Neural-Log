@@ -2,6 +2,39 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R8 - Analytics
+
+Long-range trends across every workspace. Full write-up in
+[ANALYTICS.md](ANALYTICS.md).
+
+- **Eleven metrics, one response**, spanning discipline, XP, training, learning,
+  nutrition, sleep and lifestyle - with period filters from 7 days to all time,
+  and every window compared against the equal-length window before it.
+- **Unobserved is not zero.** A day with no record carries `null` from SQL to the
+  chart; averages divide by observed days, the trend line gaps rather than being
+  drawn through the absence, and every figure prints the denominator it was
+  computed with ("averaged over 9 of 30 days").
+- **No comparison without something to compare against.** An empty previous
+  window produces no delta and no arrow, rather than "+100%".
+- **An adherence heatmap**, one square per day, coloured by Path completion
+  rather than XP - XP is capped and multiplied, so it would brighten toward the
+  right for reasons unrelated to the days themselves. Clicking a square opens
+  that day, so Today now reads its date from the URL.
+- **Attribute movement**: the radar's existing previous-period overlay, filled
+  with where each attribute stood when the window opened.
+- **Excel export** surfaced on the page, pointing at the endpoint the classic
+  dashboard already used.
+
+It caught a real bug in live data. The engine writes `daily_score = 0` for every
+day the checklist was not submitted, so on that table a zero means "no answer"
+and also means "answered No to everything". A user who had logged two days -
+scoring 100 and 95 - was being told their 30-day average was **13.0**. The metric
+now joins through `daily_log`, which only has a row for a day actually submitted,
+and reads 97.5 across 2 observed days.
+
+Two shared primitives gained `min-w-0` (`Reveal`) and `max-w-full`
+(`PageHeader`'s action slot) - the `min-width: auto` trap, fourth occurrence.
+
 ## Interface pass - design language and the cutover
 
 Six phases of redesign were unreachable in normal use. `/login` redirects to `/`,
