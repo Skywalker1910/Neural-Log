@@ -146,3 +146,38 @@ Two deliberate sources, with a clear boundary:
 Not a shrunken desktop. The sidebar is replaced below `lg` by a thumb-reachable
 bottom tab bar (four primary sections plus an overflow sheet), because logging data
 from a phone is the most common real-world use.
+
+## Motion
+
+Animation lives in `frontend/src/lib/motion.ts` for the same reason colour lives in
+`index.css`: ten workspaces built by hand would each invent their own idea of "fast".
+
+| Primitive | Use |
+|---|---|
+| `rise` / `slideIn` / `scaleIn` | Entrance variants - fade with a small translation |
+| `stagger(step, delay)` | Container variant; children inherit the sequence |
+| `pageTransition` | Route changes, deliberately plainer than component motion |
+| `spring.snappy` / `spring.soft` | Interactive feedback vs. larger surfaces |
+| `<Reveal>` / `<RevealGroup>` | What most pages actually use |
+| `<AnimatedNumber>` | Counts a value up; drives a MotionValue, not React state |
+
+Rules this encodes:
+
+- **Motion is short.** Anything over ~400ms is in the way on a dashboard opened daily.
+- **Entrances move a small distance.** Large translations read as decoration.
+- **Springs for interaction, easing for state.** Overshoot feels physical under a
+  cursor and wrong on a progress bar.
+- **Nothing is load-bearing.** Under `prefers-reduced-motion` every variant collapses
+  to a crossfade via `reducedVariants`, and the UI still makes sense. Content is never
+  gated behind an animation that might not run.
+
+### Why `m` and not `motion`
+
+Components import `m.div`, never `motion.div`, and the root wraps the app in
+`<LazyMotion features={loadDomAnimation} strict>`. The full motion build costs ~44kB
+gzipped; this keeps the feature set in a chunk fetched after first paint. `strict`
+makes an accidental `motion.*` import throw rather than quietly pulling the heavy
+build back in.
+
+Charts animate in JS rather than CSS, so they take `isAnimationActive` from
+`usePrefersReducedMotion()` directly.

@@ -128,3 +128,53 @@ def test_every_default_path_item_has_a_valid_icon_key(app_module):
     for path in app_module.DEFAULT_PATH_LIBRARY:
         for item in path["checklist_items"]:
             assert item["icon"] in app_module.ICON_KEYS, (path["name"], item["name"])
+
+
+def test_deleting_a_user_removes_all_their_data(client, app_module):
+    """Deleting an account must not leave the person's data behind - neither the
+    per-user SQL rows nor their Path/submission files on disk. Nothing cascades:
+    SQLite foreign keys are not enabled, so every table is deleted explicitly."""
+    import scoring
+
+    register(client)  # first user -> admin, stays logged in as the deleter
+
+    conn = app_module.get_db_connection()
+    conn.execute("INSERT INTO users (username, password_hash) VALUES ('victim', 'x')")
+    conn.commit()
+    victim = conn.execute(
+        "SELECT id FROM users WHERE username = 'victim'").fetchone()["id"]
+
+    items = [p for p in app_module.build_default_paths()
+             if p["id"] == "batman-path"][0]["checklist_items"]
+    answers = {i["name"]: "Yes" for i in items if i["type"] == "yes-no"}
+
+    conn.execute("INSERT INTO activities (user_id, date, activity_name) "
+                 "VALUES (?, '2026-09-01', 'Daily Checklist')", (victim,))
+    conn.execute("INSERT INTO daily_xp (user_id, date, base_xp, "
+                 "streak_multiplier_pct, total_xp) VALUES (?, '2026-09-01', 10, 0, 10)",
+                 (victim,))
+    conn.execute("INSERT INTO user_badges (user_id, badge_code) VALUES (?, 'first-log')",
+                 (victim,))
+    scoring.record_day(conn, victim, "2026-09-01", items, answers)
+    conn.commit()
+    scoring.recompute_scores(conn, victim)
+    conn.commit()
+
+    paths_file = app_module.get_user_paths_file_path("victim")
+    paths_file.write_text("{}", encoding="utf-8")
+    conn.close()
+
+    assert client.delete(f"/api/admin/users/{victim}").status_code == 200
+
+    conn = app_module.get_db_connection()
+    for table in ("activities", "milestones", "daily_xp", "user_badges",
+                  "daily_log", "attribute_scores", "daily_scores"):
+        remaining = conn.execute(
+            f"SELECT COUNT(*) AS n FROM {table} WHERE user_id = ?", (victim,)
+        ).fetchone()["n"]
+        assert remaining == 0, f"{table} still holds rows for the deleted user"
+    assert conn.execute("SELECT COUNT(*) AS n FROM users WHERE id = ?",
+                        (victim,)).fetchone()["n"] == 0
+    conn.close()
+
+    assert not paths_file.exists(), "the deleted user's Path file is still on disk"

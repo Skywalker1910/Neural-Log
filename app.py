@@ -14,6 +14,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from dotenv import load_dotenv
 
+import scoring
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -424,6 +426,34 @@ def init_db():
         cursor.execute('ALTER TABLE users ADD COLUMN custom_path_items TEXT')
 
     conn.commit()
+
+    # The shipped exercise library lives in data/exercises.json rather than in a
+    # migration: 85 curated rows are unreviewable as SQL, and every wording fix
+    # would otherwise need a new migration file. Syncing here is idempotent and
+    # keeps the JSON as the source of truth. See scoring/library.py.
+    try:
+        added, updated, archived = scoring.sync_library(conn)
+        if added or updated or archived:
+            app.logger.info(
+                'Exercise library synced: %d added, %d updated, %d archived',
+                added, updated, archived,
+            )
+    except sqlite3.Error:
+        # A library that fails to sync is a thin Training page, not a reason to
+        # refuse to boot.
+        app.logger.exception('Could not sync the exercise library')
+
+    # Same arrangement for the food library (data/foods.json, 233 rows).
+    try:
+        added, updated, archived = scoring.sync_foods(conn)
+        if added or updated or archived:
+            app.logger.info(
+                'Food library synced: %d added, %d updated, %d archived',
+                added, updated, archived,
+            )
+    except sqlite3.Error:
+        app.logger.exception('Could not sync the food library')
+
     conn.close()
 
 
@@ -502,6 +532,23 @@ def calculate_daily_xp(checklist_items, custom_responses):
         if _item_is_completed(item, response_value):
             base_xp += int(item.get('weight', 1) or 0) * XP_PER_WEIGHT_POINT
     return base_xp
+
+
+def _extract_self_rating(checklist_items, custom_responses):
+    """The 1-5 self-rating answer, kept as itself rather than folded into a score.
+
+    Note activities.progress_score is NOT this: the client sends rating*2 there,
+    so that column is a doubled self-report and must not be read as a score.
+    """
+    for item in checklist_items or []:
+        if item.get('type') != 'rating':
+            continue
+        value = (custom_responses or {}).get(item.get('name'))
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def compute_completion_percent(checklist_items, custom_responses):
@@ -1149,7 +1196,10 @@ def spa_assets(filename):
     return send_from_directory(FRONTEND_DIST / 'assets', filename)
 
 
-@app.route('/app')
+# strict_slashes=False so /app and /app/ both work. The <path:> converter does
+# not match an empty string, so without it a trailing slash - exactly what a
+# bookmark or a typed URL tends to have - returns 404.
+@app.route('/app', strict_slashes=False)
 @app.route('/app/<path:_subpath>')
 @login_required
 def serve_spa(_subpath=''):
@@ -1157,6 +1207,64 @@ def serve_spa(_subpath=''):
     if not (FRONTEND_DIST / 'index.html').exists():
         return SPA_NOT_BUILT_HTML, 200
     return send_from_directory(FRONTEND_DIST, 'index.html')
+
+def score_checklist_day(conn, user_id, date, checklist_payload, activity_id=None):
+    """Score one logged day: XP, badges, the daily log, and the attribute series.
+
+    Shared by the legacy wizard's POST /api/activities and the SPA's
+    PUT /api/days/<date>, because a day logged from one must score exactly the
+    same as the same day logged from the other.
+
+    Returns (newly_earned_badges, completion_percent).
+    """
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user_row:
+        return [], 0
+
+    paths_payload = load_user_paths(user_row)
+    path_id = checklist_payload.get('selected_path_id')
+    used_path = (
+        next((p for p in paths_payload['paths'] if p['id'] == path_id), None)
+        or get_selected_path(paths_payload)
+        or {}
+    )
+    checklist_items = used_path.get('checklist_items', [])
+    custom_responses = checklist_payload.get('custom_responses', {}) or {}
+
+    # Deliberately ignores any completion_percent in the payload: the legacy
+    # client reports answered/total, which is ~always 100 because the wizard
+    # forces an answer to every step. Badges keyed off completion (perfect-day)
+    # need completed/total, weighted, computed here.
+    completion_percent = compute_completion_percent(checklist_items, custom_responses)
+
+    newly_earned = award_daily_xp(
+        conn, user_id, date, checklist_items, custom_responses,
+        completion_percent=completion_percent,
+    )
+
+    # Snapshot the day and rebuild the derived series. Runs after award_daily_xp
+    # because that commits internally, so the XP row is already durable; a
+    # failure here costs the attribute scores, not the submission.
+    scoring.record_day(
+        conn, user_id, date, checklist_items, custom_responses,
+        path_id=used_path.get('id'),
+        path_name=used_path.get('name'),
+        activity_id=activity_id,
+        self_rating=_extract_self_rating(checklist_items, custom_responses),
+        notes=(checklist_payload.get('notes') or None),
+    )
+    conn.commit()
+    # Only from this date forward: earlier days are unaffected by a later
+    # submission, and recomputing them would be wasted work.
+    scoring.recompute_scores(conn, user_id, from_date=date)
+    conn.commit()
+
+    badges = [
+        {'code': b['code'], 'name': b['name'], 'description': b['description']}
+        for b in newly_earned
+    ]
+    return badges, completion_percent
+
 
 @app.route('/api/activities', methods=['GET', 'POST'])
 @login_required
@@ -1193,30 +1301,9 @@ def activities():
             }
             save_checklist_to_file(user_id, session.get('username', f'user_{user_id}'), activity_id, checklist_payload)
 
-            # Score this submission for XP/levels/badges against the exact Path
-            # (and its item weights) the user actually used that day.
-            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-            if user_row:
-                paths_payload = load_user_paths(user_row)
-                path_id = checklist_payload.get('selected_path_id')
-                used_path = next((p for p in paths_payload['paths'] if p['id'] == path_id), None) \
-                    or get_selected_path(paths_payload)
-                checklist_items = used_path.get('checklist_items', []) if used_path else []
-                custom_responses = checklist_payload.get('custom_responses', {}) or {}
-                # Deliberately ignores checklist_payload['completion_percent']: the
-                # client reports answered/total, which is ~always 100 because the
-                # wizard forces an answer to every step. Badges keyed off completion
-                # (perfect-day) need completed/total, weighted, computed here.
-                completion_percent = compute_completion_percent(checklist_items, custom_responses)
-
-                newly_earned = award_daily_xp(
-                    conn, user_id, data.get('date'), checklist_items, custom_responses,
-                    completion_percent=completion_percent
-                )
-                newly_earned_badges = [
-                    {'code': b['code'], 'name': b['name'], 'description': b['description']}
-                    for b in newly_earned
-                ]
+            newly_earned_badges, _ = score_checklist_day(
+                conn, user_id, data.get('date'), checklist_payload, activity_id
+            )
 
         conn.close()
         return jsonify({'success': True, 'id': activity_id, 'newly_earned_badges': newly_earned_badges}), 201
@@ -1322,6 +1409,246 @@ def gamification_summary():
         'streak_multiplier_pct': streak_multiplier_pct,
         'badges': badges
     })
+
+def _attributes_payload(conn, user_id, date=None):
+    """All eight attributes, in radar-axis order, whether or not they have a row.
+
+    scoring.store.get_attributes() returns only rows that exist, so an attribute
+    the user has never had a signal for would simply be missing. The radar needs
+    all eight every time - a chart whose axes appear and disappear is unreadable -
+    so anything absent is filled in with its honest default (locked, or
+    unobserved). unlocks_in / needs_days come from the engine rather than the
+    table, which stores only the numbers.
+    """
+    stored = {row['attribute']: row for row in scoring.get_attributes(conn, user_id, date)}
+
+    payload = []
+    for attribute in scoring.ATTRIBUTES:
+        row = stored.get(attribute)
+        if row is None:
+            payload.append(scoring.aggregate_attribute(attribute, []))
+            continue
+
+        entry = {
+            'attribute': attribute,
+            'status': row['status'],
+            'score': row['score'],
+            'confidence': row['confidence'],
+            'sample_days': row['sample_days'],
+            'raw_value': row['raw_value'],
+        }
+        # Re-derive the explanatory fields the table does not carry.
+        hint = scoring.aggregate_attribute(attribute, [])
+        if entry['status'] == 'locked' and 'unlocks_in' in hint:
+            entry['unlocks_in'] = hint['unlocks_in']
+        if entry['status'] == 'calibrating':
+            entry['needs_days'] = max(
+                scoring.DEFAULT_CONFIG.min_days_for_score - (row['sample_days'] or 0), 0
+            )
+        payload.append(entry)
+    return payload
+
+
+@app.route('/api/attributes')
+@login_required
+def attributes():
+    """The attribute set for the radar, as of a date (default: most recent)."""
+    user_id = session.get('user_id')
+    date = request.args.get('date') or None
+
+    conn = get_db_connection()
+    payload = _attributes_payload(conn, user_id, date)
+    latest = conn.execute(
+        'SELECT MAX(date) AS d FROM attribute_scores WHERE user_id = ?', (user_id,)
+    ).fetchone()
+    conn.close()
+
+    return jsonify({'date': date or (latest['d'] if latest else None),
+                    'attributes': payload})
+
+
+@app.route('/api/days/<string:date>')
+@login_required
+def day_detail(date):
+    """One day's logged checklist - the per-item answers as they were that day.
+
+    Nothing else exposes these: custom_responses are written to the JSONL file
+    and never read back over HTTP. Today reads this to show what is already
+    ticked, so it must come from daily_log's snapshot rather than the live Path.
+    """
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+
+    row = conn.execute(
+        'SELECT * FROM daily_log WHERE user_id = ? AND date = ?', (user_id, date)
+    ).fetchone()
+    scores = conn.execute(
+        'SELECT daily_score, discipline_score, completion_pct FROM daily_scores '
+        'WHERE user_id = ? AND date = ?', (user_id, date)
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        # Not an error: most dates simply have not been logged.
+        return jsonify({'date': date, 'logged': False, 'items': [], 'scores': None})
+
+    try:
+        payload = json.loads(row['payload_json'] or '{}')
+    except (TypeError, ValueError):
+        payload = {}
+
+    return jsonify({
+        'date': date,
+        'logged': True,
+        'path': {'id': row['path_id'], 'name': row['path_name']},
+        'completion_pct': row['completion_pct'],
+        'items_total': row['items_total'],
+        'items_completed': row['items_completed'],
+        'self_rating': row['self_rating'],
+        'notes': row['notes'],
+        'items': payload.get('items', []),
+        'scores': dict(scores) if scores else None,
+    })
+
+
+@app.route('/api/days/<string:date>', methods=['PUT'])
+@login_required
+def save_day(date):
+    """Log or re-log one day from the SPA.
+
+    The legacy wizard posts to /api/activities and APPENDS a row every time,
+    which is why `activities` accumulates duplicates for a re-submitted day.
+    This updates in place instead - one checklist row per date - so editing
+    today corrects the record rather than logging it twice.
+
+    Scoring goes through the same score_checklist_day() the wizard uses, so a
+    day logged here is indistinguishable from one logged there.
+    """
+    user_id = session.get('user_id')
+    username = session.get('username', f'user_{user_id}')
+    data = request.json or {}
+
+    responses = data.get('responses')
+    if not isinstance(responses, dict):
+        return jsonify({'error': 'responses must be an object of item name -> answer'}), 400
+
+    try:
+        datetime.strptime(date, '%Y-%m-%d')
+    except (TypeError, ValueError):
+        return jsonify({'error': 'date must be YYYY-MM-DD'}), 400
+
+    checklist_payload = {
+        'date': date,
+        'checklist': {},
+        'custom_responses': responses,
+        'selected_path_id': data.get('path_id'),
+        'selected_path_name': data.get('path_name'),
+        'notes': data.get('notes', ''),
+        'source': 'spa',
+    }
+
+    conn = get_db_connection()
+
+    answered = sum(1 for value in responses.values() if str(value).strip())
+    description = f'{answered} of {len(responses)} answered'
+    # Mirrors the legacy client, which sends the 1-5 self-rating doubled. Kept
+    # identical so /api/stats keeps meaning one thing across both writers.
+    self_rating = data.get('self_rating')
+    progress_score = int(self_rating) * 2 if str(self_rating or '').strip().isdigit() else 0
+
+    existing = conn.execute(
+        "SELECT id FROM activities WHERE user_id = ? AND date = ? "
+        "AND activity_name = 'Daily Checklist' ORDER BY id DESC LIMIT 1",
+        (user_id, date),
+    ).fetchone()
+
+    if existing:
+        activity_id = existing['id']
+        conn.execute(
+            'UPDATE activities SET description = ?, progress_score = ?, notes = ? WHERE id = ?',
+            (description, progress_score, data.get('notes', ''), activity_id),
+        )
+    else:
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO activities (user_id, date, activity_name, description, '
+            'duration, progress_score, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (user_id, date, 'Daily Checklist', description, 0, progress_score,
+             data.get('notes', '')),
+        )
+        activity_id = cursor.lastrowid
+    conn.commit()
+
+    # The JSONL file stays an append-only audit trail of every submission,
+    # including corrections - daily_log holds the current truth.
+    save_checklist_to_file(user_id, username, activity_id, checklist_payload)
+
+    badges, completion_percent = score_checklist_day(
+        conn, user_id, date, checklist_payload, activity_id
+    )
+    conn.close()
+
+    return jsonify({
+        'date': date,
+        'completion_pct': completion_percent,
+        'newly_earned_badges': badges,
+    })
+
+
+@app.route('/api/home')
+@login_required
+def home_summary():
+    """Everything the Home dashboard needs, in one response.
+
+    Composed server-side on purpose: QueryBoundary wraps a single query, so five
+    separate calls would mean five independent skeletons and five error states on
+    one screen. One call, one loading state.
+    """
+    user_id = session.get('user_id')
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db_connection()
+
+    total_xp = get_user_total_xp(conn, user_id)
+    level, xp_into_level, xp_for_next_level = compute_level(total_xp)
+    current_streak = calculate_current_streak(conn, user_id)
+
+    recent = scoring.get_daily_scores(conn, user_id, limit=14)
+    latest = recent[-1] if recent else None
+
+    today_row = conn.execute(
+        'SELECT completion_pct, items_total, items_completed FROM daily_log '
+        'WHERE user_id = ? AND date = ?', (user_id, today)
+    ).fetchone()
+
+    days_logged = conn.execute(
+        'SELECT COUNT(*) AS n FROM daily_log WHERE user_id = ?', (user_id,)
+    ).fetchone()['n']
+
+    payload = {
+        'date': today,
+        'level': level,
+        'total_xp': total_xp,
+        'xp_into_level': xp_into_level,
+        'xp_for_next_level': xp_for_next_level,
+        'current_streak': current_streak,
+        'streak_multiplier_pct': min(
+            current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT
+        ),
+        'days_logged': days_logged,
+        'daily_score': latest['daily_score'] if latest else None,
+        'discipline_score': latest['discipline_score'] if latest else None,
+        'today': {
+            'logged': today_row is not None,
+            'completion_pct': today_row['completion_pct'] if today_row else 0,
+            'items_total': today_row['items_total'] if today_row else 0,
+            'items_completed': today_row['items_completed'] if today_row else 0,
+        },
+        'attributes': _attributes_payload(conn, user_id),
+        'trend': recent,
+    }
+    conn.close()
+    return jsonify(payload)
+
 
 @app.route('/api/leaderboard/<string:scope>')
 @login_required
@@ -1509,17 +1836,36 @@ def delete_user(user_id):
         return jsonify({'success': False, 'message': 'Cannot delete your own account'}), 400
     
     conn = get_db_connection()
-    
-    # Delete user's activities and milestones
-    conn.execute('DELETE FROM activities WHERE user_id = ?', (user_id,))
-    conn.execute('DELETE FROM milestones WHERE user_id = ?', (user_id,))
-    
-    # Delete user
+
+    username_row = conn.execute(
+        'SELECT username FROM users WHERE id = ?', (user_id,)
+    ).fetchone()
+    if not username_row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    # Every per-user table. SQLite foreign keys are not enforced here (PRAGMA
+    # foreign_keys is never enabled), so nothing cascades - each new per-user
+    # table added by a later phase must be listed here, or deleting an account
+    # silently leaves that person's data behind.
+    for table in ('activities', 'milestones', 'daily_xp', 'user_badges',
+                  'daily_log', 'attribute_scores', 'daily_scores'):
+        conn.execute(f'DELETE FROM {table} WHERE user_id = ?', (user_id,))
+
     conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
-    
     conn.commit()
     conn.close()
-    
+
+    # Their Path templates and daily submissions live on disk, not in SQL.
+    # Deleting an account has to remove those too, or "delete this user" leaves
+    # their personal log content sitting in artifacts/.
+    for artifact in (get_user_paths_file_path(username_row['username']),
+                     get_checklist_file_path(username_row['username'])):
+        try:
+            artifact.unlink(missing_ok=True)
+        except OSError:
+            app.logger.warning('Could not remove %s for deleted user', artifact)
+
     return jsonify({'success': True})
 
 @app.route('/api/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
@@ -1608,6 +1954,21 @@ def admin_stats():
         'total_admins': total_admins,
         'active_users': [dict(row) for row in active_users]
     })
+
+# Training endpoints live in their own module - app.py is already long enough,
+# and they are self-contained. Registered after the helpers they depend on are
+# defined, and injected rather than imported so the module never imports app
+# back (the test suite swaps modules per test).
+from training_api import init_training  # noqa: E402
+from nutrition_api import init_nutrition  # noqa: E402
+
+init_training(app, get_db_connection, login_required)
+
+# Nutrition and Lifestyle also get the recompute function injected: logging a
+# meal or a night's sleep moves attribute scores, so those endpoints have to
+# rescore, and reaching for scoring.recompute_scores directly would be the same
+# import cycle the injection exists to avoid.
+init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.

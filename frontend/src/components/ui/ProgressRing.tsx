@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
+import { m } from 'motion/react'
 
 import { cn } from '../../lib/cn'
+import { EASE, duration } from '../../lib/motion'
+import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 import { accentStroke, type Accent } from '../../navigation'
 
 interface ProgressRingProps {
@@ -28,6 +31,7 @@ export function ProgressRing({
   const radius = (size - thickness) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference * (1 - pct / 100)
+  const reduced = usePrefersReducedMotion()
 
   return (
     <div
@@ -45,7 +49,7 @@ export function ProgressRing({
           strokeWidth={thickness}
           stroke="var(--color-line)"
         />
-        <circle
+        <m.circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
@@ -54,8 +58,11 @@ export function ProgressRing({
           strokeLinecap="round"
           stroke={accentStroke[accent]}
           strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-[stroke-dashoffset] duration-700 ease-out"
+          // Draws in from empty on mount, not just on later value changes - the
+          // ring filling up is the point of the component.
+          initial={{ strokeDashoffset: reduced ? offset : circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: reduced ? 0 : duration.slow * 2, ease: EASE }}
         />
       </svg>
       {label && (

@@ -15,21 +15,32 @@ This tracks where that's headed, in order.
 | - | Gamification - XP, levels, streaks, badges, leaderboards | Done |
 | - | Visual pass - light theme, custom icon set | Superseded by R1 |
 | R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
-| R2 | Home + Today - attributes, radar, daily score, streaks | Not started |
-| - | **AWS deployment** - deploy once R2 makes the app worth using | Not started |
-| R3 | Training - routines, exercise library, set logging, analytics | Not started |
-| R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
+| R2 | Home + Today - attributes, radar, daily score, streaks | Done |
+| R3 | Training - routines, exercise library, set logging, analytics | Done |
+| R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Done |
 | R5 | Learning - subjects, sessions, knowledge analytics | Not started |
 | R6 | Goals + Habits - milestones, routines, streak sources | Not started |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
+| Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
 
-AWS sits after R2 deliberately: deploying before the redesign means configuring a
-deployment for a stack that's about to be replaced, and waiting until R10 means
-nobody else can use the app for months. After R2 there's something worth logging
-into every day, and the deployment shape (static bundle + Flask API) is settled.
+Shipping is last, and the re-platform goes with it. An earlier plan put both after
+R2, reasoning that the data model needed to stop moving before the DynamoDB key
+design could be done. That reasoning does not survive inspection: the data model
+keeps moving all the way through R6 - R3 adds workouts, exercises and sets, R4 adds
+nutrition and sleep, R5 adds learning sessions, R6 adds goals and habits. Porting
+after R2 would mean revisiting the key design in every one of those phases.
+
+So the app stays on Flask + SQLite for the whole build. That keeps feature velocity
+high (no toolchain switch mid-stream, the Python test suite and scoring engine keep
+working) and defers the port to the point where the schema is actually final. The
+cost is rewriting the Flask endpoints in TypeScript at the end - mechanical work,
+and far less of it than redesigning DynamoDB keys eight times.
+
+The React components are unaffected either way: they carry over to Next.js close to
+unchanged, so everything built in R2-R10 keeps its value.
 
 ## Done before the redesign
 
@@ -81,22 +92,80 @@ The phase that makes the redesign worth using.
 - **Today** - the full day as sections and a timeline; complete, skip, reschedule.
 - **Seed data** - realistic demo data behind an explicit demo mode, so dashboards can
   be developed and reviewed without waiting weeks for real history.
-- Flip `/` from the Jinja app to the SPA; port login and admin.
+
+- **Motion system** - the animation layer every later phase builds on, added here
+  rather than saved for R10 so eight phases of UI are not retrofitted at the end.
+The flip of `/` from the Jinja app to the SPA was planned for this phase and has
+been **moved** - see *Retiring the Jinja app* below. Today replaces the checklist
+wizard, but the wizard is only part of what that page does.
+
+The Flask endpoints are now load-bearing for the whole build rather than throwaway
+(the port moved to the end), so they are built properly - just not elaborately.
+
+## Retiring the Jinja app
+
+`/` stays on the legacy Jinja dashboard until the SPA can actually replace it. The
+checklist wizard is the obvious feature, and Today covers that - but the same page
+also carries Path management, custom checklist items, profile and password, the
+badges and leaderboard modals, milestone insights, and Excel export. Flipping after
+R2 would have traded a complete app for a prettier one missing most of its surface.
+
+Parity is reached phase by phase, not in one step:
+
+| Legacy feature | Replaced in |
+|---|---|
+| Daily checklist wizard | R2 (done - Today) |
+| Stats, streaks, progress chart | R2 (done - Home) |
+| Path management, custom items | R6 - Goals and Habits |
+| Badges, leaderboard | R7 - Gamification depth |
+| Milestone insights, Excel export | R8 - Analytics |
+| Profile, password, settings | R9 - Onboarding |
+| Admin dashboard | Ship |
+
+So the flip lands once R9 is done, and the Ship phase removes the Jinja templates
+entirely. Until then both run side by side: `/` is the working app, `/app` is the
+redesign, and they share one database, so anything logged in either shows in both.
 
 ## R3 - Training
 
-Routines and splits, an exercise library organised by muscle group, set-by-set
-logging with previous-performance hints and a rest timer, personal records,
-progressive overload and volume analytics, body measurements. Exercise demo
-animations are designed for from the start (component boundary ready) but not
-shipped - no copyrighted media.
+Done. See [TRAINING.md](TRAINING.md) for the full write-up.
+
+Shipped: an 85-exercise library synced from `data/exercises.json`, set-by-set
+logging with previous-performance hints and a timestamp-driven rest timer,
+routines with target sets and reps that pre-fill a session, volume and
+muscle-balance analytics, personal records, and body measurements.
+
+This is also the phase where the attribute engine stopped running on self-report
+alone. `scoring/producers.py` turns logged sets into measured signals for
+Strength, Stamina and Agility - and Agility stopped being `locked`, because
+mobility work now feeds it. Two scoring problems surfaced and were fixed here: a
+perverse incentive where ticking a checkbox outscored an honestly logged light
+week, and a ramp-up penalty that scored a genuine first session at 27% by
+measuring one day against a full week's target.
+
+Exercise demo animations remain designed-for but unshipped - no copyrighted
+media.
 
 ## R4 - Nutrition and Lifestyle
 
-Calories, macros, fibre, hydration; energy balance against an estimated TDEE with
-estimates clearly labelled as estimates. Sleep gets first-class treatment - duration,
-schedule consistency, and a direct contribution to Discipline and Recovery. Steps,
-sunlight, mood, stress, journal.
+Done. See [NUTRITION.md](NUTRITION.md) for the full write-up.
+
+Shipped: a 233-food curated library, per-meal logging with macros and fibre, a
+recipe builder that turns a cooked dish into a reusable food, hydration and step
+tracking, sleep with duration and schedule consistency, mood/stress/energy, a
+journal, and energy balance against an estimated TDEE with every estimate labelled
+as one.
+
+Recovery stopped being `unobserved` - sleep duration finally gives it data - and
+Discipline gained its first measured signals in sleep consistency and target
+adherence. `locked` is now empty: every attribute has a source.
+
+The line this phase had to draw is between behaviour and feeling. Mood, stress,
+energy and sleep quality are recorded and charted but never scored, because an
+app that scored them would be paying you to report feeling good.
+
+`user_profile` landed here rather than in R9 as planned, because energy balance
+cannot exist without it. R9 expands the table rather than creating it.
 
 ## R5 - Learning
 
@@ -135,6 +204,25 @@ Responsive review at every breakpoint, XP/level-up/achievement animations that
 respect reduced motion, accessibility pass, loading and empty states everywhere,
 performance work (pagination, lazy loading, bundle budget).
 
+## Ship - Re-platform and deploy
+
+The last phase. Port to the stack already running Tech-Portfolio in production -
+**Next.js 16 App Router on AWS Amplify SSR, with DynamoDB and S3** - then deploy to
+`neurallog.adityamore.dev`. See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+- Frontend: React 19 + Vite + TypeScript + Tailwind v4 -> Next.js App Router. The
+  components, tokens and motion system carry over; routing and data fetching change.
+- Backend: Flask route handlers -> Next.js route handlers. `scoring/engine.py` is pure
+  functions over plain dicts with no database or framework imports, so it translates
+  mechanically; the SQL layer and migrations are rewritten for DynamoDB.
+- Storage: SQLite **and** the per-user `artifacts/` JSON files -> DynamoDB. Both have
+  to go: every serverless platform has an ephemeral filesystem.
+- Retires the legacy Jinja app, the `/app` mount point, and the unversioned Flask routes.
+- The security prerequisites in [DEPLOYMENT.md](DEPLOYMENT.md) land here, before the
+  app is reachable: no hard-coded secret fallback, closed registration, login rate
+  limiting, CSRF, session cookie flags.
+- Cost after this lands: ~$0/month within AWS's perpetual Always Free allowances.
+
 ## Beyond
 
 Architected for, not built now: wearables (Apple Health, Health Connect, Garmin),
@@ -143,5 +231,10 @@ training and learning plans, and natural-language logging ("studied ML for 90 mi
 and did a chest workout"). The constraint these place on today's decisions is simply
 that structured logs must stay structured - no free-text soup where an entity belongs.
 
-An iOS client remains the long-term goal; the R1 split into a JSON API plus a
-separate frontend is the groundwork that makes it possible.
+A native iOS client is **not planned**. It was dropped once the cost was clear: the
+Apple Developer Program is $99/year purely to distribute to a handful of friends, and
+since iOS 16.4 a Home Screen web app can be installed and receive push notifications for
+$0. A PWA covers what a habit tracker needs; the native-only features that would justify
+the fee - HealthKit, widgets, Siri Shortcuts, background sync - are all in *Beyond*
+rather than planned work. The clean API boundary is still worth keeping, because it is
+what makes a PWA (or a later native client, if HealthKit ever becomes the point) possible.

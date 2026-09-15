@@ -2,6 +2,138 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R4 - Nutrition and Lifestyle
+
+Recovery stopped being `unobserved`, and `locked` is now empty: every attribute
+has a data source. Full write-up in [NUTRITION.md](NUTRITION.md).
+
+- **Seven tables** (`migrations/004_nutrition_lifestyle.sql`) at the grain of one
+  thing eaten at one meal. `food_entries` deliberately does not denormalise
+  macros - they are the food's per-100g values times grams, computed on read, so
+  correcting a food corrects every meal that used it.
+- **233-food curated library** in `data/foods.json`, per 100g because that is the
+  only basis on which recipes compose. Chosen over an external API: no network
+  dependency on every search, no rate limits, nothing extra to provision on AWS.
+- **Recipes.** Describe a cooked dish, pick the ingredients, and it becomes one
+  entry in the food picker. A recipe *is* a food (`source = 'recipe'`), so logging
+  a dish and logging an ingredient are the same operation downstream. Macros are
+  always derived, and editing a dish rescores every meal already logged with it.
+- **Cooked weight is stored separately from the raw ingredient sum**, because rice
+  absorbs water and roasting drives it off. Dividing by the raw total for a dish
+  that lost a third of its mass would under-report every portion of it.
+- **Sleep, hydration, steps, sunlight, mood, stress, energy, journal.**
+- **Energy balance** against a Mifflin-St Jeor TDEE, with a `sources` map marking
+  every number as set / estimated / unknown, and `tdee()` returning None rather
+  than guessing.
+- **`user_profile` arrived in R4 rather than R9**, since energy balance cannot
+  exist without it. R9 expands the table rather than creating it.
+
+### Scoring
+
+Four new measured signals: sleep duration to Recovery, sleep schedule consistency
+to Discipline, steps to Stamina, water and calorie adherence to Discipline.
+
+- **Recovery joined `MEASURABLE_ATTRIBUTES`; Discipline deliberately did not.**
+  Sleep is now loggable, so an unevidenced Recovery claim gets the 0.5 ceiling.
+  But the checklist is already direct evidence of discipline, so sleep consistency
+  and adherence are additional evidence rather than the only possible evidence -
+  capping it would punish someone for not using a workspace.
+- **Sleep is scored per night while steps use a trailing window.** Not an
+  inconsistency: a rest day is not a failure, but a night you did not get is a
+  real gap in recovery on that day. You cannot bank sleep.
+- **Sleep consistency uses a circular spread.** As raw minutes past midnight,
+  bedtimes of 23:50 and 00:10 look 23 hours apart, so the most disciplined
+  possible sleeper would have scored the worst possible consistency.
+- **Calories are scored two-sided.** A one-sided "more is better" reading would
+  call a 4,000 kcal day against a 2,000 target perfect adherence.
+- **`merge_measured()`** averages by weight where producers overlap. Two now feed
+  Discipline and two feed Stamina; a plain dict update would have let whichever
+  ran last silently win.
+- **Mood, stress, energy and sleep quality are never scored.** They are
+  self-reported feelings, and an app that scored them would be paying you to
+  report feeling good.
+
+### Bugs found and fixed
+
+- **"Today" was UTC, not local.** `new Date().toISOString().slice(0, 10)` is the
+  obvious way to get today's date and it is wrong: west of UTC it rolls over to
+  tomorrow in the evening. At 20:02 in UTC-5 the Nutrition page asked for
+  2026-09-15 and showed an empty day the API had 2,152 kcal of data for. Training
+  had it too, where it would have dated a new workout tomorrow. `Today.tsx` had
+  already solved this in R2 with a comment explaining why, and R3 and R4 each
+  wrote the UTC version again - so all four now share one helper in
+  `frontend/src/lib/date.ts`.
+- **`entry_macros()` was handed a `sqlite3.Row`**, which has no `.get()`, so every
+  request for a day with a logged meal raised AttributeError.
+- **A partial profile PUT hit NOT NULL constraints.** "Just set my calorie target"
+  merged `activity_level` and `goal` to None, which failed for any user without a
+  profile row - i.e. on everyone's first edit.
+- **`TrendChart` drew a 1-5 mood rating on an axis up to 8**, which makes a good
+  week look like a mediocre one. It now takes an optional fixed `domain`.
+
+## R3 - Training
+
+The first feature that feeds the attribute engine measured data instead of
+self-report. Full write-up in [TRAINING.md](TRAINING.md).
+
+- **Six new tables** (`migrations/003_training.sql`) at the grain of the
+  individual set. `workout_sessions` deliberately has no `UNIQUE(user_id, date)` -
+  a morning lift and an evening run are two sessions. The exercise library uses
+  two *partial* unique indexes, because SQLite treats `NULL`s as distinct and a
+  plain `UNIQUE(user_id, slug)` would allow ten copies of every shared exercise.
+- **85-exercise library** in `data/exercises.json`, synced on startup. Exercises
+  removed from the file are archived, never deleted - someone may have logged sets
+  against them.
+- **`scoring/producers.py`**, the seam that turns sets into the same
+  `(attribute, ratio)` shape the checklist produces. Agility is no longer `locked`:
+  mobility work feeds it.
+- **Routines** - named, ordered plans with target sets and reps. Starting one
+  inherits its name and pre-fills the session. The plan is never persisted as
+  training data; only what you actually lift is saved, and so only that is scored.
+- **Training UI** - dashboard (volume trend, muscle balance, records, sessions,
+  measurements), focused set logging, library picker, rest timer.
+
+### Scoring problems found and fixed
+
+- **The app paid you to lie.** With self-report capped at 0.75, ticking the
+  "Workout" checkbox scored 75 while honestly logging a light week scored 62. The
+  breakeven is `(4C−1)/3` - 67% of target at C=0.75, 33% at C=0.5. The ceiling is
+  now 0.5 for measurable attributes only, and a test asserts every level of real
+  training beats claiming it.
+- **Starting was punished.** The first training day was measured against a full
+  week's target, scoring a genuine session at 27%. The target is now pro-rated by
+  the observed window.
+- **Deleting all workouts left Strength at 100.** `recompute_scores()` returned
+  early with no source data, orphaning the derived rows. `_prune_orphaned_scores()`
+  removes rows whose source is gone.
+- **Consistency scored a 5-day lapse as 100%.** The window was anchored to the
+  last log rather than to today, so stopping looked identical to never starting.
+
+### Training UI defects caught in verification
+
+- **`StatCard` truncated its own value.** The hint was `shrink-0` while the value
+  was allowed to truncate - exactly backwards - so a 16,710kg total rendered as
+  "1".
+- **Four-figure chart values rendered as "000"**, overflowing the axis gutter.
+  `TrendChart` now compacts at 1,000 (`4.5k`) and the tooltip shows the full
+  number.
+- **The logging form remounted its inputs on every render.** Server sets were
+  remapped through a key-minting function outside `useMemo`, so React saw fresh
+  keys each pass and would have dropped focus mid-typing.
+- **"Last time" quoted the session back at you.** Reopening a saved workout showed
+  its own sets as previous performance, and its own lifts as the all-time best.
+  `/api/exercises/<id>/history` now takes `?exclude_session=<id>`.
+- **Routine-seeded sessions would have saved blank sets.** Planned rows counted
+  toward "working sets" before anything was typed, and would have persisted as
+  real logged sets on finish.
+
+### Tooling
+
+- `scripts/shoot.mjs` gained `SHOOT_EVAL`, which runs a snippet in the page before
+  capture - modals, drawers and timers only exist after a click, so there was no
+  URL that rendered them. It reports exceptions, which immediately caught a
+  malformed snippet that had been silently producing empty screenshots.
+
 ## R2 prerequisites - scoring integrity fixes
 
 Found while mapping the codebase for R2's attribute engine. All three are bugs in

@@ -96,11 +96,62 @@ if (sessionCookie) {
   })
 }
 
-await send('Page.navigate', { url })
-// Let the bundle boot, queries resolve and charts animate in.
-await sleep(3500)
+await send('Emulation.setDeviceMetricsOverride', {
+  width: Number(width),
+  height: Number(height),
+  deviceScaleFactor: 1,
+  mobile: false,
+})
 
-const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
+await send('Page.navigate', { url })
+// Let the bundle boot, queries resolve and lazy chart chunks load.
+await sleep(Number(process.env.SHOOT_WAIT_MS ?? 3500))
+
+// Modals, drawers and timers only exist after a click, so there is no URL that
+// renders them. SHOOT_EVAL runs a snippet in the page first - typically
+// `[...document.querySelectorAll('button')].find(b => b.textContent.includes('Add exercise')).click()`
+// - then waits for the entrance animation to settle.
+if (process.env.SHOOT_EVAL) {
+  const evaluated = await send('Runtime.evaluate', {
+    expression: process.env.SHOOT_EVAL,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  if (evaluated.exceptionDetails) {
+    console.error('SHOOT_EVAL threw:', evaluated.exceptionDetails.exception?.description
+      ?? evaluated.exceptionDetails.text)
+  } else if (evaluated.result?.value !== undefined) {
+    console.log('SHOOT_EVAL ->', JSON.stringify(evaluated.result.value))
+  }
+  await sleep(Number(process.env.SHOOT_EVAL_WAIT_MS ?? 900))
+}
+
+// Grow the viewport to the full page BEFORE capturing, then wait again.
+//
+// The obvious approach - captureScreenshot with captureBeyondViewport: true -
+// silently produces wrong images for this app. It resizes the render surface at
+// capture time, Recharts' ResponsiveContainer re-measures, every chart replays
+// its enter animation from zero, and the shot catches frame 0: a radar with
+// axes and no data. Resizing first and waiting lets the animation finish.
+const { result: metrics } = await send('Runtime.evaluate', {
+  expression: `JSON.stringify({
+    h: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+  })`,
+  returnByValue: true,
+})
+const fullHeight = Math.min(JSON.parse(metrics.value).h, 16000)
+
+if (fullHeight > Number(height)) {
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: Number(width),
+    height: fullHeight,
+    deviceScaleFactor: 1,
+    mobile: false,
+  })
+  await sleep(Number(process.env.SHOOT_SETTLE_MS ?? 2500))
+}
+
+const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
 writeFileSync(out, Buffer.from(data, 'base64'))
 console.log(`wrote ${out}`)
 

@@ -74,7 +74,7 @@ uses it - an empty table is a liability, not a head start.
 
 | Entity | Status | Phase |
 |---|---|---|
-| `UserProfile` | New - age, sex, height, weight, units, activity level | 9 |
+| `UserProfile` | New - age, sex, height, activity level, targets | **4** (R9 expands it) |
 | `UserPreferences` | New - targets, reminder settings | 9 |
 | `DailyLog` | New - the per-day record a calendar cell maps to | 2 |
 | `AttributeScore` | New - time-series of the eight attribute scores | 2 |
@@ -85,8 +85,10 @@ uses it - an empty table is a liability, not a head start.
 | `Workout`, `WorkoutSession` | New | 3 |
 | `Exercise`, `ExerciseSet` | New - library + per-set logging | 3 |
 | `BodyMeasurement` | New | 3 |
-| `FoodEntry`, `DailyNutrition` | New | 4 |
-| `SleepEntry`, `LifestyleMetric` | New | 4 |
+| `Food`, `FoodEntry` | New - library + per-meal logging | 4 |
+| `Recipe`, `RecipeIngredient` | New - a cooked dish, reusable as a food | 4 |
+| `SleepEntry` | New - keyed to the WAKE date | 4 |
+| `LifestyleDay` | New - one row per day, not metric-per-row | 4 |
 | `LearningArea`, `LearningTopic`, `LearningSession` | New | 5 |
 | `Achievement`, `UserAchievement` | Partly exists - `user_badges` is the seed | 7 |
 | `XPTransaction` | Extends `daily_xp` - per-action XP ledger, auditable | 7 |
@@ -113,6 +115,12 @@ items into habits and backfills completions from `artifacts/checklists/*.jsonl`.
 The app has to answer "what was my discipline score six months ago" and "how much
 stronger am I than in March". That rules out tables that only hold current values.
 
-`AttributeScore`, `DailyScore`, `BodyMeasurement` and `DailyNutrition` are all
-written per-day and never overwritten in place - one row per user per day, so
-history is the default rather than something that has to be reconstructed.
+`AttributeScore`, `DailyScore`, `BodyMeasurement`, `SleepEntry` and
+`LifestyleDay` are all written per-day - one row per user per day, so history is
+the default rather than something that has to be reconstructed.
+
+`DailyNutrition` was planned as a per-day totals table and deliberately not
+built. Totals are summed from `food_entries` on read instead, so correcting a
+food corrects every day that used it. A stored total would be a second copy that
+could disagree with the entries it summarises - the same reasoning that keeps
+`Streak` and `UserLevel` derived.

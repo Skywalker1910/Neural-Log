@@ -16,6 +16,23 @@ interface TrendChartProps {
   /** Appended in the tooltip, e.g. "h" for study hours. */
   unit?: string
   name?: string
+  /**
+   * Fixed y-axis range. Give this for any bounded scale - a 1-5 mood rating
+   * left on Recharts' auto-domain drew an axis up to 8, which makes a good
+   * week look like a mediocre one.
+   */
+  domain?: [number, number]
+}
+
+/**
+ * Four-figure values (training volume) overflowed the axis gutter and rendered
+ * as "000". Compacting at 1,000 keeps the gutter narrow without lying about the
+ * number - the tooltip still shows it in full.
+ */
+function compact(value: number): string {
+  if (Math.abs(value) < 1000) return String(value)
+  const thousands = value / 1000
+  return `${thousands % 1 === 0 ? thousands : thousands.toFixed(1)}k`
 }
 
 /** Single-series trend over time - discipline, study hours, volume, weight. */
@@ -25,6 +42,7 @@ export function TrendChart({
   height = 240,
   unit = '',
   name = 'Value',
+  domain,
 }: TrendChartProps) {
   const reducedMotion = usePrefersReducedMotion()
   const colour = accentStroke[accent]
@@ -32,7 +50,7 @@ export function TrendChart({
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+      <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={colour} stopOpacity={0.35} />
@@ -41,8 +59,15 @@ export function TrendChart({
         </defs>
         <CartesianGrid stroke={gridStroke} vertical={false} />
         <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} />
-        <YAxis tick={axisTick} tickLine={false} axisLine={false} width={44} />
-        <Tooltip {...tooltipStyles} formatter={(value) => [`${value}${unit}`, name]} />
+        <YAxis
+          tick={axisTick} tickLine={false} axisLine={false} width={44}
+          tickFormatter={compact} domain={domain ?? ['auto', 'auto']}
+          allowDecimals={!domain}
+        />
+        <Tooltip
+          {...tooltipStyles}
+          formatter={(value) => [`${Number(value).toLocaleString()}${unit}`, name]}
+        />
         <Area
           type="monotone"
           dataKey="value"

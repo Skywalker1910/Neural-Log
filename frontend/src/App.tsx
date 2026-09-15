@@ -3,9 +3,18 @@ import { Route, Routes } from 'react-router'
 
 import { AppShell } from './components/layout/AppShell'
 import { SkeletonGrid } from './components/ui/Skeleton'
+import { Home } from './pages/Home'
 import { NotFound } from './pages/NotFound'
+import { Today } from './pages/Today'
+import { Lifestyle } from './pages/Lifestyle'
+import { Nutrition } from './pages/Nutrition'
+import { Training } from './pages/Training'
+import { WorkoutSession } from './pages/WorkoutSession'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
+
+/** Sections that have a real page now. Anything else still gets a placeholder. */
+const BUILT = new Set(['/today', '/training', '/nutrition', '/lifestyle'])
 
 // Dev-facing gallery - no reason for it to ride along in the main bundle.
 const DesignSystem = lazy(() =>
@@ -17,19 +26,26 @@ const DesignSystem = lazy(() =>
  * one of these for the real workspace; the shell around them doesn't change.
  */
 export default function App() {
-  const [home, ...rest] = NAV_SECTIONS
+  const [, ...rest] = NAV_SECTIONS
 
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<PlaceholderPage section={home} />} />
-        {rest.map((section) => (
-          <Route
-            key={section.path}
-            path={section.path}
-            element={<PlaceholderPage section={section} />}
-          />
-        ))}
+        <Route index element={<Home />} />
+        <Route path="/today" element={<Today />} />
+        <Route path="/training" element={<Training />} />
+        <Route path="/training/:workoutId" element={<WorkoutSession />} />
+        <Route path="/nutrition" element={<Nutrition />} />
+        <Route path="/lifestyle" element={<Lifestyle />} />
+        {rest
+          .filter((section) => !BUILT.has(section.path))
+          .map((section) => (
+            <Route
+              key={section.path}
+              path={section.path}
+              element={<PlaceholderPage section={section} />}
+            />
+          ))}
         <Route
           path={SETTINGS_SECTION.path}
           element={<PlaceholderPage section={SETTINGS_SECTION} />}
