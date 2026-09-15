@@ -34,10 +34,11 @@ today; the roadmap covers what's next.
 
 ## Architecture
 
-Flask serves a JSON API plus two frontends during the redesign: the original
-server-rendered Jinja app at `/`, and the React + TypeScript SPA at `/app` that is
-progressively replacing it. SQLite holds users/activities/XP; per-user checklist
-templates and daily submissions are JSON/JSONL files under `artifacts/`. Full
+Flask serves a JSON API plus two frontends: the React + TypeScript SPA at `/`,
+which is the app, and the original server-rendered Jinja dashboard at `/classic`,
+kept only for the few features not yet ported (Excel export, admin). SQLite holds
+users/activities/XP; per-user checklist templates and daily submissions are
+JSON/JSONL files under `artifacts/`. Full
 write-up, including *why* it's split that way:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -61,23 +62,23 @@ write-up, including *why* it's split that way:
    # then edit .env - at minimum, set a real SECRET_KEY:
    python -c "import secrets; print(secrets.token_hex(32))"
    ```
-5. **Run it.** The backend alone is enough for the classic app:
+5. **Build the frontend, then run it.** Flask serves the built SPA at `/`, so the
+   build has to exist before the app has a UI:
    ```bash
+   npm --prefix frontend run build
    python app.py
    ```
    `http://localhost:5000` - the first account you register becomes admin.
 
-   For the redesigned app, run Vite alongside it in a second terminal:
+   While working on the frontend, run Vite instead for hot reload, with Flask
+   still running in another terminal:
    ```bash
    npm --prefix frontend run dev
    ```
-   `http://localhost:5173/app` - hot reload, with `/api` proxied to Flask so your
-   session works normally.
+   `http://localhost:5173` - `/api`, `/login` and friends are proxied to Flask, so
+   your session works normally.
 
-   Or build it once and let Flask serve it at `http://localhost:5000/app`:
-   ```bash
-   npm --prefix frontend run build
-   ```
+   The classic dashboard at `/classic` needs no build - it is server-rendered.
 
 ### Running tests
 
@@ -94,7 +95,7 @@ Neural-Log/
 ├── app.py                  # Flask app: routes, auth, DB + Paths persistence
 ├── requirements.txt
 ├── .env.example            # copy to .env - see Setup
-├── frontend/               # React + Vite + TS SPA (the redesign, served at /app)
+├── frontend/               # React + Vite + TS SPA (the app, served at /)
 ├── migrations/             # numbered SQL migrations + schema_migrations ledger
 ├── templates/              # Jinja templates (classic app, being retired)
 ├── static/{css,js,images}/ # classic frontend + generated icon set (images/icons/)
