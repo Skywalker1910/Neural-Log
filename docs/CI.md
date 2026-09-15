@@ -1,0 +1,157 @@
+# CI and branch protection
+
+What runs on every pull request, what is enforced on `main`, and why each piece
+is there.
+
+## Motivation
+
+For six phases this project has been verified by hand: run the tests, run the
+typechecker, look at a screenshot. That works while one person is building it on
+one machine, and stops working the moment either of those changes.
+
+R6 was the argument for automating it. It moved the daily checklist - the one
+feature used every single day - out of JSON files and into SQL, and the thing
+that made that safe was a test suite someone remembered to run. The next time it
+might not be remembered, and a migration that corrupts real logs is not the place
+to find that out.
+
+## What runs on a pull request
+
+Three jobs, in `.github/workflows/ci.yml`. They run in parallel and all three
+must pass before `main` will accept a merge.
+
+| Job | What it does | What it catches |
+|---|---|---|
+| **Backend tests** | `pytest` against an isolated temp database | Logic regressions, scoring changes, API contract breaks |
+| **Frontend checks** | `npm ci`, typecheck, lint, build | Type errors, lint violations, a build that does not compile |
+| **Migration ledger** | `scripts/check_migrations.py` | Migrations that only work on *your* database |
+
+### Why the migration check is separate from the tests
+
+The test suite runs against a database that migrations already built, so it
+cannot tell you:
+
+1. Whether a migration applies to an **empty** database, with no earlier state to
+   lean on.
+2. Whether applying it **twice** is safe. `init_db()` runs at import time, which
+   means on every gunicorn worker start - a non-idempotent migration would
+   corrupt data on the second boot, not the first.
+3. Whether the **ledger matches the directory**. A file added without being
+   applied, or a row recorded for a file that no longer exists, both mean the
+   next deploy does something nobody predicted.
+
+`python scripts/check_migrations.py` answers all three, and is worth running by
+hand before adding a migration.
+
+### Why `push` and `pull_request` both trigger
+
+Not redundant. A pull request is tested against a *merge commit that does not
+exist on `main` yet*, so a green PR proves the merge would be green - not that
+`main` is. The push run is the only thing that proves `main` itself is healthy
+after a merge.
+
+### Other workflow details worth knowing
+
+- **`concurrency` with `cancel-in-progress`** - a second push to a branch makes
+  the first run's answer irrelevant, so it is cancelled. Keeps feedback fast.
+- **`permissions: contents: read`** - least privilege. Nothing in CI writes to
+  the repo, comments, or needs a token beyond checkout. A public repo's workflow
+  is worth keeping boring.
+- **`npm ci`, not `npm install`** - installs exactly the lockfile and fails if
+  `package.json` and the lock have drifted, which is the point of running it on a
+  build machine.
+- **No secrets are used.** `tests/conftest.py` points every test at a temp
+  database and sets its own `SECRET_KEY`, so CI needs nothing configured.
+
+### The first workflow has to land on `main` before anything runs
+
+Worth knowing, because it looks exactly like a broken workflow file.
+
+A workflow is only registered once its file exists on the **default branch**. The
+pull request that *adds* the first workflow to a repository will therefore show no
+checks at all - not a failure, not a pending run, nothing. `gh run list` is empty
+and `gh api .../actions/workflows` reports `total_count: 0`.
+
+That is not a syntax error and not an Actions permission problem. It resolves
+itself the moment the workflow reaches `main`; every pull request after that is
+checked normally, including ones already open.
+
+The practical consequence is an ordering constraint: CI has to be merged before
+branch protection can require it, because until then the required checks do not
+exist as far as GitHub is concerned.
+
+## What is enforced on `main`
+
+Branch protection, applied via the GitHub API. In plain terms:
+
+| Rule | Effect |
+|---|---|
+| Require a pull request | No pushing straight to `main`, ever |
+| Require 1 approving review | An outside PR cannot merge unless you approve it |
+| Dismiss stale approvals | A new push after approval re-opens the review |
+| Require all three CI jobs | Red tests cannot be merged |
+| Require branches up to date | Your branch must include the latest `main` before merging |
+| Require conversation resolution | Unresolved review comments block the merge |
+| Require linear history | Squash or rebase; no merge commits cluttering the log |
+| Block force pushes | `main`'s history cannot be rewritten |
+| Block deletions | `main` cannot be deleted |
+
+### The self-approval problem
+
+**GitHub does not let you approve your own pull request.** On a repository with
+one maintainer, "require 1 approval" with no escape hatch means your own PRs
+become permanently unmergeable.
+
+So admins are deliberately **not** subject to enforcement (`enforce_admins:
+false`). The practical result is exactly what was wanted:
+
+- Anyone else's PR - a friend's, or a stranger's fork of this public repo -
+  cannot merge without your review and green CI.
+- Your own PRs still require the pull request and still run CI, but you can merge
+  them yourself.
+
+This is a deliberate trade, not an oversight. If a second maintainer ever joins,
+flip `enforce_admins` to `true` and the strict reading applies to everyone.
+
+## What is NOT set up, and why
+
+**There is no deployment pipeline yet.** Deployment is the Ship phase, after R10,
+and it comes with a re-platform from Flask + SQLite to Next.js + DynamoDB. A CD
+workflow written today would target infrastructure that does not exist, against
+an application architecture that is going to change - and a half-configured
+deploy workflow sitting broken for five phases is worse than none, because it
+looks like deployment is ready when it is not.
+
+When the Ship phase arrives, CD gets added here.
+
+## Dependency updates
+
+`.github/dependabot.yml` opens grouped update PRs monthly for npm, pip and the
+GitHub Actions themselves.
+
+Monthly and grouped on purpose: a PR per package per week is noise that gets
+ignored, and an ignored update stream is worse than none, because it trains you
+to skip the security ones too. Every Dependabot PR still has to pass CI.
+
+## Reproducing CI locally
+
+```bash
+python -m pytest -q                 # backend
+python scripts/check_migrations.py  # migrations
+cd frontend && npm ci && npm run typecheck && npm run lint && npm run build
+```
+
+If those pass, CI will.
+
+## Changing the protection rules
+
+The rules live in GitHub, not in this repository, so they are recorded here to
+stay reviewable. To inspect the current state:
+
+```bash
+gh api repos/Skywalker1910/Neural-Log/branches/main/protection
+```
+
+If a CI job is ever renamed, its old name stays in the required-checks list and
+silently blocks every merge - update the protection rules in the same change that
+renames the job.
