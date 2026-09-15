@@ -1,11 +1,43 @@
-# Dependency updates.
+# Dependency updates - currently DISABLED. See "Turning this back on" below.
 #
-# Monthly rather than weekly, and grouped, because this is a hobby project with
-# a handful of users - a PR per package every week is noise that gets ignored,
-# and an ignored update stream is worse than none because it trains you to skip
-# the security ones too.
+# WHAT WENT WRONG THE FIRST TIME
+# ------------------------------
+# The original version of this file opened seven pull requests within two hours
+# of landing, which is exactly the noise its own comments said to avoid. Three
+# separate mistakes, all in one config:
 #
-# Every update still has to pass CI and be reviewed like any other PR.
+#   1. The grouping only covered `minor` and `patch`. Every update that actually
+#      arrived was a MAJOR bump - typescript 6 to 7, pytest 8 to 9, gunicorn 22
+#      to 26 - so the grouping excluded all of them and each got its own PR.
+#
+#   2. `open-pull-requests-limit` is PER ECOSYSTEM, not total. Three ecosystems
+#      at three each is nine PRs, not three.
+#
+#   3. `interval: monthly` is how often Dependabot CHECKS, not a delay before it
+#      starts. It ran the moment this file reached the default branch.
+#
+# Two of the three major bumps failed CI, which is the system working - but they
+# needed deliberate work, not a merge, and they arrived mid-phase as pure
+# distraction.
+#
+# WHAT IS DIFFERENT NOW
+# ---------------------
+# `patterns: ["*"]` with no `update-types` filter groups EVERYTHING - majors
+# included - into a single pull request per ecosystem. One PR a month per
+# ecosystem, reviewable in one sitting, instead of nine to triage.
+#
+# TURNING THIS BACK ON
+# --------------------
+# Change `open-pull-requests-limit` from 0 to 1 in each block. Zero disables
+# version updates for that ecosystem; the rest of the config stays correct and
+# ready.
+#
+# The right moment is the Ship phase. Until then the stack is still moving under
+# its own steam every phase, and a dependency PR competes with real work.
+#
+# NOTE: this only governs VERSION updates. Dependabot SECURITY alerts are a
+# separate repository setting and should stay on - those are rare and worth
+# interrupting for.
 version: 2
 
 updates:
@@ -13,24 +45,26 @@ updates:
     directory: /frontend
     schedule:
       interval: monthly
-    open-pull-requests-limit: 3
+    # 0 disables. Set to 1 to re-enable - see above.
+    open-pull-requests-limit: 0
     groups:
-      # One PR for the routine stuff. Majors stay separate, because React,
-      # Tailwind and Vite majors have all needed hand-holding before.
-      minor-and-patch:
-        update-types: [minor, patch]
+      frontend-dependencies:
+        patterns: ["*"]
 
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     groups:
-      minor-and-patch:
-        update-types: [minor, patch]
+      python-dependencies:
+        patterns: ["*"]
 
-  # Pinned action versions go stale silently and are a supply-chain surface.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 0
+    groups:
+      actions:
+        patterns: ["*"]
