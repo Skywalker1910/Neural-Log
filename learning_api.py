@@ -257,7 +257,7 @@ def sessions():
              data.get('notes')),
         )
         conn.commit()
-        _recompute(conn, user_id)
+        _recompute(conn, user_id, day)
         conn.commit()
         row = conn.execute('SELECT * FROM learning_sessions WHERE id = ?',
                            (cursor.lastrowid,)).fetchone()
@@ -312,7 +312,7 @@ def session_detail(session_id):
         )
 
     conn.commit()
-    _recompute(conn, user_id)
+    _recompute(conn, user_id, row['date'])
     conn.commit()
     conn.close()
     return jsonify({'success': True})

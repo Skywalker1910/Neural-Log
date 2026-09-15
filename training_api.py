@@ -17,12 +17,15 @@ training = Blueprint('training', __name__)
 # Injected by init_training(); see the note above about not importing app.
 _get_db = None
 _login_required = None
+_recompute = None
 
 
-def init_training(app, get_db_connection, login_required):
-    global _get_db, _login_required
+def init_training(app, get_db_connection, login_required, recompute):
+    global _get_db, _login_required, _recompute
     _get_db = get_db_connection
     _login_required = login_required
+    # R7: saving a workout now moves XP as well as the attribute scores.
+    _recompute = recompute
     app.register_blueprint(training)
 
 
@@ -282,7 +285,7 @@ def workout_detail(workout_id):
         conn.commit()
         # The deleted session was feeding Strength/Stamina/Agility, so the
         # derived scores have to be rebuilt from its date onward.
-        scoring.recompute_scores(conn, user_id, from_date=row['date'])
+        _recompute(conn, user_id, row['date'])
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -333,7 +336,7 @@ def workout_detail(workout_id):
         )
 
     conn.commit()
-    scoring.recompute_scores(conn, user_id, from_date=row['date'])
+    _recompute(conn, user_id, row['date'])
     conn.commit()
 
     updated = conn.execute('SELECT * FROM workout_sessions WHERE id = ?',

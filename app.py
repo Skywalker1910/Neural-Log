@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 
 import scoring
 import habits
+import xp
+import xp_config
 
 load_dotenv()
 
@@ -513,6 +515,16 @@ def init_db():
         # refuse to boot.
         app.logger.exception('Could not sync the exercise library')
 
+    # R7 made the ledger the authority for total XP, so historical daily_xp rows
+    # have to be represented in it or every day earned before that migration
+    # stops counting and everyone's level drops. Idempotent, so it is safe here.
+    try:
+        seeded = xp.backfill_from_daily_xp(conn)
+        if seeded:
+            app.logger.info('XP ledger backfilled: %d historical days', seeded)
+    except sqlite3.Error:
+        app.logger.exception('Could not backfill the XP ledger')
+
     # Same arrangement for the food library (data/foods.json, 233 rows).
     try:
         added, updated, archived = scoring.sync_foods(conn)
@@ -646,29 +658,22 @@ def compute_completion_percent(checklist_items, custom_responses):
     return round(completed_weight * 100 / total_weight)
 
 
-def xp_for_level(level):
-    """Cumulative total XP required to reach a given level. Level 1 is the
-    starting level everyone begins at, so it requires 0 XP."""
-    return 50 * ((level - 1) ** 2)
-
-
-def compute_level(total_xp):
-    """Return (level, xp_into_current_level, xp_needed_for_next_level)."""
-    level = 1
-    while xp_for_level(level + 1) <= total_xp:
-        level += 1
-
-    xp_into_level = total_xp - xp_for_level(level)
-    xp_for_next = xp_for_level(level + 1) - xp_for_level(level)
-    return level, xp_into_level, xp_for_next
+# The level curve moved into xp.py in R7 so it could be made configurable
+# (xp_config.LEVEL_CURVE_*). These stay as thin aliases because a dozen call
+# sites and the tests use them, and the defaults reproduce the original
+# 50 * (level - 1) ** 2 exactly - nobody's level changed when this shipped.
+xp_for_level = xp.xp_for_level
+compute_level = xp.compute_level
 
 
 def get_user_total_xp(conn, user_id):
-    row = conn.execute(
-        'SELECT COALESCE(SUM(total_xp), 0) as total FROM daily_xp WHERE user_id = ?',
-        (user_id,)
-    ).fetchone()
-    return row['total'] if row else 0
+    """Total XP, summed from the ledger rather than from daily_xp.
+
+    daily_xp is still maintained as a rollup for the leaderboard, but the ledger
+    is the authority: it is the only one that knows about achievement awards,
+    which are not part of any day's rebuild.
+    """
+    return xp.total_xp(conn, user_id)
 
 
 def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, completion_percent=0):
@@ -681,20 +686,99 @@ def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, compl
     """
     base_xp = calculate_daily_xp(checklist_items, custom_responses)
     streak = calculate_current_streak(conn, user_id)
-    multiplier_pct = min(streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
-    total_xp = round(base_xp * (1 + multiplier_pct / 100))
 
-    conn.execute('''
-        INSERT INTO daily_xp (user_id, date, base_xp, streak_multiplier_pct, total_xp)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, date) DO UPDATE SET
-            base_xp = excluded.base_xp,
-            streak_multiplier_pct = excluded.streak_multiplier_pct,
-            total_xp = excluded.total_xp
-    ''', (user_id, date, base_xp, multiplier_pct, total_xp))
+    # R7: the whole day is rebuilt through the ledger rather than daily_xp being
+    # written directly. The checklist is now one source among several - training,
+    # learning, nutrition and lifestyle all earn too - and the caps that stop XP
+    # being farmed can only be applied correctly across a whole day at once.
+    # daily_xp is still written, as a rollup, because the leaderboard reads it.
+    xp.recompute_day(
+        conn, user_id, date,
+        checklist_base_xp=base_xp,
+        targets=_xp_targets(conn, user_id, date),
+        streak=streak,
+    )
     conn.commit()
 
     return evaluate_badges(conn, user_id, completion_percent_today=completion_percent)
+
+
+def _xp_targets(conn, user_id, on_date):
+    """The day's targets, for the XP rules that check whether one was met.
+
+    Reuses the nutrition resolver so "hit your calorie target" means exactly the
+    same thing to XP as it does to the adherence signal - two definitions of one
+    target would eventually disagree.
+    """
+    try:
+        row = conn.execute('SELECT * FROM user_profile WHERE user_id = ?',
+                           (user_id,)).fetchone()
+        profile = dict(row) if row else {}
+
+        weight_row = conn.execute(
+            "SELECT value FROM body_measurements WHERE user_id = ? AND metric = 'weight' "
+            'AND date <= ? ORDER BY date DESC LIMIT 1', (user_id, on_date),
+        ).fetchone()
+        weight = weight_row['value'] if weight_row else None
+
+        return scoring.nutrition.resolve_targets(
+            profile, weight, datetime.strptime(on_date, '%Y-%m-%d').date())
+    except (sqlite3.Error, ValueError):
+        # Targets are a bonus condition, not a prerequisite. A user with no
+        # profile still earns the base XP for logging.
+        return {}
+
+
+def recompute_xp_day(conn, user_id, date):
+    """Rebuild one day's XP after a non-checklist action.
+
+    Called by the workspace blueprints: logging a workout or a study session has
+    to move XP, and until R7 nothing outside the checklist did.
+    """
+    streak = calculate_current_streak(conn, user_id)
+    return xp.recompute_day(
+        conn, user_id, date,
+        targets=_xp_targets(conn, user_id, date),
+        streak=streak,
+    )
+
+
+def _dates_with_activity(conn, user_id):
+    """Every date this user has anything on. Bounded by what they actually did."""
+    dates = set()
+    for table in ('daily_log', 'workout_sessions', 'learning_sessions',
+                  'food_entries', 'sleep_entries', 'lifestyle_days',
+                  'xp_transactions'):
+        try:
+            for row in conn.execute(
+                f'SELECT DISTINCT date FROM {table} WHERE user_id = ?', (user_id,)
+            ):
+                dates.add(row['date'])
+        except sqlite3.Error:
+            continue
+    return sorted(dates)
+
+
+def recompute_after_change(conn, user_id, date=None):
+    """Rebuild everything derived from a day: attribute scores, then XP.
+
+    Injected into the workspace blueprints so logging a workout, a meal or a
+    study session moves both. Before R7 they only moved the attribute scores -
+    XP came from the checklist alone, so the leaderboard ignored most of what the
+    app tracks.
+
+    `date=None` means something changed that affects every day - editing your
+    profile moves the targets that "hit your calorie target" is judged against -
+    so every date with activity is rebuilt. Rare and bounded by real usage.
+    """
+    scoring.recompute_scores(conn, user_id, from_date=date)
+
+    if date:
+        recompute_xp_day(conn, user_id, date)
+        return
+
+    for day in _dates_with_activity(conn, user_id):
+        recompute_xp_day(conn, user_id, day)
 
 
 BADGE_DEFINITIONS = [
@@ -1458,6 +1542,34 @@ def stats():
         'activities_by_date': [dict(row) for row in activities_by_date]
     })
 
+@app.route('/api/gamification/ledger')
+@login_required
+def gamification_ledger():
+    """Where the XP actually came from.
+
+    The point of R7's ledger: daily_xp stored one opaque total per day and could
+    never answer "why did I get 18 XP for that". This can, including whether an
+    award was capped and whether it was evidenced or merely claimed.
+    """
+    user_id = session.get('user_id')
+    limit = min(int(request.args.get('limit', 50)), 200)
+    days = min(int(request.args.get('days', 30)), 365)
+
+    conn = get_db_connection()
+    payload = {
+        'entries': xp.ledger(conn, user_id, limit=limit),
+        'by_source': xp.by_source(conn, user_id, days=days),
+        'evidence': xp.evidence_split(conn, user_id),
+        'total_xp': xp.total_xp(conn, user_id),
+        'caps': {
+            'per_source': xp_config.DAILY_SOURCE_CAPS,
+            'daily_total': xp_config.DAILY_TOTAL_CAP,
+        },
+    }
+    conn.close()
+    return jsonify(payload)
+
+
 @app.route('/api/gamification/summary')
 @login_required
 def gamification_summary():
@@ -2051,16 +2163,16 @@ from learning_api import init_learning  # noqa: E402
 from habits_api import init_habits  # noqa: E402
 from goals_api import init_goals  # noqa: E402
 
-init_training(app, get_db_connection, login_required)
+init_training(app, get_db_connection, login_required, recompute_after_change)
 
 # Nutrition and Lifestyle also get the recompute function injected: logging a
 # meal or a night's sleep moves attribute scores, so those endpoints have to
 # rescore, and reaching for scoring.recompute_scores directly would be the same
 # import cycle the injection exists to avoid.
-init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
+init_nutrition(app, get_db_connection, login_required, recompute_after_change)
 
 # Learning, same arrangement: logging a study session moves Knowledge and Focus.
-init_learning(app, get_db_connection, login_required, scoring.recompute_scores)
+init_learning(app, get_db_connection, login_required, recompute_after_change)
 
 # Habits and Goals take no recompute function, and that absence is deliberate.
 # Editing a habit's schedule does not change what you actually did, and a goal is
