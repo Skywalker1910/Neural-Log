@@ -342,7 +342,7 @@ export function Lifestyle() {
                     lowLabel="drained" highLabel="sharp"
                   />
                   <div className="flex items-start gap-1.5">
-                    <Badge tone="neutral">not scored</Badge>
+                    <Badge tone="neutral" className="shrink-0 whitespace-nowrap">not scored</Badge>
                     <p className="text-caption text-ink-subtle">
                       These are feelings, not behaviour. They are charted so you can
                       see what correlates with what — scoring them would just pay
