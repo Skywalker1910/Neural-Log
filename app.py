@@ -2048,6 +2048,8 @@ def admin_stats():
 from training_api import init_training  # noqa: E402
 from nutrition_api import init_nutrition  # noqa: E402
 from learning_api import init_learning  # noqa: E402
+from habits_api import init_habits  # noqa: E402
+from goals_api import init_goals  # noqa: E402
 
 init_training(app, get_db_connection, login_required)
 
@@ -2059,6 +2061,12 @@ init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
 
 # Learning, same arrangement: logging a study session moves Knowledge and Focus.
 init_learning(app, get_db_connection, login_required, scoring.recompute_scores)
+
+# Habits and Goals take no recompute function, and that absence is deliberate.
+# Editing a habit's schedule does not change what you actually did, and a goal is
+# an intention rather than evidence - neither moves an attribute score.
+init_habits(app, get_db_connection, login_required)
+init_goals(app, get_db_connection, login_required)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.
