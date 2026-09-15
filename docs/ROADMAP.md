@@ -18,7 +18,7 @@ This tracks where that's headed, in order.
 | R2 | Home + Today - attributes, radar, daily score, streaks | Done |
 | R3 | Training - routines, exercise library, set logging, analytics | Done |
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Done |
-| R5 | Learning - subjects, sessions, knowledge analytics | Not started |
+| R5 | Learning - subjects, sessions, knowledge analytics | Backend done, UI next |
 | R6 | Goals + Habits - milestones, routines, streak sources | Not started |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
@@ -169,8 +169,46 @@ cannot exist without it. R9 expands the table rather than creating it.
 
 ## R5 - Learning
 
-Areas, topics and skills; tracked study sessions with focus and difficulty ratings;
-study-time and topic-distribution analytics; weekly study goals; learning streaks.
+Areas and topics, tracked study sessions, study-time and topic-distribution
+analytics, weekly study goals, learning streaks.
+
+**In progress.** The backend is done and committed; the UI is what remains.
+
+Done:
+
+- `migrations/005_learning.sql` - `learning_areas`, `learning_topics`,
+  `learning_sessions`, plus `weekly_study_minutes` on `user_profile`.
+- `producers.learning_ratios()` - study minutes feed Knowledge over a trailing
+  window; block depth feeds Focus. Wired into `store.recompute_scores`.
+- `learning_api.py` - areas, topics, sessions and the dashboard summary.
+- 41 tests across `tests/test_learning_scoring.py` and `tests/test_learning_api.py`.
+
+Still to do:
+
+- Types and query hooks in `frontend/src/api/`.
+- A Learning page: areas and topics, a session timer and manual logger,
+  study-time trend, topic distribution, streak and depth.
+- Route wiring in `App.tsx` (add `/learning` to the `BUILT` set).
+- `docs/LEARNING.md`, changelog and README entries, verification screenshots.
+
+### The two decisions this phase turned on
+
+**Focus is measured from the shape of study time, not from a rating.** The
+original brief asked for a self-reported focus rating, but R4 established that
+scoring a feeling pays you to report feeling good. So Focus comes from
+uninterrupted block length instead - one two-hour block is deeper work than four
+half-hour ones for the same total, and that is observable. The rating is still
+recorded and charted; a test asserts it never reaches the producer.
+
+**Depth is a duration-weighted mean block length**, `sum(d^2)/sum(d)`. Total
+minutes is just Knowledge again; longest block lets one good session hide a
+fragmented week; a plain mean lets a stray five-minute session drag a great day
+down. Weighting by duration asks "for a randomly chosen minute of study, how long
+was the block it belonged to", which is the question Focus is actually asking.
+
+Scope was held to the roadmap: no resource tracking (books, courses with progress)
+and no spaced repetition. Both were considered and deliberately left out to keep
+R5 the size of R3 and R4.
 
 ## R6 - Goals and Habits
 

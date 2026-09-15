@@ -313,13 +313,15 @@ def test_the_ceiling_does_not_apply_where_nothing_can_measure():
     """Capping an attribute because you did not log something would punish
     someone for a feature that does not exist.
 
-    Recovery was on this list until R4 made sleep loggable, and moved off it
-    then. Discipline stays here permanently despite gaining measured signals in
-    R4: the daily checklist is already direct evidence of discipline, so sleep
-    consistency and nutrition adherence are additional evidence rather than the
-    only possible evidence.
+    Recovery left this list in R4 when sleep became loggable, and Knowledge and
+    Focus left it in R5 when study sessions did.
+
+    Discipline stays permanently despite gaining measured signals in R4: the
+    daily checklist is already direct evidence of discipline, so sleep
+    consistency and adherence are additional evidence rather than the only
+    possible evidence. Consistency stays because nothing self-reports it at all.
     """
-    for attribute in ('Discipline', 'Knowledge', 'Focus'):
+    for attribute in ('Discipline', 'Consistency'):
         assert producers.blend(attribute, 1.0, None) == 1.0
 
 
