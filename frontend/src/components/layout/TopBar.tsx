@@ -17,8 +17,11 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = {
 }
 
 /**
- * Identity + progression strip. This is also the first real proof that the SPA's
- * cookie-authenticated API calls work through the Vite proxy.
+ * Identity + progression strip.
+ *
+ * Sticky and frosted rather than a fixed panel: your level and streak are the
+ * two numbers worth keeping on screen at all times, and Apple's answer to
+ * "always visible but never in the way" is a material you can see through.
  */
 export function TopBar() {
   const now = new Date()
@@ -31,9 +34,9 @@ export function TopBar() {
       : 0
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line px-4 lg:px-6">
+    <header className="material-chrome sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line px-4 lg:px-8">
       <div className="min-w-0">
-        <h1 className="truncate text-label font-semibold text-ink">
+        <h1 className="truncate text-label font-semibold tracking-tight text-ink">
           {greeting(now.getHours())}
           {user.data ? `, ${user.data.username}` : ''}
         </h1>
@@ -49,23 +52,25 @@ export function TopBar() {
           <>
             {summary.data.current_streak > 0 && (
               <span
-                className="hidden items-center gap-1.5 text-label text-discipline sm:flex"
+                className="hidden items-center gap-1.5 rounded-pill bg-discipline/12 px-3 py-1 text-label text-discipline sm:flex"
                 title={`${summary.data.current_streak} day streak`}
               >
-                <Flame size={16} aria-hidden />
+                <Flame size={15} strokeWidth={2} aria-hidden />
                 <span className="tabular">{summary.data.current_streak}</span>
               </span>
             )}
 
             <div className="hidden w-40 sm:block">
               <div className="flex items-baseline justify-between text-meta">
-                <span className="font-semibold text-ink">Level {summary.data.level}</span>
+                <span className="font-semibold tracking-tight text-ink">
+                  Level {summary.data.level}
+                </span>
                 <span className="tabular text-ink-subtle">
                   {summary.data.xp_into_level}/{summary.data.xp_for_next_level}
                 </span>
               </div>
               <div
-                className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-raised"
+                className="mt-1.5 h-1.5 overflow-hidden rounded-pill bg-surface-raised"
                 role="progressbar"
                 aria-valuenow={Math.round(xpPct)}
                 aria-valuemin={0}
@@ -73,13 +78,13 @@ export function TopBar() {
                 aria-label="Progress to next level"
               >
                 <div
-                  className="h-full rounded-full bg-discipline transition-[width] duration-500"
+                  className="h-full rounded-pill bg-discipline transition-[width] duration-700 ease-apple"
                   style={{ width: `${xpPct}%` }}
                 />
               </div>
             </div>
 
-            <span className="flex size-9 items-center justify-center rounded-full bg-discipline/12 text-label font-bold text-discipline sm:hidden">
+            <span className="flex size-9 items-center justify-center rounded-pill bg-discipline/12 text-label font-bold text-discipline sm:hidden">
               {summary.data.level}
             </span>
           </>

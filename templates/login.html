@@ -2,70 +2,307 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neural-Log - Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Neural Log - Sign in</title>
+    <!--
+      Deliberately not linked to static/css/style.css. That stylesheet is the
+      classic app's light theme, and this page is the first thing anyone sees -
+      it has to look like the app they are about to be let into, not the one it
+      replaced. Self-contained also means the sign-in screen cannot be broken by
+      an edit to a stylesheet nobody thought applied to it.
+
+      The tokens below are the same values as frontend/src/index.css.
+    -->
+    <style>
+        :root {
+            --base: #000000;
+            --card: #1d1d1f;
+            --raised: #2c2c2e;
+            --line: #2a2a2c;
+            --line-strong: #48484a;
+            --ink: #f5f5f7;
+            --ink-muted: #a1a1a6;
+            --ink-subtle: #6e6e73;
+            --brand: #e5484d;
+            --brand-hover: #f0595e;
+            --danger: #ff6369;
+            --success: #3dbe72;
+            --ease: cubic-bezier(0.28, 0.11, 0.32, 1);
+            color-scheme: dark;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1.25rem;
+            background: var(--base);
+            color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+                'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* A single soft brand glow behind the card. Apple lights its dark pages
+           from somewhere rather than leaving them flat black. */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(60rem 40rem at 50% -10%, rgb(229 72 77 / 0.16), transparent 70%);
+        }
+
+        .shell {
+            position: relative;
+            width: 100%;
+            max-width: 26rem;
+            animation: rise 0.6s var(--ease) both;
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        .mark {
+            width: 3.25rem;
+            height: 3.25rem;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            background: var(--brand);
+            color: #fff;
+        }
+
+        h1 {
+            margin: 0;
+            text-align: center;
+            font-size: 2.25rem;
+            line-height: 1.1;
+            font-weight: 700;
+            letter-spacing: -0.028em;
+        }
+
+        .tagline {
+            margin: 0.625rem 0 2rem;
+            text-align: center;
+            font-size: 1.0625rem;
+            line-height: 1.4;
+            color: var(--ink-muted);
+            letter-spacing: -0.01em;
+        }
+
+        /* Segmented control - the iOS/macOS idiom for two exclusive views, and
+           the right shape for a pair of tabs this small. The thumb slides. */
+        .segmented {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 3px;
+            margin-bottom: 1.5rem;
+            border-radius: 980px;
+            background: var(--card);
+            border: 1px solid var(--line);
+        }
+
+        .segmented-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: calc(50% - 3px);
+            height: calc(100% - 6px);
+            border-radius: 980px;
+            background: var(--raised);
+            transition: transform 0.35s var(--ease);
+        }
+
+        .segmented[data-tab='register'] .segmented-thumb { transform: translateX(100%); }
+
+        .segmented button {
+            position: relative;
+            appearance: none;
+            border: 0;
+            background: none;
+            padding: 0.5rem 0;
+            font: inherit;
+            font-size: 0.875rem;
+            font-weight: 550;
+            letter-spacing: -0.01em;
+            color: var(--ink-muted);
+            cursor: pointer;
+            transition: color 0.25s var(--ease);
+        }
+
+        .segmented button[aria-selected='true'] { color: var(--ink); }
+
+        .message {
+            display: none;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            line-height: 1.4;
+        }
+        .message.show { display: block; animation: rise 0.25s var(--ease) both; }
+        .error-message   { background: rgb(229 72 77 / 0.14);  color: var(--danger);  border: 1px solid rgb(229 72 77 / 0.3); }
+        .success-message { background: rgb(61 190 114 / 0.14); color: var(--success); border: 1px solid rgb(61 190 114 / 0.3); }
+
+        .form-container { display: none; }
+        .form-container.active { display: block; animation: rise 0.3s var(--ease) both; }
+
+        .field { margin-bottom: 0.75rem; }
+
+        label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            color: var(--ink-subtle);
+        }
+
+        input, select {
+            width: 100%;
+            height: 2.875rem;
+            padding: 0 0.9375rem;
+            border-radius: 12px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            color: var(--ink);
+            font: inherit;
+            font-size: 0.9375rem;
+            transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+        }
+
+        input::placeholder { color: var(--ink-subtle); }
+
+        input:hover, select:hover { border-color: var(--line-strong); }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--brand);
+            background: var(--raised);
+            box-shadow: 0 0 0 4px rgb(229 72 77 / 0.18);
+        }
+
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.875rem center;
+            padding-right: 2.5rem;
+        }
+
+        .btn {
+            width: 100%;
+            height: 2.875rem;
+            margin-top: 1.25rem;
+            border: 0;
+            border-radius: 980px;
+            background: var(--brand);
+            color: #fff;
+            font: inherit;
+            font-size: 0.9375rem;
+            font-weight: 550;
+            letter-spacing: -0.01em;
+            cursor: pointer;
+            transition: background-color 0.2s var(--ease), transform 0.2s var(--ease);
+        }
+
+        .btn:hover { background: var(--brand-hover); }
+        .btn:active { transform: scale(0.97); }
+
+        .foot {
+            margin: 1.75rem 0 0;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--ink-subtle);
+        }
+
+        .foot a { color: var(--ink-muted); text-decoration: none; }
+        .foot a:hover { color: var(--ink); text-decoration: underline; }
+
+        :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
 </head>
-<body class="login-page">
-    <div class="login-container">
-        <div class="login-header">
-            <h1 class="login-brand">
-                <img src="{{ url_for('static', filename='images/app-logo.png') }}" alt="Neural-Log logo" class="login-logo">
-                <span class="login-app-name">NEURAL-LOG</span>
-            </h1>
-            <p>Your Daily Chronicle - Track the Night</p>
+<body>
+    <main class="shell">
+        <div class="mark" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>
+            </svg>
         </div>
 
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('login')">Login</div>
-            <div class="tab" onclick="switchTab('register')">Register</div>
+        <h1>Neural Log</h1>
+        <p class="tagline">Track what you actually did.</p>
+
+        <div class="segmented" id="segmented" data-tab="login" role="tablist" aria-label="Sign in or create an account">
+            <span class="segmented-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" id="tab-login" aria-selected="true"
+                    aria-controls="login-form" onclick="switchTab('login')">Sign in</button>
+            <button type="button" role="tab" id="tab-register" aria-selected="false"
+                    aria-controls="register-form" onclick="switchTab('register')">Create account</button>
         </div>
 
-        <div id="error-message" class="error-message"></div>
-        <div id="success-message" class="success-message"></div>
+        <div id="error-message" class="message error-message" role="alert"></div>
+        <div id="success-message" class="message success-message" role="status"></div>
 
-        <!-- Login Form -->
-        <div id="login-form" class="form-container active">
+        <div id="login-form" class="form-container active" role="tabpanel" aria-labelledby="tab-login">
             <form onsubmit="handleLogin(event)">
-                <div class="form-group">
+                <div class="field">
                     <label for="login-username">Username</label>
-                    <input type="text" id="login-username" required>
+                    <input type="text" id="login-username" autocomplete="username" required>
                 </div>
 
-                <div class="form-group">
+                <div class="field">
                     <label for="login-password">Password</label>
-                    <input type="password" id="login-password" required>
+                    <input type="password" id="login-password" autocomplete="current-password" required>
                 </div>
 
-                <button type="submit" class="btn btn-primary">Login</button>
+                <button type="submit" class="btn">Sign in</button>
             </form>
         </div>
 
-        <!-- Register Form -->
-        <div id="register-form" class="form-container">
+        <div id="register-form" class="form-container" role="tabpanel" aria-labelledby="tab-register">
             <form onsubmit="handleRegister(event)">
-                <div class="form-group">
+                <div class="field">
                     <label for="register-username">Username</label>
-                    <input type="text" id="register-username" required>
+                    <input type="text" id="register-username" autocomplete="username" required>
                 </div>
 
-                <div class="form-group">
-                    <label for="register-email">Email (optional)</label>
-                    <input type="email" id="register-email">
+                <div class="field">
+                    <label for="register-email">Email <span style="opacity:.7">(optional)</span></label>
+                    <input type="email" id="register-email" autocomplete="email">
                 </div>
 
-                <div class="form-group">
+                <div class="field">
                     <label for="register-password">Password</label>
-                    <input type="password" id="register-password" required minlength="6">
+                    <input type="password" id="register-password" autocomplete="new-password" required minlength="6">
                 </div>
 
-                <div class="form-group">
-                    <label for="register-confirm-password">Confirm Password</label>
-                    <input type="password" id="register-confirm-password" required minlength="6">
+                <div class="field">
+                    <label for="register-confirm-password">Confirm password</label>
+                    <input type="password" id="register-confirm-password" autocomplete="new-password" required minlength="6">
                 </div>
 
-                <div class="form-group">
-                    <label for="register-path">Select Your Path</label>
+                <div class="field">
+                    <label for="register-path">Your path</label>
                     <select id="register-path" required>
                         <option value="Batman Path">Batman Path</option>
                         <option value="Thor Path">Thor Path</option>
@@ -74,35 +311,37 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary">Create Account</button>
+                <button type="submit" class="btn">Create account</button>
             </form>
         </div>
-    </div>
+
+        <p class="foot">Looking for the old dashboard? <a href="/classic">Open the classic view</a></p>
+    </main>
 
     <script>
         function switchTab(tab) {
-            // Update tab styling
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            const segmented = document.getElementById('segmented');
+            segmented.dataset.tab = tab;
 
-            // Show corresponding form
+            document.getElementById('tab-login').setAttribute('aria-selected', String(tab === 'login'));
+            document.getElementById('tab-register').setAttribute('aria-selected', String(tab === 'register'));
+
             document.querySelectorAll('.form-container').forEach(f => f.classList.remove('active'));
             document.getElementById(`${tab}-form`).classList.add('active');
 
-            // Clear messages
             hideMessages();
         }
 
         function showError(message) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('show');
+            const el = document.getElementById('error-message');
+            el.textContent = message;
+            el.classList.add('show');
         }
 
         function showSuccess(message) {
-            const successDiv = document.getElementById('success-message');
-            successDiv.textContent = message;
-            successDiv.classList.add('show');
+            const el = document.getElementById('success-message');
+            el.textContent = message;
+            el.classList.add('show');
         }
 
         function hideMessages() {
@@ -120,19 +359,15 @@
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showSuccess('Login successful! Redirecting...');
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 1000);
+                    showSuccess('Signed in. Taking you in...');
+                    setTimeout(() => { window.location.href = '/'; }, 600);
                 } else {
                     showError(data.message || 'Invalid username or password');
                 }
@@ -159,24 +394,15 @@
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        username,
-                        email,
-                        password,
-                        selected_path: selectedPath
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password, selected_path: selectedPath })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showSuccess('Account created successfully! Redirecting...');
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 1000);
+                    showSuccess('Account created. Taking you in...');
+                    setTimeout(() => { window.location.href = '/'; }, 600);
                 } else {
                     showError(data.message || 'Registration failed');
                 }
@@ -184,8 +410,6 @@
                 showError('An error occurred. Please try again.');
             }
         }
-
-        function toggleCustomPathItems() {}
     </script>
 </body>
 </html>

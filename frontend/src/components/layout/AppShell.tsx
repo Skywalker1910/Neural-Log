@@ -36,7 +36,7 @@ export function AppShell() {
         <TopBar />
         {/* Bottom padding clears the mobile tab bar. Max width so a dashboard
             doesn't stretch across an ultrawide monitor. */}
-        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-24 pt-6 lg:px-6 lg:pb-10">
+        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-24 pt-8 lg:px-8 lg:pb-14">
           {/*
             mode="wait" so the outgoing page finishes before the next arrives -
             crossfading two dashboards produces a flash of overlapping numbers.

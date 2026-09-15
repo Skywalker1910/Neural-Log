@@ -373,9 +373,13 @@ export function Training() {
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {routines.data?.routines.map((routine) => (
+                      // min-w-0: this row is a grid item, so it defaults to
+                      // min-width:auto and refuses to shrink below the width of
+                      // its three action buttons plus the routine name - which
+                      // scrolled the whole page sideways on a phone.
                       <div
                         key={routine.id}
-                        className="flex items-center gap-2 rounded-md border border-line bg-surface-base px-3 py-2"
+                        className="flex min-w-0 items-center gap-2 rounded-md border border-line bg-surface-base px-3 py-2"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-label text-ink">
