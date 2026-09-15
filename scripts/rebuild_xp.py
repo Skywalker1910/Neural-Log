@@ -68,12 +68,23 @@ def main():
             neural_log.recompute_xp_day(conn, user['id'], day)
         conn.commit()
 
+        # Evaluate achievements after the rebuild, not during it.
+        #
+        # recompute_xp_day only rebuilds XP; unlocking happens on the write paths
+        # that call recompute_after_change. A rebuild that skipped this left the
+        # catalogue stale - seven logged workouts with "Logged your first
+        # workout" still showing as locked, reading "7 of 1".
+        unlocked = neural_log.evaluate_badges(conn, user['id'])
+        conn.commit()
+
         after = neural_log.xp.total_xp(conn, user['id'])
         level_before = neural_log.compute_level(before)[0]
         level_after = neural_log.compute_level(after)[0]
         arrow = '->' if after != before else '=='
+        unlocked_note = f'   +{len(unlocked)} unlocked' if unlocked else ''
         print(f"{user['username']:<14} {before:>6} {arrow} {after:<6} XP   "
-              f'level {level_before} {arrow} {level_after}   ({len(dates)} dates)')
+              f'level {level_before} {arrow} {level_after}   '
+              f'({len(dates)} dates){unlocked_note}')
 
     conn.close()
     return 0

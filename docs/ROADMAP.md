@@ -20,7 +20,7 @@ This tracks where that's headed, in order.
 | R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Done |
 | R5 | Learning - subjects, sessions, knowledge analytics | Done |
 | R6 | Goals + Habits - milestones, routines, streak sources | Done |
-| R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
+| R7 | Gamification depth - achievements, XP ledger, attributes | Done |
 | R8 | Analytics - long-range trends, calendar, comparisons | Not started |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
@@ -222,9 +222,25 @@ completions and the UI always says where the number came from.
 
 ## R7 - Gamification depth
 
-Achievement categories and unlock UI, an auditable per-action XP ledger
-(`XPTransaction`) replacing day-granularity XP, a configurable level curve, and
-anti-gaming rules so XP can't be farmed by trivial repeated actions.
+Done. See [XP.md](XP.md) for the full write-up.
+
+The gap was bigger than the brief suggested: XP came only from the daily
+checklist, so four phases of workspaces awarded nothing and the leaderboard
+ranked people on box-ticking.
+
+Shipped: a per-action XP ledger replacing day-granularity XP, every workspace
+earning, evidence paying more than a claim, per-source daily caps and floors so
+farming is pointless, a configurable level curve, 23 achievements across six
+categories with real progress reporting, and the Achievements page.
+
+The two decisions this phase turned on: **evidence beats a claim** - logging real
+sets pays full while ticking "I trained" on the same day pays 40%, because the
+sets are already being paid for that behaviour - and **caps make farming
+pointless rather than merely difficult**, with `capped_from` recorded so a cap is
+visible rather than an unexplained number.
+
+Achievements stopped being lambdas and became a metric plus a threshold, which is
+what lets a locked one say "8 of 10" instead of sitting greyed out.
 
 ## R8 - Analytics
 

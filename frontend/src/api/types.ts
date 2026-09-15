@@ -28,11 +28,28 @@ export interface Stats {
   activities_by_date: ActivityByDate[]
 }
 
+export type AchievementCategory =
+  | 'consistency' | 'training' | 'nutrition' | 'lifestyle' | 'learning' | 'mastery'
+
+export type AchievementTier = 'bronze' | 'silver' | 'gold'
+
+/**
+ * R7 turned badges from opaque earned/not-earned flags into something that can
+ * report progress: `current` of `threshold`. A locked achievement can say
+ * "180 of 600 minutes" rather than sitting greyed out with no hint.
+ */
 export interface Badge {
   code: string
   name: string
   description: string
   earned: boolean
+  category: AchievementCategory
+  tier: AchievementTier
+  xp_reward: number
+  current: number
+  threshold: number
+  /** 0-1. Always 1 once earned. */
+  progress: number
 }
 
 export interface GamificationSummary {
@@ -688,4 +705,36 @@ export interface GoalsResponse {
 
 export interface TasksResponse {
   tasks: Task[]
+}
+
+/* --- R7: the XP ledger ---------------------------------------------------- */
+
+export type XpSource =
+  | 'checklist' | 'training' | 'nutrition' | 'lifestyle' | 'learning' | 'badge'
+
+export interface XpEntry {
+  id: number
+  date: string
+  source: XpSource
+  source_key: string
+  /** Human-readable. The ledger exists to answer "why did I get that". */
+  reason: string
+  base_xp: number
+  multiplier_pct: number
+  xp: number
+  /** Set when a daily cap reduced this award, holding what it would have been. */
+  capped_from: number | null
+  /** 'measured' for logged work, 'claimed' for a ticked box. */
+  evidence: 'measured' | 'claimed'
+}
+
+export interface XpLedger {
+  entries: XpEntry[]
+  by_source: { source: XpSource; xp: number; entries: number }[]
+  evidence: Partial<Record<'measured' | 'claimed', number>>
+  total_xp: number
+  caps: {
+    per_source: Record<string, number>
+    daily_total: number
+  }
 }
