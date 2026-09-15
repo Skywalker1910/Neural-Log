@@ -174,6 +174,49 @@ def test_home_composes_everything_in_one_response(logged_in):
     assert len(data['trend']) == 5
 
 
+def test_the_home_trend_leaves_unlogged_days_unobserved(logged_in):
+    """daily_scores stores 0 for a day the checklist was not submitted, and a
+    stored 0 is indistinguishable from "answered No to everything". Passing that
+    straight to the chart drew a flat line along the bottom for every unlogged
+    day - which reads as "you scored nothing" rather than "you did not log".
+
+    Those are opposite claims, so the unlogged days come back as null and the
+    chart gaps instead."""
+    exercises = logged_in.get('/api/exercises').get_json()['exercises']
+    bench = next(e for e in exercises if 'Bench' in e['name'])
+
+    # Three days of training with no checklist submitted. The engine scores them,
+    # writing daily_score = 0 on each.
+    for date in ('2026-09-10', '2026-09-11', '2026-09-12'):
+        workout = logged_in.post('/api/workouts',
+                                 json={'date': date, 'name': 'Push'}).get_json()
+        logged_in.put(f"/api/workouts/{workout['id']}", json={'sets': [
+            {'exercise_id': bench['id'], 'weight': 80, 'reps': 8}]})
+
+    items = logged_in.get('/api/checklist-items').get_json()['items']
+    logged_in.put('/api/days/2026-09-13', json={
+        'responses': {i['name']: 'Yes' for i in items if i['type'] == 'yes-no'}})
+
+    trend = logged_in.get('/api/home').get_json()['trend']
+    by_date = {point['date']: point for point in trend}
+
+    for date in ('2026-09-10', '2026-09-11', '2026-09-12'):
+        assert by_date[date]['daily_score'] is None, date
+        assert by_date[date]['logged'] is False, date
+
+    assert by_date['2026-09-13']['logged'] is True
+    assert by_date['2026-09-13']['daily_score'] > 0
+
+
+def test_the_home_trend_keeps_the_days_it_cannot_score(logged_in):
+    """Null, not absent. Dropping the unlogged days would pack the logged ones
+    together and draw a continuous run out of a scattered few - the same lie as
+    plotting zeros, told by omission."""
+    _seed(logged_in, 3)
+    trend = logged_in.get('/api/home').get_json()['trend']
+    assert all('daily_score' in point and 'logged' in point for point in trend)
+
+
 def test_home_for_a_new_user_does_not_invent_numbers(logged_in):
     data = logged_in.get('/api/home').get_json()
     assert data['days_logged'] == 0

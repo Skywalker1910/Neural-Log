@@ -451,10 +451,44 @@ def get_attribute_history(conn, user_id, attribute, limit=30):
 
 
 def get_daily_scores(conn, user_id, limit=30):
-    """Recent daily/discipline scores, oldest first."""
+    """Recent daily/discipline scores, oldest first.
+
+    `daily_score` is None on any day the checklist was not submitted, and
+    `logged` says which days those were.
+
+    The table itself stores 0 for them, and a stored 0 cannot be told apart from
+    a day where every answer was No - the column holds 0 either way. `daily_log`
+    can tell them apart, because a row exists there only for a day that was
+    actually submitted, so the score is read through that join.
+
+    Without this, Home's trend drew a flat line along the bottom for every day
+    someone had not logged, which reads as "you scored nothing" rather than "you
+    did not log" - and those are opposite claims. Same reasoning, and the same
+    join, as the analytics endpoint's daily_score metric; see docs/ANALYTICS.md.
+
+    `discipline_score` needs no such treatment: it comes from workspace activity
+    rather than the checklist, and is already NULL when unobserved.
+    """
     rows = conn.execute(
-        'SELECT date, daily_score, discipline_score, completion_pct '
-        'FROM daily_scores WHERE user_id = ? ORDER BY date DESC LIMIT ?',
+        'SELECT daily_scores.date              AS date, '
+        '       daily_scores.daily_score       AS daily_score, '
+        '       daily_scores.discipline_score  AS discipline_score, '
+        '       daily_scores.completion_pct    AS completion_pct, '
+        '       daily_log.id                   AS log_id '
+        'FROM daily_scores '
+        'LEFT JOIN daily_log ON daily_log.user_id = daily_scores.user_id '
+        '                   AND daily_log.date = daily_scores.date '
+        'WHERE daily_scores.user_id = ? '
+        'ORDER BY daily_scores.date DESC LIMIT ?',
         (user_id, limit),
     ).fetchall()
-    return [dict(row) for row in reversed(rows)]
+    return [
+        {
+            'date': row['date'],
+            'daily_score': row['daily_score'] if row['log_id'] is not None else None,
+            'discipline_score': row['discipline_score'],
+            'completion_pct': row['completion_pct'],
+            'logged': row['log_id'] is not None,
+        }
+        for row in reversed(rows)
+    ]

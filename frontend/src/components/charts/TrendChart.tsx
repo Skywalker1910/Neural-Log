@@ -53,6 +53,21 @@ export function TrendChart({
   const colour = accentStroke[accent]
   const gradientId = `trend-${accent}`
 
+  /*
+    Dots when the observations are sparse.
+
+    A line is drawn *between* points, so with connectNulls={false} a single
+    observed day surrounded by unlogged ones has nothing to connect to and
+    renders as literally nothing - the chart looks empty while holding real
+    data. A dot is the only way an isolated observation can be seen.
+
+    Above the threshold they are dropped: on a dense series the dots crowd into
+    a thick band and the trend gets harder to read, which is the problem they
+    were added to solve, inverted.
+  */
+  const observed = data.reduce((count, point) => count + (point.value === null ? 0 : 1), 0)
+  const sparse = observed <= 12
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
@@ -84,6 +99,8 @@ export function TrendChart({
           /* Leave the gaps. connectNulls would draw a straight line across the
              days with no data, inventing a trend through them. */
           connectNulls={false}
+          dot={sparse ? { r: 3, fill: colour, strokeWidth: 0 } : false}
+          activeDot={{ r: 4 }}
         />
       </AreaChart>
     </ResponsiveContainer>

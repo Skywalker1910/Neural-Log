@@ -97,9 +97,14 @@ logged two days — scoring 100 and 95 — was being told their 30-day average w
 was actually submitted. The metric joins through it, and the average now reads
 97.5 across 2 observed days.
 
-The same phantom zeros are still visible on Home's 14-day trend, which reads
-`daily_scores` directly. That is pre-existing and was left alone here rather than
-being fixed as a side effect of a different phase.
+Home's 14-day trend had the same phantom zeros, and was fixed in the same way:
+`scoring.store.get_daily_scores()` now reads the score through that join and
+returns `daily_score = None` plus a `logged` flag. Home is its only caller.
+
+The chart keeps those days as null points rather than dropping them. Filtering
+them out would close the gap and pack the logged days together, drawing a
+continuous fortnight out of two days - the same lie as plotting zeros, told by
+omission instead. Its subtitle now reads "2 of 14 days logged".
 
 ## Periods
 
@@ -137,6 +142,17 @@ survive a refresh.
 
 It is a CSS grid of `div`s, not Recharts — Recharts has no heatmap, and pulling
 300kB in to draw coloured rectangles would be absurd.
+
+## Sparse series need dots
+
+A line is drawn *between* points, so with `connectNulls={false}` a single
+observed day surrounded by unlogged ones has nothing to connect to and renders as
+literally nothing - the chart looks empty while holding real data.
+
+`TrendChart` therefore draws dots when a series has 12 or fewer observations, and
+drops them above that: on a dense series the dots crowd into a thick band and the
+trend gets harder to read, which is the problem they were added to solve,
+inverted.
 
 ## Bugs worth remembering
 

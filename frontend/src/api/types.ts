@@ -175,9 +175,12 @@ export interface DayDetail {
 
 export interface DailyScorePoint {
   date: string
+  /** null on a day the checklist was not submitted - unobserved, not zero. */
   daily_score: number | null
   discipline_score: number | null
   completion_pct: number
+  /** Whether the day was actually submitted. */
+  logged: boolean
 }
 
 export interface HomeSummary {

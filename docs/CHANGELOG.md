@@ -32,6 +32,15 @@ scoring 100 and 95 - was being told their 30-day average was **13.0**. The metri
 now joins through `daily_log`, which only has a row for a day actually submitted,
 and reads 97.5 across 2 observed days.
 
+**Home's 14-day trend had the same bug** and is fixed with the same join, in
+`scoring.store.get_daily_scores()` - it had been drawing a flat line along the
+bottom for every unlogged day, which reads as "you scored nothing" rather than
+"you did not log". Its subtitle now reports coverage too.
+
+`TrendChart` draws dots on sparse series, because a line is drawn *between*
+points: a single observed day surrounded by nulls had nothing to connect to and
+rendered as nothing at all.
+
 Two shared primitives gained `min-w-0` (`Reveal`) and `max-w-full`
 (`PageHeader`'s action slot) - the `min-width: auto` trap, fourth occurrence.
 
