@@ -17,7 +17,7 @@ This tracks where that's headed, in order.
 | R1 | Redesign foundation - toolchain, design system, shell, migrations | Done |
 | R2 | Home + Today - attributes, radar, daily score, streaks | Done |
 | R3 | Training - routines, exercise library, set logging, analytics | Done |
-| R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Not started |
+| R4 | Nutrition + Lifestyle - macros, hydration, sleep, mood | Done |
 | R5 | Learning - subjects, sessions, knowledge analytics | Not started |
 | R6 | Goals + Habits - milestones, routines, streak sources | Not started |
 | R7 | Gamification depth - achievements, XP ledger, attributes | Not started |
@@ -148,10 +148,24 @@ media.
 
 ## R4 - Nutrition and Lifestyle
 
-Calories, macros, fibre, hydration; energy balance against an estimated TDEE with
-estimates clearly labelled as estimates. Sleep gets first-class treatment - duration,
-schedule consistency, and a direct contribution to Discipline and Recovery. Steps,
-sunlight, mood, stress, journal.
+Done. See [NUTRITION.md](NUTRITION.md) for the full write-up.
+
+Shipped: a 233-food curated library, per-meal logging with macros and fibre, a
+recipe builder that turns a cooked dish into a reusable food, hydration and step
+tracking, sleep with duration and schedule consistency, mood/stress/energy, a
+journal, and energy balance against an estimated TDEE with every estimate labelled
+as one.
+
+Recovery stopped being `unobserved` - sleep duration finally gives it data - and
+Discipline gained its first measured signals in sleep consistency and target
+adherence. `locked` is now empty: every attribute has a source.
+
+The line this phase had to draw is between behaviour and feeling. Mood, stress,
+energy and sleep quality are recorded and charted but never scored, because an
+app that scored them would be paying you to report feeling good.
+
+`user_profile` landed here rather than in R9 as planned, because energy balance
+cannot exist without it. R9 expands the table rather than creating it.
 
 ## R5 - Learning
 

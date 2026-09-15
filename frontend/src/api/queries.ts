@@ -6,10 +6,21 @@ import type {
   ChecklistItemsResponse,
   ExerciseHistory,
   ExercisesResponse,
+  Food,
+  FoodsResponse,
+  LifestyleDay,
+  LifestyleDayResponse,
+  LifestyleSummary,
   LoggedSet,
+  NutritionDay,
+  ProfileResponse,
+  Recipe,
+  RecipesResponse,
   Routine,
   RoutinesResponse,
+  SleepEntry,
   TrainingSummary,
+  UserProfile,
   Workout,
   CurrentUser,
   DayDetail,
@@ -40,6 +51,13 @@ export const queryKeys = {
   routines: ['routines'] as const,
   routine: (id: number) => ['routine', id] as const,
   workout: (id: number) => ['workout', id] as const,
+  foods: (filters?: string) => ['foods', filters ?? 'all'] as const,
+  recipes: ['recipes'] as const,
+  nutrition: (date: string) => ['nutrition', date] as const,
+  lifestyle: ['lifestyle'] as const,
+  lifestyleDay: (date: string) => ['lifestyle-day', date] as const,
+  sleep: ['sleep'] as const,
+  profile: ['profile'] as const,
 }
 
 export function useCurrentUser() {
@@ -267,6 +285,195 @@ export function useSaveDay(date: string) {
         ['attributes'],
         ['leaderboard'],
       ]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+/* --- R4: nutrition and lifestyle ------------------------------------------ */
+
+/**
+ * Logging a meal, a night's sleep or a step count moves attribute scores, so
+ * every mutation here invalidates `home` and `attributes` alongside its own key.
+ * `refetchOnWindowFocus` is off and `staleTime` is 30s, so nothing self-heals -
+ * anything left out shows a stale number until a reload.
+ */
+function nutritionKeysFor(date: string) {
+  return [
+    queryKeys.nutrition(date),
+    queryKeys.lifestyleDay(date),
+    queryKeys.lifestyle,
+    queryKeys.home,
+    ['attributes'],
+  ]
+}
+
+export function useFoods(filters: { q?: string; category?: string; source?: string } = {}) {
+  const params = new URLSearchParams(
+    Object.entries(filters).filter(([, value]) => value) as [string, string][],
+  ).toString()
+
+  return useQuery({
+    queryKey: queryKeys.foods(params),
+    queryFn: () => api.get<FoodsResponse>(`/api/foods${params ? `?${params}` : ''}`),
+    // The shipped library only changes when the app ships a new one; a custom
+    // food invalidates this key explicitly.
+    staleTime: 30 * 60_000,
+  })
+}
+
+export function useCreateFood() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<Food> & { name: string; kcal_per_100g: number }) =>
+      api.post<Food>('/api/foods', body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['foods'] }),
+  })
+}
+
+export function useNutritionDay(date: string) {
+  return useQuery({
+    queryKey: queryKeys.nutrition(date),
+    queryFn: () => api.get<NutritionDay>(`/api/nutrition/${date}`),
+  })
+}
+
+export function useLogFood(date: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { food_id: number; grams: number; meal: string }) =>
+      api.post<{ success: boolean }>(`/api/nutrition/${date}/entries`, body),
+    onSuccess: () => {
+      for (const key of nutritionKeysFor(date)) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+export function useUpdateFoodEntry(date: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; grams?: number; meal?: string }) =>
+      api.put<{ success: boolean }>(`/api/nutrition/entries/${id}`, body),
+    onSuccess: () => {
+      for (const key of nutritionKeysFor(date)) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+export function useDeleteFoodEntry(date: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (entryId: number) =>
+      api.delete<{ success: boolean }>(`/api/nutrition/entries/${entryId}`),
+    onSuccess: () => {
+      for (const key of nutritionKeysFor(date)) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+export function useRecipes() {
+  return useQuery({
+    queryKey: queryKeys.recipes,
+    queryFn: () => api.get<RecipesResponse>('/api/recipes'),
+  })
+}
+
+/**
+ * Saving a recipe changes the macros of every meal already logged with it, so
+ * this invalidates the nutrition keys as broadly as a meal edit would.
+ */
+export function useSaveRecipe() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<Recipe> & { id?: number }) =>
+      id
+        ? api.put<Recipe>(`/api/recipes/${id}`, body)
+        : api.post<Recipe>('/api/recipes', body),
+    onSuccess: () => {
+      for (const key of [queryKeys.recipes, ['foods'], ['nutrition'],
+        queryKeys.home, ['attributes']]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+export function useDeleteRecipe() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (recipeId: number) =>
+      api.delete<{ success: boolean }>(`/api/recipes/${recipeId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.recipes })
+      queryClient.invalidateQueries({ queryKey: ['foods'] })
+    },
+  })
+}
+
+export function useLifestyleSummary() {
+  return useQuery({
+    queryKey: queryKeys.lifestyle,
+    queryFn: () => api.get<LifestyleSummary>('/api/lifestyle'),
+  })
+}
+
+export function useLifestyleDay(date: string) {
+  return useQuery({
+    queryKey: queryKeys.lifestyleDay(date),
+    queryFn: () => api.get<LifestyleDayResponse>(`/api/lifestyle/${date}`),
+  })
+}
+
+export function useSaveLifestyle(date: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<LifestyleDay>) =>
+      api.put<LifestyleDayResponse>(`/api/lifestyle/${date}`, body),
+    onSuccess: () => {
+      for (const key of nutritionKeysFor(date)) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+  })
+}
+
+export function useLogSleep() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<SleepEntry> & { date: string }) =>
+      api.post<{ success: boolean }>('/api/sleep', body),
+    onSuccess: (_result, variables) => {
+      for (const key of nutritionKeysFor(variables.date)) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.sleep })
+    },
+  })
+}
+
+export function useProfile() {
+  return useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: () => api.get<ProfileResponse>('/api/profile'),
+  })
+}
+
+/** Targets feed the adherence signal, so editing them rescores history. */
+export function useSaveProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<UserProfile>) =>
+      api.put<ProfileResponse>('/api/profile', body),
+    onSuccess: () => {
+      for (const key of [queryKeys.profile, ['nutrition'], queryKeys.lifestyle,
+        queryKeys.home, ['attributes']]) {
         queryClient.invalidateQueries({ queryKey: key })
       }
     },

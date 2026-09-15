@@ -51,10 +51,23 @@ An attribute never silently becomes a number. It reports one of:
 | `calibrating` | Observed, too little history | "needs N more days" |
 | `active` | A real score | 0-100 plus a confidence |
 
-Today, with only checklist data: Agility is `locked` (needs mobility work from
-the Training phase). The rest depend on your Path - the stock Batman Path feeds
-Discipline, Knowledge, Strength, Stamina, Recovery and Focus, and leaves Agility
-unobserved. Consistency has its own producer (below).
+Which attributes can reach `active` depends on what you actually log:
+
+| Attribute | Evidenced by | Since |
+|---|---|---|
+| Discipline | Checklist, sleep schedule consistency, water and calorie adherence | R2, R4 |
+| Strength | Logged sets | R3 |
+| Stamina | Logged cardio, steps | R3, R4 |
+| Agility | Logged mobility work | R3 |
+| Recovery | Sleep duration | R4 |
+| Consistency | Showing up to log at all (its own producer, below) | R2 |
+| Knowledge | Checklist only until R5 adds study sessions | R2 |
+| Focus | Checklist only | R2 |
+
+`locked` is now empty: every attribute has a data source. It is kept as a
+mechanism for any attribute added before the phase that feeds it, because
+reporting such an attribute as `unobserved` would read as "your Path is missing
+something" rather than "this does not exist yet".
 
 ## Resolving an item to attributes
 
@@ -113,9 +126,78 @@ Derived scores are stamped with that version when persisted, so a recomputed row
 can be told apart from an original and a weight change never silently rewrites
 history.
 
-## Extending it (R3 onwards)
+## Measured signals
+
+From R3 onward the engine stopped running on self-report alone. Each workspace
+adds a *producer* in `scoring/producers.py` that turns its own rows into the same
+`{date: {attribute: (ratio, weight)}}` shape, and the scoring core never learns
+what a workout or a meal is.
+
+| Producer | Feeds | Shape |
+|---|---|---|
+| `training_ratios` | Strength, Stamina, Agility | Trailing 7-day window vs a weekly target |
+| `sleep_ratios` | Recovery, Discipline | Per night; consistency over 14 nights |
+| `steps_ratios` | Stamina | Trailing 7-day window |
+| `adherence_ratios` | Discipline | Per day, against your own targets |
+
+**Why sleep is per-night and steps are windowed.** Training and steps use a
+window because a rest day is not a failure. Sleep is the opposite: you cannot
+bank it, and a night you did not get is a real gap in recovery on that day.
+
+**Overlapping producers are averaged, not overwritten.** Two now feed Discipline
+and two feed Stamina. `merge_measured()` combines them by weight and keeps the
+total, so an attribute evidenced by two independent measurements outweighs one
+evidenced by a single measurement. A plain dict update would have let whichever
+producer ran last silently win.
+
+## The self-report ceiling
+
+Where an attribute *can* be measured and you only ticked a box, the score is
+capped at `self_report_ceiling` (0.5). The top of the scale is reserved for
+evidence, because the app cannot tell a hard session from a claim about one.
+
+`MEASURABLE_ATTRIBUTES` is Strength, Stamina, Agility and Recovery. Two
+deliberate exclusions:
+
+- **Discipline is not capped**, despite gaining measured signals in R4. The daily
+  checklist is already direct evidence of discipline, so sleep consistency and
+  adherence are *additional* evidence rather than the only possible evidence.
+  Capping it would punish someone for not using a workspace.
+- **Knowledge and Focus are not capped** because nothing measures them yet.
+
+The ceiling is 0.5 rather than something higher for a reason that is arithmetic,
+not taste. With `measured_weight` 3, an unevidenced claim worth C is only beaten
+by real logging once that logging reaches `(4C - 1) / 3` of the target: 67% at
+C=0.75, but 33% at C=0.5. A ceiling of 0.75 meant honestly logging a light week
+scored *lower* than claiming a perfect one and logging nothing. An app that
+punishes honest logging is worse than one that does not measure at all, and a
+test asserts the incentive points the right way for both training and sleep.
+
+## What is deliberately never scored
+
+Mood, stress, energy, sleep quality and body measurements are recorded and
+charted but never feed an attribute.
+
+The first four are self-reported *feelings* rather than behaviour. Scoring them
+would be dishonest in the same way an unevidenced "I trained" is, and worse: it
+would pay you to report feeling good. Body weight is a measurement, but it is an
+outcome rather than an action, and rewarding it would reward the wrong thing.
+
+Protein intake feeds Discipline, as adherence to a target you set - never
+Strength. Eating protein is not training.
+
+## Extending it
 
 `scoring/engine.py` is pure functions over plain dicts - no database, no Flask,
-no import of `app`. A future phase adds a producer that emits the same
-`{attribute: {available, earned}}` shape from its own data, and the aggregation,
+no import of `app`. A future phase adds a producer that emits the same shape from
+its own data, registers it in `store.recompute_scores`, and the aggregation,
 statuses, confidence and radar need no changes.
+
+Two things a new producer must get right, because both have already been got
+wrong here:
+
+1. **Include your dates in `all_dates`.** A day whose only entry is a meal still
+   has to appear in the series, or it silently vanishes from every score.
+2. **Say nothing before your first observation.** Back-filling zeroes invents a
+   history of not doing the thing, and the EWMA then carries that invented past
+   forward for a fortnight.

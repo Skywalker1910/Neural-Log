@@ -2,6 +2,75 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R4 - Nutrition and Lifestyle
+
+Recovery stopped being `unobserved`, and `locked` is now empty: every attribute
+has a data source. Full write-up in [NUTRITION.md](NUTRITION.md).
+
+- **Seven tables** (`migrations/004_nutrition_lifestyle.sql`) at the grain of one
+  thing eaten at one meal. `food_entries` deliberately does not denormalise
+  macros - they are the food's per-100g values times grams, computed on read, so
+  correcting a food corrects every meal that used it.
+- **233-food curated library** in `data/foods.json`, per 100g because that is the
+  only basis on which recipes compose. Chosen over an external API: no network
+  dependency on every search, no rate limits, nothing extra to provision on AWS.
+- **Recipes.** Describe a cooked dish, pick the ingredients, and it becomes one
+  entry in the food picker. A recipe *is* a food (`source = 'recipe'`), so logging
+  a dish and logging an ingredient are the same operation downstream. Macros are
+  always derived, and editing a dish rescores every meal already logged with it.
+- **Cooked weight is stored separately from the raw ingredient sum**, because rice
+  absorbs water and roasting drives it off. Dividing by the raw total for a dish
+  that lost a third of its mass would under-report every portion of it.
+- **Sleep, hydration, steps, sunlight, mood, stress, energy, journal.**
+- **Energy balance** against a Mifflin-St Jeor TDEE, with a `sources` map marking
+  every number as set / estimated / unknown, and `tdee()` returning None rather
+  than guessing.
+- **`user_profile` arrived in R4 rather than R9**, since energy balance cannot
+  exist without it. R9 expands the table rather than creating it.
+
+### Scoring
+
+Four new measured signals: sleep duration to Recovery, sleep schedule consistency
+to Discipline, steps to Stamina, water and calorie adherence to Discipline.
+
+- **Recovery joined `MEASURABLE_ATTRIBUTES`; Discipline deliberately did not.**
+  Sleep is now loggable, so an unevidenced Recovery claim gets the 0.5 ceiling.
+  But the checklist is already direct evidence of discipline, so sleep consistency
+  and adherence are additional evidence rather than the only possible evidence -
+  capping it would punish someone for not using a workspace.
+- **Sleep is scored per night while steps use a trailing window.** Not an
+  inconsistency: a rest day is not a failure, but a night you did not get is a
+  real gap in recovery on that day. You cannot bank sleep.
+- **Sleep consistency uses a circular spread.** As raw minutes past midnight,
+  bedtimes of 23:50 and 00:10 look 23 hours apart, so the most disciplined
+  possible sleeper would have scored the worst possible consistency.
+- **Calories are scored two-sided.** A one-sided "more is better" reading would
+  call a 4,000 kcal day against a 2,000 target perfect adherence.
+- **`merge_measured()`** averages by weight where producers overlap. Two now feed
+  Discipline and two feed Stamina; a plain dict update would have let whichever
+  ran last silently win.
+- **Mood, stress, energy and sleep quality are never scored.** They are
+  self-reported feelings, and an app that scored them would be paying you to
+  report feeling good.
+
+### Bugs found and fixed
+
+- **"Today" was UTC, not local.** `new Date().toISOString().slice(0, 10)` is the
+  obvious way to get today's date and it is wrong: west of UTC it rolls over to
+  tomorrow in the evening. At 20:02 in UTC-5 the Nutrition page asked for
+  2026-09-15 and showed an empty day the API had 2,152 kcal of data for. Training
+  had it too, where it would have dated a new workout tomorrow. `Today.tsx` had
+  already solved this in R2 with a comment explaining why, and R3 and R4 each
+  wrote the UTC version again - so all four now share one helper in
+  `frontend/src/lib/date.ts`.
+- **`entry_macros()` was handed a `sqlite3.Row`**, which has no `.get()`, so every
+  request for a day with a logged meal raised AttributeError.
+- **A partial profile PUT hit NOT NULL constraints.** "Just set my calorie target"
+  merged `activity_level` and `goal` to None, which failed for any user without a
+  profile row - i.e. on everyone's first edit.
+- **`TrendChart` drew a 1-5 mood rating on an axis up to 8**, which makes a good
+  week look like a mediocre one. It now takes an optional fixed `domain`.
+
 ## R3 - Training
 
 The first feature that feeds the attribute engine measured data instead of

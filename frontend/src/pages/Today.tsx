@@ -22,6 +22,7 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
+import { shiftISO, todayISO } from '../lib/date'
 import { scaleIn, slideIn, spring } from '../lib/motion'
 
 const ARTWORK_KEYS: ArtworkKey[] = [
@@ -35,23 +36,9 @@ function toArtworkKey(icon: string): ArtworkKey {
   return (ARTWORK_KEYS as string[]).includes(icon) ? (icon as ArtworkKey) : 'default'
 }
 
-function isoDate(d: Date): string {
-  // Local date, not toISOString() - that converts to UTC and can land on the
-  // wrong day either side of midnight.
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`
-}
-
-function shiftDate(iso: string, days: number): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const next = new Date(y, m - 1, d + days)
-  return isoDate(next)
-}
-
 function humanDate(iso: string, today: string): string {
   if (iso === today) return 'Today'
-  if (iso === shiftDate(today, -1)) return 'Yesterday'
+  if (iso === shiftISO(today, -1)) return 'Yesterday'
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString(undefined, {
     weekday: 'long',
@@ -240,7 +227,7 @@ function BadgeCelebration({ badges, onDismiss }: { badges: BadgeType[]; onDismis
 }
 
 export function Today() {
-  const today = isoDate(new Date())
+  const today = todayISO()
   const [date, setDate] = useState(today)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [editingDate, setEditingDate] = useState(date)
@@ -323,13 +310,13 @@ export function Today() {
             <Button
               size="sm"
               icon={ChevronLeft}
-              onClick={() => setDate((value) => shiftDate(value, -1))}
+              onClick={() => setDate((value) => shiftISO(value, -1))}
               aria-label="Previous day"
             />
             <Button
               size="sm"
               icon={ChevronRight}
-              onClick={() => setDate((value) => shiftDate(value, 1))}
+              onClick={() => setDate((value) => shiftISO(value, 1))}
               disabled={date >= today}
               aria-label="Next day"
             />

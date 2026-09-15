@@ -25,6 +25,7 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { StatCard } from '../components/ui/StatCard'
+import { shortDate, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
 
 const METRICS = [
@@ -36,12 +37,6 @@ const METRICS = [
   { metric: 'thigh', label: 'Thigh', unit: 'cm' },
 ]
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-function shortDate(iso: string) {
-  const [, month, day] = iso.split('-')
-  return `${month}/${day}`
-}
 
 /**
  * Balance is measured in working sets, not volume - a set of calf raises and a
@@ -82,7 +77,7 @@ function MeasurementForm({ open, onClose }: { open: boolean; onClose: () => void
   const log = useLogMeasurement()
   const [metric, setMetric] = useState(METRICS[0].metric)
   const [value, setValue] = useState('')
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(todayISO)
 
   const unit = METRICS.find((option) => option.metric === metric)?.unit
 
@@ -123,7 +118,7 @@ function MeasurementForm({ open, onClose }: { open: boolean; onClose: () => void
         <label className="flex flex-col gap-1">
           <span className="text-meta text-ink-muted">Date</span>
           <input
-            type="date" value={date} max={today()}
+            type="date" value={date} max={todayISO()}
             onChange={(event) => setDate(event.target.value)}
             className="rounded-md border border-line bg-surface-base px-3 py-2 text-label tabular text-ink outline-none focus:border-brand"
           />
@@ -173,7 +168,7 @@ export function Training() {
 
   function beginWorkout(routineId?: number) {
     start.mutate(
-      routineId ? { date: today(), routine_id: routineId } : { date: today(), name: 'Workout' },
+      routineId ? { date: todayISO(), routine_id: routineId } : { date: todayISO(), name: 'Workout' },
       { onSuccess: (workout) => navigate(`/training/${workout.id}`) },
     )
   }

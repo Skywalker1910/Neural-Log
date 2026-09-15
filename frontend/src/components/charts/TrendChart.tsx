@@ -16,6 +16,12 @@ interface TrendChartProps {
   /** Appended in the tooltip, e.g. "h" for study hours. */
   unit?: string
   name?: string
+  /**
+   * Fixed y-axis range. Give this for any bounded scale - a 1-5 mood rating
+   * left on Recharts' auto-domain drew an axis up to 8, which makes a good
+   * week look like a mediocre one.
+   */
+  domain?: [number, number]
 }
 
 /**
@@ -36,6 +42,7 @@ export function TrendChart({
   height = 240,
   unit = '',
   name = 'Value',
+  domain,
 }: TrendChartProps) {
   const reducedMotion = usePrefersReducedMotion()
   const colour = accentStroke[accent]
@@ -54,7 +61,8 @@ export function TrendChart({
         <XAxis dataKey="label" tick={axisTick} tickLine={false} axisLine={false} />
         <YAxis
           tick={axisTick} tickLine={false} axisLine={false} width={44}
-          tickFormatter={compact}
+          tickFormatter={compact} domain={domain ?? ['auto', 'auto']}
+          allowDecimals={!domain}
         />
         <Tooltip
           {...tooltipStyles}

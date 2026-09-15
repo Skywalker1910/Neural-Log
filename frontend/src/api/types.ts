@@ -318,3 +318,174 @@ export interface TrainingSummary {
   }[]
   measurements: { metric: string; value: number; unit: string | null; date: string }[]
 }
+
+/* --- R4: nutrition and lifestyle ------------------------------------------ */
+
+export type FoodCategory =
+  | 'protein' | 'grain' | 'legume' | 'vegetable' | 'fruit' | 'dairy' | 'fat'
+  | 'nut-seed' | 'beverage' | 'prepared' | 'condiment' | 'sweet'
+
+export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+export interface Food {
+  id: number
+  slug: string
+  name: string
+  category: FoodCategory
+  /** 'library' ships with the app, 'custom' you added, 'recipe' you cooked. */
+  source: 'library' | 'custom' | 'recipe'
+  kcal_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+  fibre_per_100g: number
+  serving_name: string | null
+  serving_grams: number | null
+  is_custom: boolean
+}
+
+export interface Macros {
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  fibre_g: number
+}
+
+export interface FoodEntry {
+  id: number
+  food_id: number
+  name: string
+  category: FoodCategory
+  source: Food['source']
+  meal: Meal
+  grams: number
+  serving_name: string | null
+  serving_grams: number | null
+  macros: Macros
+}
+
+/** Every value is either what you set or a derivation - `sources` says which. */
+export interface Targets {
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  fibre_g: number
+  water_ml: number
+  steps: number
+  sleep_minutes: number
+  estimated_tdee: number | null
+  estimated_bmr: number | null
+  goal: 'cut' | 'maintain' | 'bulk'
+  sources: Record<string, 'set' | 'estimated' | 'unknown'>
+}
+
+export interface NutritionDay {
+  date: string
+  entries: FoodEntry[]
+  by_meal: Partial<Record<Meal, FoodEntry[]>>
+  totals: Macros
+  targets: Targets
+  body_weight_kg: number | null
+}
+
+export interface RecipeIngredient {
+  id?: number
+  food_id: number
+  grams: number
+  position?: number
+  name?: string
+  category?: FoodCategory
+  kcal_per_100g?: number
+  protein_per_100g?: number
+  carbs_per_100g?: number
+  fat_per_100g?: number
+  fibre_per_100g?: number
+}
+
+export interface Recipe {
+  id: number
+  /** The `foods` row this recipe produces - what you actually log. */
+  food_id: number
+  name: string
+  servings: number
+  /** Cooked weight. Not the sum of the raw ingredients. */
+  total_grams: number | null
+  notes: string | null
+  ingredients: RecipeIngredient[]
+  food: Food | null
+}
+
+export interface SleepEntry {
+  id?: number
+  /** The date you WOKE UP - a night spans two calendar dates. */
+  date: string
+  bedtime: string | null
+  wake_time: string | null
+  duration_minutes: number
+  /** 1-5, self-reported. Recorded, never scored. */
+  quality: number | null
+  notes: string | null
+}
+
+export interface LifestyleDay {
+  date: string
+  water_ml: number | null
+  steps: number | null
+  sunlight_minutes: number | null
+  /** 1-5, self-reported feelings. Charted, never scored. */
+  mood: number | null
+  stress: number | null
+  energy: number | null
+  journal: string | null
+}
+
+export interface LifestyleDayResponse {
+  date: string
+  lifestyle: LifestyleDay | null
+  sleep: SleepEntry | null
+  targets: Targets
+}
+
+export interface LifestyleSummary {
+  sleep: SleepEntry[]
+  lifestyle: LifestyleDay[]
+  targets: Targets
+  averages: {
+    sleep_minutes: number | null
+    schedule_consistency: number | null
+    water_ml: number | null
+    steps: number | null
+  }
+}
+
+export interface UserProfile {
+  birth_year: number | null
+  sex: 'male' | 'female' | 'unspecified' | null
+  height_cm: number | null
+  activity_level: 'sedentary' | 'light' | 'moderate' | 'active' | 'very-active'
+  goal: 'cut' | 'maintain' | 'bulk'
+  calorie_target: number | null
+  protein_target_g: number | null
+  carb_target_g: number | null
+  fat_target_g: number | null
+  fibre_target_g: number | null
+  water_target_ml: number | null
+  step_target: number | null
+  sleep_target_minutes: number | null
+}
+
+export interface ProfileResponse {
+  profile: Partial<UserProfile>
+  targets: Targets
+  body_weight_kg: number | null
+}
+
+export interface FoodsResponse {
+  foods: Food[]
+}
+
+export interface RecipesResponse {
+  recipes: Recipe[]
+}
