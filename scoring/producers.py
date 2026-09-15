@@ -158,9 +158,9 @@ def blend(attribute, self_reported, measured, config=DEFAULT_CONFIG):
        the scale is reserved for evidence, because the app cannot tell a hard
        session from a claim about one.
 
-    Rule 2 deliberately does NOT apply to Discipline, Knowledge, Focus, Recovery
-    or Consistency: nothing measures those yet, so capping them would punish
-    people for a feature that does not exist.
+    Rule 2 applies only to MEASURABLE_ATTRIBUTES - see the note there. It does
+    not apply to Discipline (the checklist is already direct evidence of it) or
+    Consistency (nothing self-reports it in the first place).
 
     Either side may be None.
     """
@@ -475,4 +475,156 @@ def merge_measured(*sources):
             # evidenced by two independent measurements outweighs one evidenced
             # by a single measurement when blended against self-report.
             out.setdefault(iso, {})[attribute] = (ratio, total_weight)
+    return out
+
+
+# --- R5: study time and the shape of it --------------------------------------
+#
+# Knowledge is minutes over a trailing window. Focus is something else entirely,
+# and the distinction is the whole point of this producer.
+#
+# WHY FOCUS IS A DURATION-WEIGHTED MEAN
+# -------------------------------------
+# Focus asks how deep the work was, which is a question about the SHAPE of study
+# time rather than its total. Three obvious statistics are all wrong:
+#
+#   total minutes      - that is Knowledge again, and says nothing about depth
+#   longest block      - one good session hides a week of fragmented ones
+#   plain mean block   - a stray five-minute session drags a great day down
+#
+# The last is the subtle one. Someone who does a two-hour block and then a
+# five-minute one has had an excellent day of deep work, but a plain mean scores
+# them 62 where the two-hour block alone would have scored 120.
+#
+# So blocks are averaged WEIGHTED BY THEIR OWN LENGTH:
+#
+#     depth = sum(d^2) / sum(d)
+#
+# which answers "for a randomly chosen minute of study, how long was the block it
+# belonged to?" - exactly the question Focus is asking. A short session can only
+# dilute it in proportion to how little of your time it was.
+#
+#   one 120-min block          -> 120
+#   120-min + 5-min            -> 115   (barely moved)
+#   four 30-min blocks         ->  30   (same total, much shallower)
+
+
+def _block_minutes(sessions, config=DEFAULT_CONFIG):
+    """Collapse one day's sessions into uninterrupted blocks, in minutes.
+
+    Two sessions separated by less than `focus_block_gap_minutes` are one block
+    that happened to be logged twice - getting up for coffee does not end deep
+    work. Sessions without clock times cannot be joined to anything, so each
+    stands alone.
+    """
+    timed, untimed = [], []
+    for row in sessions:
+        duration = row.get('duration_minutes') or 0
+        if duration <= 0:
+            continue
+        start = _minutes_since_midnight(row.get('started_at'))
+        if start is None:
+            untimed.append(float(duration))
+        else:
+            timed.append((start, float(duration)))
+
+    blocks = list(untimed)
+    timed.sort()
+
+    current_start = current_end = None
+    for start, duration in timed:
+        end = start + duration
+        if current_start is None:
+            current_start, current_end = start, end
+            continue
+        if start - current_end <= config.focus_block_gap_minutes:
+            # Overlapping or near-contiguous: extend rather than start a new one.
+            current_end = max(current_end, end)
+        else:
+            blocks.append(current_end - current_start)
+            current_start, current_end = start, end
+
+    if current_start is not None:
+        blocks.append(current_end - current_start)
+
+    return [b for b in blocks if b > 0]
+
+
+def session_depth(blocks):
+    """Duration-weighted mean block length. See the note above for why."""
+    total = sum(blocks)
+    if total <= 0:
+        return None
+    return sum(b * b for b in blocks) / total
+
+
+def learning_ratios(session_rows, dates, targets_by_date=None, config=DEFAULT_CONFIG):
+    """Per-day Knowledge (minutes) and Focus (block depth) ratios.
+
+    `session_rows` are mappings with date, duration_minutes and optionally
+    started_at. `targets_by_date` may override the weekly study target per day.
+
+    Returns {date: {attribute: (ratio, weight)}}.
+    """
+    by_date = {}
+    for row in session_rows:
+        if row.get('date') and (row.get('duration_minutes') or 0) > 0:
+            by_date.setdefault(row['date'], []).append(row)
+
+    if not by_date:
+        return {}
+
+    targets_by_date = targets_by_date or {}
+    first_seen = min(by_date)
+    window = max(1, config.learning_window_days)
+    out = {}
+
+    for iso in dates:
+        if iso < first_seen:
+            continue  # nothing studied yet - silence, not a zero
+
+        day = _date.fromisoformat(iso)
+        start = day - _timedelta(days=window - 1)
+        in_window = [
+            (logged_iso, rows) for logged_iso, rows in by_date.items()
+            if start <= _date.fromisoformat(logged_iso) <= day
+        ]
+
+        total_minutes = sum(
+            row.get('duration_minutes') or 0
+            for _, rows in in_window for row in rows
+        )
+
+        # Knowledge: minutes against the weekly target, pro-rated by how much of
+        # the window has history. Measuring someone's first study day against a
+        # full week would score a genuine two-hour session at 40%.
+        started = _date.fromisoformat(first_seen)
+        observed_days = min(window, (day - started).days + 1)
+        target = targets_by_date.get(iso) or config.weekly_study_minutes
+        effective = target * (observed_days / window)
+        if effective > 0:
+            out.setdefault(iso, {})['Knowledge'] = (
+                min(1.0, total_minutes / effective), config.measured_weight,
+            )
+
+        # Focus: the shape of that time. Blocks are computed per day and then
+        # pooled - a block cannot span midnight, and treating the window as one
+        # long day would silently join last Tuesday's evening to Wednesday's
+        # morning.
+        if total_minutes < config.focus_min_window_minutes:
+            continue
+
+        blocks = []
+        for _, rows in in_window:
+            blocks.extend(_block_minutes(rows, config))
+
+        depth = session_depth(blocks)
+        if depth is None:
+            continue
+
+        out.setdefault(iso, {})['Focus'] = (
+            min(1.0, depth / config.focus_target_block_minutes),
+            config.measured_weight,
+        )
+
     return out

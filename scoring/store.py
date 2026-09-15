@@ -119,6 +119,15 @@ def _load_lifestyle(conn, user_id):
     return [dict(row) for row in rows]
 
 
+def _load_learning_sessions(conn, user_id):
+    rows = conn.execute(
+        'SELECT date, duration_minutes, started_at FROM learning_sessions '
+        'WHERE user_id = ? ORDER BY date, started_at',
+        (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _load_nutrition_totals(conn, user_id):
     """Per-day macro totals, summed in SQL rather than in Python.
 
@@ -266,6 +275,7 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     sleep_rows = _load_sleep(conn, user_id)
     lifestyle_rows = _load_lifestyle(conn, user_id)
     nutrition_totals = _load_nutrition_totals(conn, user_id)
+    learning_rows = _load_learning_sessions(conn, user_id)
 
     # Every workspace can be the only thing logged on a day - a night's sleep
     # with no checklist, a meal with no workout - so the date set is the union of
@@ -276,6 +286,7 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
         | {row['date'] for row in training_sets}
         | {row['date'] for row in sleep_rows}
         | {row['date'] for row in lifestyle_rows}
+        | {row['date'] for row in learning_rows}
         | set(nutrition_totals)
     )
 
@@ -290,16 +301,19 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     targets = _targets_by_date(conn, user_id, all_dates)
     sleep_targets = {iso: t.get('sleep_minutes') for iso, t in targets.items()}
     step_targets = {iso: t.get('steps') for iso, t in targets.items()}
+    study_targets = {iso: t.get('weekly_study_minutes') for iso, t in targets.items()}
 
-    # Four measured producers now, and two of them (sleep consistency, adherence)
-    # both speak to Discipline while steps and cardio both speak to Stamina.
-    # merge_measured averages by weight where they overlap - a plain dict update
-    # would have let whichever ran last silently win.
+    # Five measured producers now, and several of them speak to the same
+    # attribute: sleep consistency and adherence both feed Discipline, steps and
+    # cardio both feed Stamina. merge_measured averages by weight where they
+    # overlap - a plain dict update would have let whichever ran last silently
+    # win.
     measured = producers.merge_measured(
         producers.training_ratios(training_sets, all_dates, config),
         producers.sleep_ratios(sleep_rows, all_dates, sleep_targets, config),
         producers.steps_ratios(lifestyle_rows, all_dates, step_targets, config),
         producers.adherence_ratios(lifestyle_rows, nutrition_totals, targets, config),
+        producers.learning_ratios(learning_rows, all_dates, study_targets, config),
     )
 
     # One blended ratio per attribute per day. Where a day has both a ticked box

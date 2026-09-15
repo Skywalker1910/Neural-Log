@@ -72,13 +72,22 @@ MUSCLE_ATTRIBUTES = {
 # the self-report ceiling: capping an attribute because you did not log something
 # would be nonsense where there is nothing to log.
 #
-# Recovery joined in R4, because sleep became loggable. Discipline deliberately
-# did NOT, even though R4 gives it measured signals (sleep consistency, hydration
-# and nutrition adherence): the daily checklist is already direct evidence of
-# discipline, so those are ADDITIONAL evidence rather than the only possible
-# evidence. Capping Discipline would punish someone for not using a workspace,
-# which is the opposite of what the ceiling is for.
-MEASURABLE_ATTRIBUTES = frozenset({'Strength', 'Stamina', 'Agility', 'Recovery'})
+# Recovery joined in R4 when sleep became loggable; Knowledge and Focus joined in
+# R5 when study sessions did.
+#
+# Two deliberate exclusions, for different reasons:
+#
+#   Discipline  - has measured signals since R4 (sleep consistency, adherence),
+#                 but the daily checklist is already DIRECT evidence of
+#                 discipline, so those are additional evidence rather than the
+#                 only possible evidence. Capping it would punish someone for not
+#                 using a workspace, which is the opposite of what the ceiling is
+#                 for.
+#   Consistency - has no self-reported route at all. Nothing in a Path feeds it;
+#                 it is derived from whether you logged. There is nothing to cap.
+MEASURABLE_ATTRIBUTES = frozenset({
+    'Strength', 'Stamina', 'Agility', 'Recovery', 'Knowledge', 'Focus',
+})
 
 # Exercise category overrides the muscle map where it disagrees - a mobility
 # movement targeting hamstrings is Agility work, not a hamstring builder.
@@ -203,6 +212,29 @@ class ScoringConfig:
         'calories': 1.0,
         'protein': 1.0,
     })
+
+    # --- Learning (R5) ------------------------------------------------------
+    # Knowledge is study minutes over a trailing window, same shape as training:
+    # a day off is not a failure, and someone who studies hard twice a week would
+    # otherwise score 100 on those days and be invisible on the other five.
+    learning_window_days: int = 7
+    weekly_study_minutes: float = 300.0      # the default; the profile overrides it
+
+    # Focus is measured from the SHAPE of study time rather than its total.
+    # `focus_target_block_minutes` is the length at which a block counts as fully
+    # deep work. 50 minutes rather than a round hour because that is roughly
+    # where a worked session lands once you subtract settling in.
+    focus_target_block_minutes: float = 50.0
+
+    # Sessions closer together than this are treated as one interrupted block.
+    # Getting up for coffee does not end deep work, and counting it as two short
+    # sessions would score an honest three-hour stretch worse than it deserves.
+    focus_block_gap_minutes: int = 15
+
+    # Below this much study in the window there is not enough to characterise a
+    # pattern, so Focus stays silent rather than reporting a number derived from
+    # a single ten-minute session.
+    focus_min_window_minutes: float = 30.0
 
     # Weights for the composite daily score.
     daily_score_weights: dict = field(default_factory=lambda: {
