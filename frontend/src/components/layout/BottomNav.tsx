@@ -7,7 +7,7 @@ import { accentText, OVERFLOW_SECTIONS, PRIMARY_SECTIONS, SETTINGS_SECTION } fro
 import { Modal } from '../ui/Modal'
 
 const TAB_CLASSES =
-  'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-caption transition-colors'
+  'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-caption transition-colors duration-200 ease-apple active:scale-95'
 
 /**
  * Mobile navigation. Deliberately a thumb-reachable tab bar rather than a
@@ -18,9 +18,12 @@ export function BottomNav() {
 
   return (
     <>
+      {/* The same frosted material as the sidebar and the top bar, and the
+          safe-area inset so the tabs clear a phone's home indicator rather than
+          sitting underneath it. */}
       <nav
         aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface-card/95 backdrop-blur lg:hidden"
+        className="material-chrome fixed inset-x-0 bottom-0 z-30 flex border-t border-line pb-[env(safe-area-inset-bottom,0px)] lg:hidden"
       >
         {PRIMARY_SECTIONS.map((section) => {
           const Icon = section.icon
@@ -66,7 +69,7 @@ export function BottomNav() {
                 <NavLink
                   to={section.path}
                   onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2.5 text-label text-ink-muted transition-colors hover:bg-surface-raised hover:text-ink"
+                  className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2.5 text-label text-ink-muted transition-colors duration-200 ease-apple hover:bg-surface-raised hover:text-ink"
                 >
                   <Icon size={17} className={accentText[section.accent]} aria-hidden />
                   {section.label}
