@@ -197,10 +197,9 @@ def test_r2_endpoints_require_login(client):
 
 
 def test_spa_mount_point_tolerates_a_trailing_slash(logged_in):
-    """/app/ is what a bookmark or a typed URL tends to look like. The <path:>
-    converter does not match an empty string, so this 404'd until R2."""
-    for url in ('/app', '/app/'):
-        assert logged_in.get(url).status_code == 200, url
+    """The <path:> converter does not match an empty string, so without
+    strict_slashes=False the bare root 404'd."""
+    assert logged_in.get('/').status_code == 200
 
 
 # --- PUT /api/days/<date> ---------------------------------------------------

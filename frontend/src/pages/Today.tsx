@@ -13,7 +13,8 @@ import type { Badge as BadgeType, ChecklistItem } from '../api/types'
 import { useChecklistItems, useDay, useSaveDay } from '../api/queries'
 import { PageHeader } from '../components/layout/PageHeader'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { ArtworkBadge, type ArtworkKey } from '../components/ui/ArtworkBadge'
+import { ItemIcon } from '../components/ui/ItemIcon'
+import { iconForItem } from '../lib/itemIcons'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -24,17 +25,6 @@ import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
 import { shiftISO, todayISO } from '../lib/date'
 import { scaleIn, slideIn, spring } from '../lib/motion'
-
-const ARTWORK_KEYS: ArtworkKey[] = [
-  'sun', 'coffee', 'workout', 'code', 'chess',
-  'breakfast', 'lunch', 'water', 'sleep', 'default',
-]
-
-/** The backend's ICON_KEYS and the ArtworkKey union don't meet in the type
- *  system, so narrow here rather than casting at every call site. */
-function toArtworkKey(icon: string): ArtworkKey {
-  return (ARTWORK_KEYS as string[]).includes(icon) ? (icon as ArtworkKey) : 'default'
-}
 
 function humanDate(iso: string, today: string): string {
   if (iso === today) return 'Today'
@@ -80,7 +70,7 @@ function ItemRow({ item, answer, onAnswer }: ItemRowProps) {
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <ArtworkBadge name={toArtworkKey(item.icon)} size={40} />
+        <ItemIcon name={iconForItem(item.icon, item.name)} size={40} />
         <div className="min-w-0">
           <p className="text-label text-ink">{item.name}</p>
           {item.weight > 1 && (
@@ -342,7 +332,13 @@ export function Today() {
                     />
                   }
                 />
-                <div className="min-w-0 flex-1">
+                {/*
+                  A min width rather than min-w-0: flex-wrap only moves whole
+                  items to the next line, so with no floor this block shrank to
+                  a sliver instead of pushing the button down - "9 / 9" broke
+                  across two lines and the badge became a vertical stripe.
+                */}
+                <div className="min-w-[11rem] flex-1">
                   <p className="tabular text-metric text-ink">
                     <AnimatedNumber value={answered} />
                     <span className="text-section text-ink-subtle"> / {scorable}</span>

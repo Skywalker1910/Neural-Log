@@ -9,8 +9,8 @@ import './index.css'
 import { loadDomAnimation } from './lib/motionFeatures'
 import App from './App.tsx'
 
-// Flask mounts the SPA under /app (see serve_spa in app.py).
-const BASENAME = '/app'
+// Flask serves the SPA at the site root (see index() in app.py).
+const BASENAME = '/'
 
 const queryClient = new QueryClient({
   defaultOptions: {

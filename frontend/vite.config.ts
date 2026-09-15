@@ -2,9 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// The SPA is served by Flask under /app (see serve_spa in app.py), so assets must
-// resolve against /app/ rather than the site root.
-const BASE = '/app/'
+// Flask serves the SPA at the site root (see index() in app.py).
+const BASE = '/'
 
 // Flask dev server. In dev we proxy instead of enabling CORS, so the browser sees a
 // single origin and the existing session cookie keeps working untouched.
@@ -21,6 +20,9 @@ export default defineConfig({
       '/static': { target: FLASK, changeOrigin: false },
       '/login': { target: FLASK, changeOrigin: false },
       '/logout': { target: FLASK, changeOrigin: false },
+      '/register': { target: FLASK, changeOrigin: false },
+      '/classic': { target: FLASK, changeOrigin: false },
+      '/admin': { target: FLASK, changeOrigin: false },
     },
   },
   build: {

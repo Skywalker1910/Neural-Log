@@ -15,8 +15,14 @@ import type { Transition, Variants } from 'motion/react'
  *    to a plain crossfade, and the UI must still make sense.
  */
 
-/** Standard easing - slight ease-out, no overshoot. */
-export const EASE = [0.22, 0.61, 0.36, 1] as const
+/**
+ * Standard easing. Apple's curve, matching --ease-apple in index.css so a CSS
+ * transition and a motion variant on the same element cannot disagree.
+ *
+ * It leaves almost immediately and settles slowly, which is why their
+ * interfaces feel unhurried at durations this short.
+ */
+export const EASE = [0.28, 0.11, 0.32, 1] as const
 
 export const duration = {
   instant: 0.12,

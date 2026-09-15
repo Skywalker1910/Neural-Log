@@ -3,7 +3,7 @@ import { Dumbbell, Flame, GraduationCap, Moon, Droplets, Palette } from 'lucide-
 
 import { AttributeRadar, TrendChart } from '../components/charts'
 import { PageHeader } from '../components/layout/PageHeader'
-import { ArtworkBadge } from '../components/ui/ArtworkBadge'
+import { ItemIcon } from '../components/ui/ItemIcon'
 import { AttributeBadge } from '../components/ui/AttributeBadge'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -178,13 +178,13 @@ export function DesignSystem() {
         </div>
       </Section>
 
-      <Section title="Artwork badges">
-        <Card subtitle="Kept from the custom icon set for achievements and attributes.">
+      <Section title="Item icons">
+        <Card subtitle="Checklist and attribute glyphs. Line icons from the same family as the chrome - they take an accent colour and stay sharp at any size.">
           <div className="flex flex-wrap items-center gap-3">
-            {(['sun', 'workout', 'code', 'chess', 'sleep', 'water'] as const).map((name) => (
-              <ArtworkBadge key={name} name={name} />
+            {(['sun', 'workout', 'code', 'chess', 'sleep', 'water', 'breakfast', 'lunch'] as const).map((name) => (
+              <ItemIcon key={name} name={name} />
             ))}
-            <ArtworkBadge name="default" locked />
+            <ItemIcon name="default" locked />
           </div>
         </Card>
       </Section>
