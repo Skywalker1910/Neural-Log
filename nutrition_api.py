@@ -359,6 +359,8 @@ def recipe_detail(recipe_id):
 
         # Editing a recipe changes the macros of every meal already logged with
         # it, so the scores derived from those meals have to move too.
+        # No date: editing a recipe changes the macros of every meal ever
+        # logged with it, so every day has to be rebuilt.
         _recompute(conn, user_id)
         conn.commit()
 
@@ -455,7 +457,7 @@ def add_entry(date):
         (user_id, date, data.get('meal', 'snack'), food_id, float(grams), position),
     )
     conn.commit()
-    _recompute(conn, user_id)
+    _recompute(conn, user_id, date)
     conn.commit()
     conn.close()
     return jsonify({'success': True}), 201
@@ -484,7 +486,7 @@ def entry_detail(entry_id):
         )
 
     conn.commit()
-    _recompute(conn, user_id)
+    _recompute(conn, user_id, row['date'])
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -540,7 +542,7 @@ def sleep():
              int(duration), data.get('quality'), data.get('notes')),
         )
         conn.commit()
-        _recompute(conn, user_id)
+        _recompute(conn, user_id, day)
         conn.commit()
         conn.close()
         return jsonify({'success': True}), 201
@@ -585,7 +587,7 @@ def lifestyle_day(date):
              merged['energy'], merged['journal']),
         )
         conn.commit()
-        _recompute(conn, user_id)
+        _recompute(conn, user_id, date)
         conn.commit()
 
     row = conn.execute(
@@ -697,6 +699,8 @@ def profile():
         conn.commit()
 
         # Targets feed the adherence signal, so changing them rescores history.
+        # No date: targets feed the "hit your calorie target" rules, so
+        # changing them re-judges every day.
         _recompute(conn, user_id)
         conn.commit()
 

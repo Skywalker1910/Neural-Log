@@ -27,6 +27,7 @@ import type {
   ScheduleType,
   Task,
   TasksResponse,
+  XpLedger,
   LifestyleSummary,
   LoggedSet,
   NutritionDay,
@@ -83,6 +84,7 @@ export const queryKeys = {
   goalsSummary: ['goals', 'summary'] as const,
   tasks: ['tasks'] as const,
   habits: (days?: number) => ['habits', days ?? 'default'] as const,
+  xpLedger: ['xp-ledger'] as const,
 }
 
 export function useCurrentUser() {
@@ -793,5 +795,15 @@ export function useUpdateHabit() {
         queryClient.invalidateQueries({ queryKey: key })
       }
     },
+  })
+}
+
+/* --- R7: the XP ledger ---------------------------------------------------- */
+
+export function useXpLedger(limit?: number) {
+  return useQuery({
+    queryKey: queryKeys.xpLedger,
+    queryFn: () =>
+      api.get<XpLedger>(`/api/gamification/ledger${limit ? `?limit=${limit}` : ''}`),
   })
 }

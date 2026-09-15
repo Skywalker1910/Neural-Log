@@ -2,6 +2,60 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R7 - Gamification depth
+
+XP had only ever come from the daily checklist. Four phases of workspaces awarded
+nothing, and the leaderboard ranked people on box-ticking. Full write-up in
+[XP.md](XP.md).
+
+- **A per-action XP ledger** (`xp_transactions`) replaces day-granularity XP as
+  the authority. `daily_xp` is kept as a rollup because the leaderboard reads it.
+  Each row records the reason, the multiplier, whether a cap reduced it, and
+  whether it was measured or claimed.
+- **Every workspace earns.** Training, learning, nutrition and lifestyle all pay,
+  sized by what is actually in them.
+- **Evidence beats a claim.** Ticking "I trained" on a day you also logged pays
+  40%, because the sets are already being paid for that behaviour. Not zero - the
+  checklist is still the daily ritual.
+- **Caps and floors.** Per-source daily caps, a whole-day ceiling, and floors so
+  a three-minute study session or a warm-up-only workout earns nothing.
+  `capped_from` is recorded, so hitting a cap is visible rather than unexplained.
+- **A configurable level curve**, defaults reproducing the old hard-coded one
+  exactly - a test pins that so nobody's level moved.
+- **23 achievements across six categories**, up from 8, covering the workspaces
+  that had nothing. They became data - a metric and a threshold - rather than
+  lambdas, which is what lets a locked one report "8 of 10".
+- **The Achievements page**: category filters, tier styling, progress on every
+  locked achievement, an XP breakdown by source, the evidenced-vs-claimed split,
+  and the ledger itself with reasons and caps.
+- **Unlocking no longer waits for a checklist submission.** Logging your first
+  workout unlocks it there and then.
+
+### Bugs found
+
+- **The rollup fed itself.** `_write_rollup` wrote the day's full base into
+  `daily_xp.base_xp`, which `recompute_day` reads back as the CHECKLIST base. A
+  workout's XP was read back as a checklist award on the next rebuild and
+  survived deleting the workout, reappearing relabelled.
+- **The leaderboard would have under-reported.** Badge XP is written after the
+  day is rebuilt, so `daily_xp` was short by exactly the unlock - ledger 94,
+  rollup 84.
+- **Rebuilding history stamped today's streak on every past day.** Found by a
+  user coming out 1 XP lighter than they went in, because their streak had since
+  lapsed. `calculate_current_streak` now takes an `as_of` date.
+- **Achievement metrics disagreed with the XP floors.** A warm-up-only workout
+  unlocked "Rack Pulled" while earning nothing. Both now read `xp_config`.
+- **The rebuild script did not unlock anything.** Seven logged workouts with
+  "Logged your first workout" still locked, reading "7 of 1" - progress was
+  right, and unlocking simply never ran because it happens on write paths.
+
+### Also
+
+`docs/CI.md` corrected: required approvals were dropped from 1 to 0. They never
+protected against outsiders - only write access does - so on a one-maintainer
+repo the rule gated nobody but the maintainer, who cannot approve their own PR.
+Everything else stayed, including the force-push block.
+
 ## R6 - Goals and Habits
 
 The Paths JSON system moved into SQL, and goals were built on top. Full write-up

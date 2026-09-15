@@ -16,6 +16,9 @@ from dotenv import load_dotenv
 
 import scoring
 import habits
+import xp
+import xp_config
+import achievements
 
 load_dotenv()
 
@@ -513,6 +516,24 @@ def init_db():
         # refuse to boot.
         app.logger.exception('Could not sync the exercise library')
 
+    # The achievement catalogue, synced like the exercise and food libraries.
+    try:
+        added, updated = achievements.sync_catalogue(conn)
+        if added or updated:
+            app.logger.info('Achievements synced: %d added, %d updated', added, updated)
+    except sqlite3.Error:
+        app.logger.exception('Could not sync the achievement catalogue')
+
+    # R7 made the ledger the authority for total XP, so historical daily_xp rows
+    # have to be represented in it or every day earned before that migration
+    # stops counting and everyone's level drops. Idempotent, so it is safe here.
+    try:
+        seeded = xp.backfill_from_daily_xp(conn)
+        if seeded:
+            app.logger.info('XP ledger backfilled: %d historical days', seeded)
+    except sqlite3.Error:
+        app.logger.exception('Could not backfill the XP ledger')
+
     # Same arrangement for the food library (data/foods.json, 233 rows).
     try:
         added, updated, archived = scoring.sync_foods(conn)
@@ -536,14 +557,21 @@ STREAK_MULTIPLIER_PCT_PER_DAY = 2   # +2% total XP per consecutive day logged...
 STREAK_MULTIPLIER_CAP_PCT = 50      # ...capped at +50% (a 25-day streak)
 
 
-def calculate_current_streak(conn, user_id):
-    """Current consecutive-day streak (today or yesterday must be logged)."""
+def calculate_current_streak(conn, user_id, as_of=None):
+    """Consecutive-day streak, as of a date (default: today).
+
+    `as_of` exists because XP is rebuilt per day and the multiplier has to be the
+    streak that applied ON THAT DAY. Without it, rebuilding history stamps
+    today's streak onto every past day - a day earned during a ten-day run would
+    silently lose its multiplier, and a day earned with no streak at all would
+    gain one.
+    """
     streak_rows = conn.execute('''
         SELECT DISTINCT date
         FROM activities
-        WHERE user_id = ?
+        WHERE user_id = ? AND (? IS NULL OR date <= ?)
         ORDER BY date DESC
-    ''', (user_id,)).fetchall()
+    ''', (user_id, as_of, as_of)).fetchall()
 
     activity_dates = []
     for row in streak_rows:
@@ -555,7 +583,8 @@ def calculate_current_streak(conn, user_id):
     if not activity_dates:
         return 0
 
-    today = datetime.now().date()
+    today = (datetime.strptime(as_of, '%Y-%m-%d').date() if as_of
+             else datetime.now().date())
     latest_date = activity_dates[0]
 
     if latest_date < (today - timedelta(days=1)):
@@ -646,29 +675,22 @@ def compute_completion_percent(checklist_items, custom_responses):
     return round(completed_weight * 100 / total_weight)
 
 
-def xp_for_level(level):
-    """Cumulative total XP required to reach a given level. Level 1 is the
-    starting level everyone begins at, so it requires 0 XP."""
-    return 50 * ((level - 1) ** 2)
-
-
-def compute_level(total_xp):
-    """Return (level, xp_into_current_level, xp_needed_for_next_level)."""
-    level = 1
-    while xp_for_level(level + 1) <= total_xp:
-        level += 1
-
-    xp_into_level = total_xp - xp_for_level(level)
-    xp_for_next = xp_for_level(level + 1) - xp_for_level(level)
-    return level, xp_into_level, xp_for_next
+# The level curve moved into xp.py in R7 so it could be made configurable
+# (xp_config.LEVEL_CURVE_*). These stay as thin aliases because a dozen call
+# sites and the tests use them, and the defaults reproduce the original
+# 50 * (level - 1) ** 2 exactly - nobody's level changed when this shipped.
+xp_for_level = xp.xp_for_level
+compute_level = xp.compute_level
 
 
 def get_user_total_xp(conn, user_id):
-    row = conn.execute(
-        'SELECT COALESCE(SUM(total_xp), 0) as total FROM daily_xp WHERE user_id = ?',
-        (user_id,)
-    ).fetchone()
-    return row['total'] if row else 0
+    """Total XP, summed from the ledger rather than from daily_xp.
+
+    daily_xp is still maintained as a rollup for the leaderboard, but the ledger
+    is the authority: it is the only one that knows about achievement awards,
+    which are not part of any day's rebuild.
+    """
+    return xp.total_xp(conn, user_id)
 
 
 def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, completion_percent=0):
@@ -680,122 +702,205 @@ def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, compl
     double-count XP.
     """
     base_xp = calculate_daily_xp(checklist_items, custom_responses)
-    streak = calculate_current_streak(conn, user_id)
-    multiplier_pct = min(streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
-    total_xp = round(base_xp * (1 + multiplier_pct / 100))
+    # As of the day being scored, not today: editing last Tuesday should use last
+    # Tuesday's streak, not the one you happen to be on now.
+    streak = calculate_current_streak(conn, user_id, as_of=date)
 
-    conn.execute('''
-        INSERT INTO daily_xp (user_id, date, base_xp, streak_multiplier_pct, total_xp)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, date) DO UPDATE SET
-            base_xp = excluded.base_xp,
-            streak_multiplier_pct = excluded.streak_multiplier_pct,
-            total_xp = excluded.total_xp
-    ''', (user_id, date, base_xp, multiplier_pct, total_xp))
+    # R7: the whole day is rebuilt through the ledger rather than daily_xp being
+    # written directly. The checklist is now one source among several - training,
+    # learning, nutrition and lifestyle all earn too - and the caps that stop XP
+    # being farmed can only be applied correctly across a whole day at once.
+    # daily_xp is still written, as a rollup, because the leaderboard reads it.
+    xp.recompute_day(
+        conn, user_id, date,
+        checklist_base_xp=base_xp,
+        targets=_xp_targets(conn, user_id, date),
+        streak=streak,
+    )
     conn.commit()
 
     return evaluate_badges(conn, user_id, completion_percent_today=completion_percent)
 
 
-BADGE_DEFINITIONS = [
-    {
-        'code': 'first-log',
-        'name': 'First Steps',
-        'description': 'Logged your first daily checklist.',
-        'check': lambda ctx: ctx['total_days'] >= 1
-    },
-    {
-        'code': 'week-streak',
-        'name': 'One Week Strong',
-        'description': 'Reached a 7-day streak.',
-        'check': lambda ctx: ctx['current_streak'] >= 7
-    },
-    {
-        'code': 'month-streak',
-        'name': 'Consistency Master',
-        'description': 'Reached a 30-day streak.',
-        'check': lambda ctx: ctx['current_streak'] >= 30
-    },
-    {
-        'code': 'century',
-        'name': 'Century Club',
-        'description': 'Logged 100 days.',
-        'check': lambda ctx: ctx['total_days'] >= 100
-    },
-    {
-        'code': 'custom-path',
-        'name': 'Path Finder',
-        'description': 'Created your own custom Path.',
-        'check': lambda ctx: ctx['has_custom_path']
-    },
-    {
-        'code': 'perfect-day',
-        'name': 'Perfectionist',
-        'description': 'Completed 100% of a daily checklist.',
-        'check': lambda ctx: ctx['completion_percent_today'] >= 100
-    },
-    {
-        'code': 'level-5',
-        'name': 'Leveling Up',
-        'description': 'Reached level 5.',
-        'check': lambda ctx: ctx['level'] >= 5
-    },
-    {
-        'code': 'level-10',
-        'name': 'Double Digits',
-        'description': 'Reached level 10.',
-        'check': lambda ctx: ctx['level'] >= 10
-    }
-]
+def _xp_targets(conn, user_id, on_date):
+    """The day's targets, for the XP rules that check whether one was met.
+
+    Reuses the nutrition resolver so "hit your calorie target" means exactly the
+    same thing to XP as it does to the adherence signal - two definitions of one
+    target would eventually disagree.
+    """
+    try:
+        row = conn.execute('SELECT * FROM user_profile WHERE user_id = ?',
+                           (user_id,)).fetchone()
+        profile = dict(row) if row else {}
+
+        weight_row = conn.execute(
+            "SELECT value FROM body_measurements WHERE user_id = ? AND metric = 'weight' "
+            'AND date <= ? ORDER BY date DESC LIMIT 1', (user_id, on_date),
+        ).fetchone()
+        weight = weight_row['value'] if weight_row else None
+
+        return scoring.nutrition.resolve_targets(
+            profile, weight, datetime.strptime(on_date, '%Y-%m-%d').date())
+    except (sqlite3.Error, ValueError):
+        # Targets are a bonus condition, not a prerequisite. A user with no
+        # profile still earns the base XP for logging.
+        return {}
+
+
+def recompute_xp_day(conn, user_id, date):
+    """Rebuild one day's XP after a non-checklist action.
+
+    Called by the workspace blueprints: logging a workout or a study session has
+    to move XP, and until R7 nothing outside the checklist did.
+    """
+    streak = calculate_current_streak(conn, user_id, as_of=date)
+    return xp.recompute_day(
+        conn, user_id, date,
+        targets=_xp_targets(conn, user_id, date),
+        streak=streak,
+    )
+
+
+def _dates_with_activity(conn, user_id):
+    """Every date this user has anything on. Bounded by what they actually did."""
+    dates = set()
+    for table in ('daily_log', 'workout_sessions', 'learning_sessions',
+                  'food_entries', 'sleep_entries', 'lifestyle_days',
+                  'xp_transactions'):
+        try:
+            for row in conn.execute(
+                f'SELECT DISTINCT date FROM {table} WHERE user_id = ?', (user_id,)
+            ):
+                dates.add(row['date'])
+        except sqlite3.Error:
+            continue
+    return sorted(dates)
+
+
+def recompute_after_change(conn, user_id, date=None, evaluate_badges_on_change=True):
+    """Rebuild everything derived from a day: attribute scores, then XP.
+
+    Injected into the workspace blueprints so logging a workout, a meal or a
+    study session moves both. Before R7 they only moved the attribute scores -
+    XP came from the checklist alone, so the leaderboard ignored most of what the
+    app tracks.
+
+    `date=None` means something changed that affects every day - editing your
+    profile moves the targets that "hit your calorie target" is judged against -
+    so every date with activity is rebuilt. Rare and bounded by real usage.
+    """
+    scoring.recompute_scores(conn, user_id, from_date=date)
+
+    if date:
+        recompute_xp_day(conn, user_id, date)
+    else:
+        for day in _dates_with_activity(conn, user_id):
+            recompute_xp_day(conn, user_id, day)
+
+    # Achievements are evaluated here too, not only on checklist submission.
+    # Before R7 the gamification system listened to the checklist alone, so
+    # logging your first workout could not unlock "Rack Pulled" - you had to go
+    # and tick a box before the app noticed.
+    #
+    # After the XP rebuild, deliberately: the level-based achievements test a
+    # total that the rebuild has just changed.
+    if evaluate_badges_on_change:
+        evaluate_badges(conn, user_id)
+
+
+# The badge catalogue moved to achievements.py in R7, where it is data rather
+# than eight dicts carrying check() lambdas - see the note at the top of that
+# module on why progress reporting made that necessary.
 
 
 def evaluate_badges(conn, user_id, completion_percent_today=0):
-    """Check all badge definitions against the user's current stats and
-    unlock any newly-earned ones. Returns the list of newly-earned definitions.
+    """Unlock anything newly earned, and pay its XP into the ledger.
+
+    Returns the newly-earned entries. R7 moved the catalogue into
+    achievements.py: the old version held eight dicts each carrying a check()
+    lambda, which can decide earned-or-not but cannot say how CLOSE you are - and
+    an unlock UI that cannot show progress is just a list of things you lack.
     """
     total_days = conn.execute(
         'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
         (user_id,)
     ).fetchone()['count']
     current_streak = calculate_current_streak(conn, user_id)
-    total_xp = get_user_total_xp(conn, user_id)
-    level, _, _ = compute_level(total_xp)
+    total = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total)
 
     user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     has_custom_path = False
     if user_row:
         paths_payload = load_user_paths(user_row, conn)
-        has_custom_path = any(not path.get('is_default', False) for path in paths_payload.get('paths', []))
+        has_custom_path = any(not path.get('is_default', False)
+                              for path in paths_payload.get('paths', []))
 
-    ctx = {
-        'total_days': total_days,
-        'current_streak': current_streak,
-        'total_xp': total_xp,
-        'level': level,
-        'has_custom_path': has_custom_path,
-        'completion_percent_today': completion_percent_today
-    }
+    ctx = achievements.build_context(
+        conn, user_id,
+        completion_percent_today=completion_percent_today,
+        has_custom_path=has_custom_path,
+        total_days=total_days, current_streak=current_streak,
+        total_xp=total, level=level,
+    )
 
-    already_earned = {
-        row['badge_code']
-        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
-    }
+    newly_earned = achievements.evaluate(conn, user_id, ctx)
 
-    newly_earned = []
-    for badge in BADGE_DEFINITIONS:
-        if badge['code'] in already_earned:
-            continue
-        if badge['check'](ctx):
-            conn.execute(
-                'INSERT OR IGNORE INTO user_badges (user_id, badge_code) VALUES (?, ?)',
-                (user_id, badge['code'])
-            )
-            newly_earned.append(badge)
+    # An unlock is worth XP, and it goes through the ledger like everything else
+    # so the total stays auditable. Uncapped and never rebuilt - an achievement
+    # is one-off, and a cap would mean unlocking two in a day discarded one.
+    awarded_on = datetime.now().date().isoformat()
+    for entry in newly_earned:
+        xp.award_achievement(conn, user_id, entry['code'], entry['name'],
+                             entry.get('xp_reward', 0), day=awarded_on)
 
     if newly_earned:
+        # Refresh that day's rollup. Badge XP is written after the day has
+        # already been rebuilt, so without this daily_xp is short by exactly the
+        # unlock - and daily_xp is what the leaderboard reads, so it would
+        # under-report anyone who had just earned something.
+        recompute_xp_day(conn, user_id, awarded_on)
         conn.commit()
 
     return newly_earned
+
+
+def achievement_context(conn, user_id):
+    """The context used to report progress, outside a checklist submission."""
+    total_days = conn.execute(
+        'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()['count']
+    total = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total)
+
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    has_custom_path = False
+    if user_row:
+        paths_payload = load_user_paths(user_row, conn)
+        has_custom_path = any(not path.get('is_default', False)
+                              for path in paths_payload.get('paths', []))
+
+    return achievements.build_context(
+        conn, user_id,
+        # Not a submission, so today's completion is not in play - a locked
+        # "Perfectionist" should show its real distance, not 0 of 100 by accident.
+        completion_percent_today=_todays_completion_percent(conn, user_id),
+        has_custom_path=has_custom_path,
+        total_days=total_days,
+        current_streak=calculate_current_streak(conn, user_id),
+        total_xp=total, level=level,
+    )
+
+
+def _todays_completion_percent(conn, user_id):
+    row = conn.execute(
+        'SELECT completion_pct FROM daily_log WHERE user_id = ? ORDER BY date DESC LIMIT 1',
+        (user_id,),
+    ).fetchone()
+    return row['completion_pct'] if row else 0
+
 
 # Decorator for routes that require login
 def login_required(f):
@@ -1458,6 +1563,34 @@ def stats():
         'activities_by_date': [dict(row) for row in activities_by_date]
     })
 
+@app.route('/api/gamification/ledger')
+@login_required
+def gamification_ledger():
+    """Where the XP actually came from.
+
+    The point of R7's ledger: daily_xp stored one opaque total per day and could
+    never answer "why did I get 18 XP for that". This can, including whether an
+    award was capped and whether it was evidenced or merely claimed.
+    """
+    user_id = session.get('user_id')
+    limit = min(int(request.args.get('limit', 50)), 200)
+    days = min(int(request.args.get('days', 30)), 365)
+
+    conn = get_db_connection()
+    payload = {
+        'entries': xp.ledger(conn, user_id, limit=limit),
+        'by_source': xp.by_source(conn, user_id, days=days),
+        'evidence': xp.evidence_split(conn, user_id),
+        'total_xp': xp.total_xp(conn, user_id),
+        'caps': {
+            'per_source': xp_config.DAILY_SOURCE_CAPS,
+            'daily_total': xp_config.DAILY_TOTAL_CAP,
+        },
+    }
+    conn.close()
+    return jsonify(payload)
+
+
 @app.route('/api/gamification/summary')
 @login_required
 def gamification_summary():
@@ -1470,21 +1603,11 @@ def gamification_summary():
     current_streak = calculate_current_streak(conn, user_id)
     streak_multiplier_pct = min(current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
 
-    earned_codes = {
-        row['badge_code']
-        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
-    }
+    # Every achievement with its progress, not just earned/not-earned: a locked
+    # one should be able to say "18 of 30 nights" rather than sitting greyed out.
+    badges = achievements.with_progress(
+        conn, user_id, achievement_context(conn, user_id))
     conn.close()
-
-    badges = [
-        {
-            'code': badge['code'],
-            'name': badge['name'],
-            'description': badge['description'],
-            'earned': badge['code'] in earned_codes
-        }
-        for badge in BADGE_DEFINITIONS
-    ]
 
     return jsonify({
         'total_xp': total_xp,
@@ -2051,16 +2174,16 @@ from learning_api import init_learning  # noqa: E402
 from habits_api import init_habits  # noqa: E402
 from goals_api import init_goals  # noqa: E402
 
-init_training(app, get_db_connection, login_required)
+init_training(app, get_db_connection, login_required, recompute_after_change)
 
 # Nutrition and Lifestyle also get the recompute function injected: logging a
 # meal or a night's sleep moves attribute scores, so those endpoints have to
 # rescore, and reaching for scoring.recompute_scores directly would be the same
 # import cycle the injection exists to avoid.
-init_nutrition(app, get_db_connection, login_required, scoring.recompute_scores)
+init_nutrition(app, get_db_connection, login_required, recompute_after_change)
 
 # Learning, same arrangement: logging a study session moves Knowledge and Focus.
-init_learning(app, get_db_connection, login_required, scoring.recompute_scores)
+init_learning(app, get_db_connection, login_required, recompute_after_change)
 
 # Habits and Goals take no recompute function, and that absence is deliberate.
 # Editing a habit's schedule does not change what you actually did, and a goal is

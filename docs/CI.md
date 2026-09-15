@@ -89,7 +89,7 @@ Branch protection, applied via the GitHub API. In plain terms:
 | Rule | Effect |
 |---|---|
 | Require a pull request | No pushing straight to `main`, ever |
-| Require 1 approving review | An outside PR cannot merge unless you approve it |
+| ~~Require 1 approving review~~ | **Removed.** See below |
 | Dismiss stale approvals | A new push after approval re-opens the review |
 | Require all three CI jobs | Red tests cannot be merged |
 | Require branches up to date | Your branch must include the latest `main` before merging |
@@ -97,6 +97,23 @@ Branch protection, applied via the GitHub API. In plain terms:
 | Require linear history | Squash or rebase; no merge commits cluttering the log |
 | Block force pushes | `main`'s history cannot be rewritten |
 | Block deletions | `main` cannot be deleted |
+
+### Why required approvals were removed
+
+They were set to 1, and then dropped to 0 after the first PR hit the friction.
+
+The reasoning that removed them: **required approvals never protected against
+outsiders.** Only write access does that - someone forking a public repo cannot
+merge their PR regardless of the rule. On a repository with one maintainer the
+rule gated nobody but the maintainer, who cannot approve their own PR, so every
+PR arrived pre-blocked and needed an administrator bypass.
+
+Everything protective stayed: a pull request is still required, all three checks
+must pass, the branch must be up to date, conversations must be resolved, and
+force-pushes and deletions are still blocked.
+
+Put the approval requirement back the day a second person gets write access -
+that is when it starts doing real work.
 
 ### The self-approval problem
 
