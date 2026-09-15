@@ -18,6 +18,7 @@ import scoring
 import habits
 import xp
 import xp_config
+import achievements
 
 load_dotenv()
 
@@ -515,6 +516,14 @@ def init_db():
         # refuse to boot.
         app.logger.exception('Could not sync the exercise library')
 
+    # The achievement catalogue, synced like the exercise and food libraries.
+    try:
+        added, updated = achievements.sync_catalogue(conn)
+        if added or updated:
+            app.logger.info('Achievements synced: %d added, %d updated', added, updated)
+    except sqlite3.Error:
+        app.logger.exception('Could not sync the achievement catalogue')
+
     # R7 made the ledger the authority for total XP, so historical daily_xp rows
     # have to be represented in it or every day earned before that migration
     # stops counting and everyone's level drops. Idempotent, so it is safe here.
@@ -769,7 +778,7 @@ def _dates_with_activity(conn, user_id):
     return sorted(dates)
 
 
-def recompute_after_change(conn, user_id, date=None):
+def recompute_after_change(conn, user_id, date=None, evaluate_badges_on_change=True):
     """Rebuild everything derived from a day: attribute scores, then XP.
 
     Injected into the workspace blueprints so logging a workout, a meal or a
@@ -785,111 +794,113 @@ def recompute_after_change(conn, user_id, date=None):
 
     if date:
         recompute_xp_day(conn, user_id, date)
-        return
+    else:
+        for day in _dates_with_activity(conn, user_id):
+            recompute_xp_day(conn, user_id, day)
 
-    for day in _dates_with_activity(conn, user_id):
-        recompute_xp_day(conn, user_id, day)
+    # Achievements are evaluated here too, not only on checklist submission.
+    # Before R7 the gamification system listened to the checklist alone, so
+    # logging your first workout could not unlock "Rack Pulled" - you had to go
+    # and tick a box before the app noticed.
+    #
+    # After the XP rebuild, deliberately: the level-based achievements test a
+    # total that the rebuild has just changed.
+    if evaluate_badges_on_change:
+        evaluate_badges(conn, user_id)
 
 
-BADGE_DEFINITIONS = [
-    {
-        'code': 'first-log',
-        'name': 'First Steps',
-        'description': 'Logged your first daily checklist.',
-        'check': lambda ctx: ctx['total_days'] >= 1
-    },
-    {
-        'code': 'week-streak',
-        'name': 'One Week Strong',
-        'description': 'Reached a 7-day streak.',
-        'check': lambda ctx: ctx['current_streak'] >= 7
-    },
-    {
-        'code': 'month-streak',
-        'name': 'Consistency Master',
-        'description': 'Reached a 30-day streak.',
-        'check': lambda ctx: ctx['current_streak'] >= 30
-    },
-    {
-        'code': 'century',
-        'name': 'Century Club',
-        'description': 'Logged 100 days.',
-        'check': lambda ctx: ctx['total_days'] >= 100
-    },
-    {
-        'code': 'custom-path',
-        'name': 'Path Finder',
-        'description': 'Created your own custom Path.',
-        'check': lambda ctx: ctx['has_custom_path']
-    },
-    {
-        'code': 'perfect-day',
-        'name': 'Perfectionist',
-        'description': 'Completed 100% of a daily checklist.',
-        'check': lambda ctx: ctx['completion_percent_today'] >= 100
-    },
-    {
-        'code': 'level-5',
-        'name': 'Leveling Up',
-        'description': 'Reached level 5.',
-        'check': lambda ctx: ctx['level'] >= 5
-    },
-    {
-        'code': 'level-10',
-        'name': 'Double Digits',
-        'description': 'Reached level 10.',
-        'check': lambda ctx: ctx['level'] >= 10
-    }
-]
+# The badge catalogue moved to achievements.py in R7, where it is data rather
+# than eight dicts carrying check() lambdas - see the note at the top of that
+# module on why progress reporting made that necessary.
 
 
 def evaluate_badges(conn, user_id, completion_percent_today=0):
-    """Check all badge definitions against the user's current stats and
-    unlock any newly-earned ones. Returns the list of newly-earned definitions.
+    """Unlock anything newly earned, and pay its XP into the ledger.
+
+    Returns the newly-earned entries. R7 moved the catalogue into
+    achievements.py: the old version held eight dicts each carrying a check()
+    lambda, which can decide earned-or-not but cannot say how CLOSE you are - and
+    an unlock UI that cannot show progress is just a list of things you lack.
     """
     total_days = conn.execute(
         'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
         (user_id,)
     ).fetchone()['count']
     current_streak = calculate_current_streak(conn, user_id)
-    total_xp = get_user_total_xp(conn, user_id)
-    level, _, _ = compute_level(total_xp)
+    total = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total)
 
     user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     has_custom_path = False
     if user_row:
         paths_payload = load_user_paths(user_row, conn)
-        has_custom_path = any(not path.get('is_default', False) for path in paths_payload.get('paths', []))
+        has_custom_path = any(not path.get('is_default', False)
+                              for path in paths_payload.get('paths', []))
 
-    ctx = {
-        'total_days': total_days,
-        'current_streak': current_streak,
-        'total_xp': total_xp,
-        'level': level,
-        'has_custom_path': has_custom_path,
-        'completion_percent_today': completion_percent_today
-    }
+    ctx = achievements.build_context(
+        conn, user_id,
+        completion_percent_today=completion_percent_today,
+        has_custom_path=has_custom_path,
+        total_days=total_days, current_streak=current_streak,
+        total_xp=total, level=level,
+    )
 
-    already_earned = {
-        row['badge_code']
-        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
-    }
+    newly_earned = achievements.evaluate(conn, user_id, ctx)
 
-    newly_earned = []
-    for badge in BADGE_DEFINITIONS:
-        if badge['code'] in already_earned:
-            continue
-        if badge['check'](ctx):
-            conn.execute(
-                'INSERT OR IGNORE INTO user_badges (user_id, badge_code) VALUES (?, ?)',
-                (user_id, badge['code'])
-            )
-            newly_earned.append(badge)
+    # An unlock is worth XP, and it goes through the ledger like everything else
+    # so the total stays auditable. Uncapped and never rebuilt - an achievement
+    # is one-off, and a cap would mean unlocking two in a day discarded one.
+    awarded_on = datetime.now().date().isoformat()
+    for entry in newly_earned:
+        xp.award_achievement(conn, user_id, entry['code'], entry['name'],
+                             entry.get('xp_reward', 0), day=awarded_on)
 
     if newly_earned:
+        # Refresh that day's rollup. Badge XP is written after the day has
+        # already been rebuilt, so without this daily_xp is short by exactly the
+        # unlock - and daily_xp is what the leaderboard reads, so it would
+        # under-report anyone who had just earned something.
+        recompute_xp_day(conn, user_id, awarded_on)
         conn.commit()
 
     return newly_earned
+
+
+def achievement_context(conn, user_id):
+    """The context used to report progress, outside a checklist submission."""
+    total_days = conn.execute(
+        'SELECT COUNT(DISTINCT date) as count FROM activities WHERE user_id = ?',
+        (user_id,)
+    ).fetchone()['count']
+    total = get_user_total_xp(conn, user_id)
+    level, _, _ = compute_level(total)
+
+    user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    has_custom_path = False
+    if user_row:
+        paths_payload = load_user_paths(user_row, conn)
+        has_custom_path = any(not path.get('is_default', False)
+                              for path in paths_payload.get('paths', []))
+
+    return achievements.build_context(
+        conn, user_id,
+        # Not a submission, so today's completion is not in play - a locked
+        # "Perfectionist" should show its real distance, not 0 of 100 by accident.
+        completion_percent_today=_todays_completion_percent(conn, user_id),
+        has_custom_path=has_custom_path,
+        total_days=total_days,
+        current_streak=calculate_current_streak(conn, user_id),
+        total_xp=total, level=level,
+    )
+
+
+def _todays_completion_percent(conn, user_id):
+    row = conn.execute(
+        'SELECT completion_pct FROM daily_log WHERE user_id = ? ORDER BY date DESC LIMIT 1',
+        (user_id,),
+    ).fetchone()
+    return row['completion_pct'] if row else 0
+
 
 # Decorator for routes that require login
 def login_required(f):
@@ -1592,21 +1603,11 @@ def gamification_summary():
     current_streak = calculate_current_streak(conn, user_id)
     streak_multiplier_pct = min(current_streak * STREAK_MULTIPLIER_PCT_PER_DAY, STREAK_MULTIPLIER_CAP_PCT)
 
-    earned_codes = {
-        row['badge_code']
-        for row in conn.execute('SELECT badge_code FROM user_badges WHERE user_id = ?', (user_id,)).fetchall()
-    }
+    # Every achievement with its progress, not just earned/not-earned: a locked
+    # one should be able to say "18 of 30 nights" rather than sitting greyed out.
+    badges = achievements.with_progress(
+        conn, user_id, achievement_context(conn, user_id))
     conn.close()
-
-    badges = [
-        {
-            'code': badge['code'],
-            'name': badge['name'],
-            'description': badge['description'],
-            'earned': badge['code'] in earned_codes
-        }
-        for badge in BADGE_DEFINITIONS
-    ]
 
     return jsonify({
         'total_xp': total_xp,

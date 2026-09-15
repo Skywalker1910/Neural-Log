@@ -39,6 +39,13 @@ def _total(client):
     return client.get("/api/gamification/summary").get_json()["total_xp"]
 
 
+def _source_xp(client, source):
+    """XP from one source. Preferred over the grand total wherever a test is
+    about whether a particular kind of action earned, because unlocking an
+    achievement also moves the total and would mask the answer."""
+    return sum(e["xp"] for e in _ledger(client, source))
+
+
 # --- the level curve ---------------------------------------------------------
 
 def test_the_level_curve_is_unchanged_by_becoming_configurable():
@@ -106,10 +113,14 @@ def test_the_ledger_says_why(player):
 
 def test_a_trivial_study_session_earns_nothing(player):
     """Three minutes is opening a book and closing it."""
-    before = _total(player)
     player.post("/api/learning/sessions", json={
         "date": _iso(), "duration_minutes": 3, "started_at": "09:00"})
-    assert _total(player) == before
+    assert _source_xp(player, "learning") == 0
+
+    # Nor should it unlock the achievement. The floor has to mean the same thing
+    # to both systems, or one of them is lying about what counts as study.
+    badges = player.get("/api/gamification/summary").get_json()["badges"]
+    assert next(b for b in badges if b["code"] == "first-study")["earned"] is False
 
 
 def test_an_empty_workout_earns_nothing(player):
@@ -125,17 +136,21 @@ def test_warmups_do_not_earn(player):
 
     workout = player.post("/api/workouts",
                           json={"date": _iso(), "name": "Warmup only"}).get_json()
-    before = _total(player)
     player.put(f"/api/workouts/{workout['id']}", json={"sets": [
         {"exercise_id": bench["id"], "weight": 40, "reps": 5, "is_warmup": True},
     ]})
-    assert _total(player) == before
+    assert _source_xp(player, "training") == 0
 
 
 def test_a_two_hour_night_is_not_a_night(player):
-    before = _total(player)
     player.post("/api/sleep", json={"date": _iso(), "duration_minutes": 60})
-    assert _total(player) == before
+    assert _source_xp(player, "lifestyle") == 0
+
+    # And it should not unlock "logged your first night" either - the achievement
+    # metric respects the same floor, or the two would disagree about what counts
+    # as a night.
+    badges = player.get("/api/gamification/summary").get_json()["badges"]
+    assert next(b for b in badges if b["code"] == "first-night")["earned"] is False
 
 
 # --- caps --------------------------------------------------------------------
@@ -271,7 +286,9 @@ def test_deleting_a_workout_removes_its_xp(player):
     assert _total(player) > before
 
     player.delete(f"/api/workouts/{workout['id']}")
-    assert _total(player) == before
+    # Source-specific: the achievement the workout unlocked keeps its XP, because
+    # an unlock is permanent. Only the training award is undone.
+    assert _source_xp(player, "training") == 0
 
 
 def test_rebuilding_a_day_twice_does_not_relabel_xp(player, app_module):
@@ -295,7 +312,8 @@ def test_rebuilding_a_day_twice_does_not_relabel_xp(player, app_module):
         conn.commit()
 
     sources = [r["source"] for r in conn.execute(
-        'SELECT source FROM xp_transactions WHERE user_id = ? AND date = ?',
+        "SELECT source FROM xp_transactions WHERE user_id = ? AND date = ? "
+        "AND source != 'badge'",
         (user_id, _iso()))]
     conn.close()
 
@@ -324,12 +342,17 @@ def test_a_past_day_keeps_the_streak_it_was_earned_with(player, app_module):
     conn.row_factory = sqlite3.Row
     user_id = conn.execute("SELECT id FROM users WHERE username = 'player'").fetchone()["id"]
 
-    first_day = conn.execute(
-        'SELECT multiplier_pct FROM xp_transactions WHERE user_id = ? AND date = ?',
-        (user_id, _iso(3))).fetchone()["multiplier_pct"]
-    last_day = conn.execute(
-        'SELECT multiplier_pct FROM xp_transactions WHERE user_id = ? AND date = ?',
-        (user_id, _iso(0))).fetchone()["multiplier_pct"]
+    # Filtered to the checklist row on purpose: achievement awards also land on
+    # the day they unlock, and they carry no multiplier, so an unfiltered
+    # fetchone() can pick up a badge row and read 0%.
+    def multiplier(day):
+        return conn.execute(
+            "SELECT multiplier_pct FROM xp_transactions "
+            "WHERE user_id = ? AND date = ? AND source = 'checklist'",
+            (user_id, day)).fetchone()["multiplier_pct"]
+
+    first_day = multiplier(_iso(3))
+    last_day = multiplier(_iso(0))
     conn.close()
 
     assert last_day > first_day, (

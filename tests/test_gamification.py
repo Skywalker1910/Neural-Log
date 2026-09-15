@@ -4,6 +4,10 @@ spec these implement.
 """
 from datetime import datetime, timedelta
 
+import sqlite3
+
+import achievements
+
 from conftest import register, login
 
 
@@ -81,11 +85,20 @@ def test_daily_checklist_awards_weighted_xp_and_first_day_badges(client, app_mod
     assert "first-log" in newly_earned
     assert "perfect-day" in newly_earned
 
-    # First day logged -> streak of 1 -> +2% multiplier
-    expected_total_xp = round(expected_base_xp * 1.02)
+    # First day logged -> streak of 1 -> +2% multiplier.
+    #
+    # Since R7 the total also includes XP paid for the achievements this
+    # submission unlocked - those go through the ledger like everything else, so
+    # the total is checklist XP PLUS whatever the unlocks were worth.
+    expected_checklist_xp = round(expected_base_xp * 1.02)
+    unlocked_xp = sum(
+        entry["xp_reward"] for entry in achievements.CATALOGUE
+        if entry["code"] in newly_earned
+    )
 
     summary = client.get("/api/gamification/summary").get_json()
-    assert summary["total_xp"] == expected_total_xp
+    assert summary["total_xp"] == expected_checklist_xp + unlocked_xp
+    assert unlocked_xp > 0, "unlocking an achievement should be worth something"
     assert summary["current_streak"] == 1
     assert summary["streak_multiplier_pct"] == 2
 
@@ -112,8 +125,19 @@ def test_resubmitting_same_day_recalculates_instead_of_stacking(client, app_modu
         item["weight"] for item in batman_path["checklist_items"] if item["type"] == "time"
     ) * app_module.XP_PER_WEIGHT_POINT
 
-    assert first_total > round(time_only_base_xp * 1.02)
-    assert second_total == round(time_only_base_xp * 1.02)
+    # Achievements unlocked by the first submission keep their XP - they are
+    # one-off and are never rebuilt, so only the checklist portion is replaced.
+    # That is the point of the comparison: the day's XP was recalculated rather
+    # than stacked, even though the total did not drop all the way back.
+    conn = sqlite3.connect(app_module.DATABASE)
+    conn.row_factory = sqlite3.Row
+    badge_xp = conn.execute(
+        "SELECT COALESCE(SUM(xp), 0) AS n FROM xp_transactions WHERE source = 'badge'"
+    ).fetchone()["n"]
+    conn.close()
+
+    assert first_total > round(time_only_base_xp * 1.02) + badge_xp
+    assert second_total == round(time_only_base_xp * 1.02) + badge_xp
 
 
 def test_seven_day_streak_unlocks_badge_and_scales_multiplier(client, app_module):
