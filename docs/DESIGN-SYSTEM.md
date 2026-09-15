@@ -155,7 +155,7 @@ Primitives live in `frontend/src/components/ui/`, charts in
 | `QueryBoundary` | Loading / error / empty / retry around any query |
 | `AttributeRadar` | The attribute radar chart, with previous-period overlay |
 | `CalendarHeatmap` | Adherence grid, one square per day. Plain CSS, not Recharts |
-| `TrendChart` | Single-series trend over time |
+| `TrendChart` | Single-series trend over time. `null` gaps rather than plotting 0; dots on sparse series |
 
 ### QueryBoundary
 

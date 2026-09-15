@@ -158,24 +158,44 @@ function TodayPanel({ today }: { today: HomeSummary['today'] }) {
 }
 
 function TrendPanel({ trend }: { trend: HomeSummary['trend'] }) {
-  const points = trend
-    .filter((point) => point.daily_score !== null)
-    .map((point) => ({
-      // Long ranges would overlap; show day-of-month only.
-      label: point.date.slice(8),
-      value: point.daily_score as number,
-    }))
+  /*
+    Unlogged days are kept as null points rather than filtered out. Dropping
+    them would close the gap and pack the logged days together, drawing a
+    continuous fortnight out of two days - which is the same lie as plotting
+    them at zero, just told by omission instead. TrendChart breaks the line at a
+    null, so the gap stays where it happened.
+  */
+  const points = trend.map((point) => ({
+    // Long ranges would overlap; show day-of-month only.
+    label: point.date.slice(8),
+    value: point.daily_score,
+  }))
+
+  const observed = points.filter((point) => point.value !== null).length
 
   return (
-    <Card title="Daily score" subtitle="Last 14 days" icon={ChartLine} accent="learning">
-      {points.length < 2 ? (
+    <Card
+      title="Daily score"
+      subtitle={`${observed} of ${trend.length} days logged`}
+      icon={ChartLine}
+      accent="learning"
+    >
+      {observed < 2 ? (
         <EmptyState
           icon={TrendingUp}
           title="Not enough history for a trend"
           description="Two logged days and this starts drawing."
         />
       ) : (
-        <TrendChart data={points} accent="learning" height={220} name="Daily score" />
+        <TrendChart
+          data={points}
+          accent="learning"
+          height={220}
+          name="Daily score"
+          // Bounded scale: without this the auto-domain rescales to whatever two
+          // points happen to be there, so 88 and 92 look like a cliff.
+          domain={[0, 100]}
+        />
       )}
     </Card>
   )
