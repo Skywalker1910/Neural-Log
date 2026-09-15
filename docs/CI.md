@@ -63,22 +63,24 @@ after a merge.
 - **No secrets are used.** `tests/conftest.py` points every test at a temp
   database and sets its own `SECRET_KEY`, so CI needs nothing configured.
 
-### The first workflow has to land on `main` before anything runs
+### If the first run does not appear, wait before debugging it
 
-Worth knowing, because it looks exactly like a broken workflow file.
+When CI was first added here, the pull request showed no checks at all - not a
+failure, not a pending run. `gh run list` was empty and
+`gh api .../actions/workflows` reported `total_count: 0` for the whole repository.
 
-A workflow is only registered once its file exists on the **default branch**. The
-pull request that *adds* the first workflow to a repository will therefore show no
-checks at all - not a failure, not a pending run, nothing. `gh run list` is empty
-and `gh api .../actions/workflows` reports `total_count: 0`.
+That looks exactly like a broken workflow file, and it was not. The YAML was
+valid, Actions was enabled, and the file was on the branch. A later push to the
+same branch registered the workflow and ran all three jobs with no change to the
+workflow itself.
 
-That is not a syntax error and not an Actions permission problem. It resolves
-itself the moment the workflow reaches `main`; every pull request after that is
-checked normally, including ones already open.
-
-The practical consequence is an ordering constraint: CI has to be merged before
-branch protection can require it, because until then the required checks do not
-exist as far as GitHub is concerned.
+The cause was never established - most likely a delay on GitHub's side in picking
+up a repository's first workflow. The lesson is the useful part: **before editing
+a workflow that is not running, confirm it is actually broken.** Check that the
+YAML parses, that `actions/permissions` reports `enabled: true`, and that the file
+is present on the head branch at the path `.github/workflows/`. If all three hold,
+push again and give it a few minutes rather than rewriting a file that was
+correct.
 
 ## What is enforced on `main`
 
