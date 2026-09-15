@@ -304,6 +304,56 @@ def test_rebuilding_a_day_twice_does_not_relabel_xp(player, app_module):
     )
 
 
+def test_a_past_day_keeps_the_streak_it_was_earned_with(player, app_module):
+    """Rebuilding history must not stamp today's streak onto every past day.
+
+    A day earned during a ten-day run should keep that multiplier, and a day
+    earned with no streak should not gain one retroactively. The bug this guards
+    against showed up as a user losing XP during a historical rebuild, because
+    their streak had since lapsed to zero.
+    """
+    import sqlite3
+    items = player.get("/api/checklist-items").get_json()["items"]
+    answers = {i["name"]: "Yes" for i in items if i["type"] == "yes-no"}
+
+    # Four consecutive days, so the last of them was earned on a 4-day streak.
+    for offset in range(3, -1, -1):
+        player.put(f"/api/days/{_iso(offset)}", json={"responses": answers})
+
+    conn = sqlite3.connect(app_module.DATABASE)
+    conn.row_factory = sqlite3.Row
+    user_id = conn.execute("SELECT id FROM users WHERE username = 'player'").fetchone()["id"]
+
+    first_day = conn.execute(
+        'SELECT multiplier_pct FROM xp_transactions WHERE user_id = ? AND date = ?',
+        (user_id, _iso(3))).fetchone()["multiplier_pct"]
+    last_day = conn.execute(
+        'SELECT multiplier_pct FROM xp_transactions WHERE user_id = ? AND date = ?',
+        (user_id, _iso(0))).fetchone()["multiplier_pct"]
+    conn.close()
+
+    assert last_day > first_day, (
+        f"the fourth consecutive day ({last_day}%) should carry a bigger streak "
+        f"multiplier than the first ({first_day}%)"
+    )
+
+
+def test_the_streak_can_be_asked_for_as_of_a_past_date(player, app_module):
+    import sqlite3
+    items = player.get("/api/checklist-items").get_json()["items"]
+    answers = {i["name"]: "Yes" for i in items if i["type"] == "yes-no"}
+    for offset in range(3, -1, -1):
+        player.put(f"/api/days/{_iso(offset)}", json={"responses": answers})
+
+    conn = sqlite3.connect(app_module.DATABASE)
+    conn.row_factory = sqlite3.Row
+    user_id = conn.execute("SELECT id FROM users WHERE username = 'player'").fetchone()["id"]
+
+    assert app_module.calculate_current_streak(conn, user_id, as_of=_iso(3)) == 1
+    assert app_module.calculate_current_streak(conn, user_id, as_of=_iso(0)) == 4
+    conn.close()
+
+
 # --- the backfill ------------------------------------------------------------
 
 def test_historical_xp_is_preserved(player, app_module):

@@ -548,14 +548,21 @@ STREAK_MULTIPLIER_PCT_PER_DAY = 2   # +2% total XP per consecutive day logged...
 STREAK_MULTIPLIER_CAP_PCT = 50      # ...capped at +50% (a 25-day streak)
 
 
-def calculate_current_streak(conn, user_id):
-    """Current consecutive-day streak (today or yesterday must be logged)."""
+def calculate_current_streak(conn, user_id, as_of=None):
+    """Consecutive-day streak, as of a date (default: today).
+
+    `as_of` exists because XP is rebuilt per day and the multiplier has to be the
+    streak that applied ON THAT DAY. Without it, rebuilding history stamps
+    today's streak onto every past day - a day earned during a ten-day run would
+    silently lose its multiplier, and a day earned with no streak at all would
+    gain one.
+    """
     streak_rows = conn.execute('''
         SELECT DISTINCT date
         FROM activities
-        WHERE user_id = ?
+        WHERE user_id = ? AND (? IS NULL OR date <= ?)
         ORDER BY date DESC
-    ''', (user_id,)).fetchall()
+    ''', (user_id, as_of, as_of)).fetchall()
 
     activity_dates = []
     for row in streak_rows:
@@ -567,7 +574,8 @@ def calculate_current_streak(conn, user_id):
     if not activity_dates:
         return 0
 
-    today = datetime.now().date()
+    today = (datetime.strptime(as_of, '%Y-%m-%d').date() if as_of
+             else datetime.now().date())
     latest_date = activity_dates[0]
 
     if latest_date < (today - timedelta(days=1)):
@@ -685,7 +693,9 @@ def award_daily_xp(conn, user_id, date, checklist_items, custom_responses, compl
     double-count XP.
     """
     base_xp = calculate_daily_xp(checklist_items, custom_responses)
-    streak = calculate_current_streak(conn, user_id)
+    # As of the day being scored, not today: editing last Tuesday should use last
+    # Tuesday's streak, not the one you happen to be on now.
+    streak = calculate_current_streak(conn, user_id, as_of=date)
 
     # R7: the whole day is rebuilt through the ledger rather than daily_xp being
     # written directly. The checklist is now one source among several - training,
@@ -735,7 +745,7 @@ def recompute_xp_day(conn, user_id, date):
     Called by the workspace blueprints: logging a workout or a study session has
     to move XP, and until R7 nothing outside the checklist did.
     """
-    streak = calculate_current_streak(conn, user_id)
+    streak = calculate_current_streak(conn, user_id, as_of=date)
     return xp.recompute_day(
         conn, user_id, date,
         targets=_xp_targets(conn, user_id, date),
