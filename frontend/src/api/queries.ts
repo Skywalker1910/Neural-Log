@@ -10,6 +10,13 @@ import type {
   FoodsResponse,
   LifestyleDay,
   LifestyleDayResponse,
+  LearningArea,
+  LearningAreasResponse,
+  LearningSession,
+  LearningSessionsResponse,
+  LearningSummary,
+  LearningTopic,
+  LearningTopicsResponse,
   LifestyleSummary,
   LoggedSet,
   NutritionDay,
@@ -58,6 +65,10 @@ export const queryKeys = {
   lifestyleDay: (date: string) => ['lifestyle-day', date] as const,
   sleep: ['sleep'] as const,
   profile: ['profile'] as const,
+  learning: ['learning'] as const,
+  learningAreas: ['learning-areas'] as const,
+  learningTopics: ['learning-topics'] as const,
+  learningSessions: ['learning-sessions'] as const,
 }
 
 export function useCurrentUser() {
@@ -476,6 +487,135 @@ export function useSaveProfile() {
         queryKeys.home, ['attributes']]) {
         queryClient.invalidateQueries({ queryKey: key })
       }
+    },
+  })
+}
+
+/* --- R5: learning --------------------------------------------------------- */
+
+/**
+ * Logging a study session moves Knowledge and Focus, so every mutation here
+ * invalidates `home` and `attributes` alongside its own keys. Editing an area or
+ * topic does not touch a score, so those invalidate narrowly.
+ */
+const LEARNING_SCORE_KEYS = [
+  queryKeys.learning,
+  queryKeys.learningSessions,
+  queryKeys.home,
+  ['attributes'],
+]
+
+export function useLearningSummary() {
+  return useQuery({
+    queryKey: queryKeys.learning,
+    queryFn: () => api.get<LearningSummary>('/api/learning'),
+  })
+}
+
+export function useLearningAreas() {
+  return useQuery({
+    queryKey: queryKeys.learningAreas,
+    queryFn: () => api.get<LearningAreasResponse>('/api/learning/areas'),
+  })
+}
+
+export function useLearningTopics() {
+  return useQuery({
+    queryKey: queryKeys.learningTopics,
+    queryFn: () => api.get<LearningTopicsResponse>('/api/learning/topics'),
+  })
+}
+
+export function useLearningSessions(limit?: number) {
+  return useQuery({
+    queryKey: queryKeys.learningSessions,
+    queryFn: () =>
+      api.get<LearningSessionsResponse>(
+        `/api/learning/sessions${limit ? `?limit=${limit}` : ''}`,
+      ),
+  })
+}
+
+export function useSaveArea() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<LearningArea> & { id?: number }) =>
+      id
+        ? api.put<LearningArea>(`/api/learning/areas/${id}`, body)
+        : api.post<LearningArea>('/api/learning/areas', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningAreas })
+      // Topics carry their area's name and accent, so renaming an area or
+      // recolouring it has to refresh them too.
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+      queryClient.invalidateQueries({ queryKey: queryKeys.learning })
+    },
+  })
+}
+
+export function useDeleteArea() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (areaId: number) =>
+      api.delete<{ success: boolean }>(`/api/learning/areas/${areaId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningAreas })
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+    },
+  })
+}
+
+export function useSaveTopic() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<LearningTopic> & { id?: number }) =>
+      id
+        ? api.put<LearningTopic>(`/api/learning/topics/${id}`, body)
+        : api.post<LearningTopic>('/api/learning/topics', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningAreas })
+      queryClient.invalidateQueries({ queryKey: queryKeys.learning })
+    },
+  })
+}
+
+export function useDeleteTopic() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (topicId: number) =>
+      api.delete<{ success: boolean }>(`/api/learning/topics/${topicId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningAreas })
+    },
+  })
+}
+
+export function useLogSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Partial<LearningSession> & { date: string }) =>
+      api.post<LearningSession>('/api/learning/sessions', body),
+    onSuccess: () => {
+      for (const key of LEARNING_SCORE_KEYS) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
+    },
+  })
+}
+
+export function useDeleteSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (sessionId: number) =>
+      api.delete<{ success: boolean }>(`/api/learning/sessions/${sessionId}`),
+    onSuccess: () => {
+      for (const key of LEARNING_SCORE_KEYS) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.learningTopics })
     },
   })
 }

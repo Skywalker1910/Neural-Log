@@ -112,6 +112,7 @@ Neural-Log/
     ├── SCORING.md          # how behaviour becomes the eight attributes
     ├── TRAINING.md         # exercise library, set logging, routines, analytics
     ├── NUTRITION.md        # food library, recipes, sleep, lifestyle, TDEE
+    ├── LEARNING.md         # areas, topics, study sessions, block depth
     ├── DEPLOYMENT.md       # AWS plan and cost model
     ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first
@@ -121,9 +122,10 @@ Neural-Log/
 
 Mid-redesign: turning the checklist app into a full personal-development platform -
 ten workspaces, an RPG-style attribute system driven by real behaviour, and analytics
-over it all. Foundation (R1), Home and Today (R2), Training (R3) and Nutrition +
-Lifestyle (R4) are done; Learning (R5) is next. Deployment comes last, once the
-product is complete - see [docs/ROADMAP.md](docs/ROADMAP.md).
+over it all. Foundation (R1), Home and Today (R2), Training (R3), Nutrition +
+Lifestyle (R4) and Learning (R5) are done; Goals and Habits (R6) are next.
+Deployment comes last, once the product is complete - see
+[docs/ROADMAP.md](docs/ROADMAP.md).
 See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License

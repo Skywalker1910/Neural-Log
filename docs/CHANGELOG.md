@@ -2,6 +2,65 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R5 - Learning
+
+Knowledge and Focus stopped running on checklist data alone. Full write-up in
+[LEARNING.md](LEARNING.md).
+
+- **Three tables** (`migrations/005_learning.sql`) - areas, topics and sessions,
+  plus `weekly_study_minutes` on `user_profile`. Deliberately shallow: a deeper
+  tree is a thing to maintain rather than a thing that helps you study.
+- **`producers.learning_ratios()`** - study minutes feed Knowledge over a trailing
+  window; block depth feeds Focus.
+- **`learning_api.py`** - areas, topics, sessions and a composed dashboard.
+- **Learning workspace** - a persistent session timer, manual logging, weekly
+  goal, study-time trend, topic distribution, streak and block depth.
+
+### The Focus signal
+
+The brief asked for Focus to come from a self-reported focus rating. R4 had
+already established why that is wrong, so Focus is derived from the *shape* of
+study time instead - one two-hour block is deeper work than four half-hour ones
+for the same total, and that is observable. The rating is recorded and charted,
+and a test asserts it never reaches the producer.
+
+Depth is a **duration-weighted mean block length**, `sum(d^2)/sum(d)`. The three
+obvious statistics are all wrong: total minutes is Knowledge again, longest block
+lets one good session hide a fragmented week, and a plain mean lets a stray
+five-minute session drag a great day down - 120 minutes plus a 5-minute glance
+scores 62, worse than the 120 alone. Weighting by duration asks "for a randomly
+chosen minute of study, how long was the block it belonged to".
+
+Sessions less than 15 minutes apart merge into one block; blocks are pooled per
+day so they cannot span midnight; overlapping sessions do not double-count.
+
+Knowledge and Focus join `MEASURABLE_ATTRIBUTES`. Only Discipline and Consistency
+remain outside it now - the checklist is already direct evidence of discipline,
+and nothing self-reports consistency at all.
+
+### Bugs found in verification
+
+- **The study-time chart lied by omission.** The endpoint returns only days with
+  sessions, so the line ran straight from one study day to the next and a rest day
+  read as continuity. Gaps are now filled with zero - but only between the first
+  and last logged day, since extending the fill backwards would invent a history
+  of not studying before you started.
+- **A topic row broke the page on a phone.** Grid items default to
+  `min-width: auto`, so the row refused to shrink below its three buttons and
+  pushed the whole document into horizontal scroll. A DOM probe comparing
+  `scrollWidth` against `clientWidth` located it immediately, and the same probe
+  cleared Home, Today, Training, Nutrition and Lifestyle.
+- **A ref was read during render** in the session timer. The ref was redundant -
+  the effect already depends on the stored value and can close over it.
+- **The "not scored" badge wrapped onto two lines** here and on Lifestyle.
+
+### Streaks
+
+Consecutive days studied, derived rather than stored. A streak counts as unbroken
+if you studied yesterday even with nothing logged today - at 09:00 you have not
+studied yet, and a counter that reset overnight would report a lost streak every
+single morning.
+
 ## R4 - Nutrition and Lifestyle
 
 Recovery stopped being `unobserved`, and `locked` is now empty: every attribute

@@ -489,3 +489,86 @@ export interface FoodsResponse {
 export interface RecipesResponse {
   recipes: Recipe[]
 }
+
+/* --- R5: learning --------------------------------------------------------- */
+
+export interface LearningArea {
+  id: number
+  name: string
+  /** A design-system accent name, so an area is coloured consistently. */
+  accent: string
+  notes: string | null
+  /** Null means the profile-wide weekly study target applies instead. */
+  weekly_target_minutes: number | null
+  /** Joined on the list endpoint only. */
+  topic_count?: number
+  total_minutes?: number
+}
+
+export interface LearningTopic {
+  id: number
+  area_id: number | null
+  name: string
+  notes: string | null
+  status: 'active' | 'paused' | 'done'
+  area_name?: string | null
+  area_accent?: string | null
+  session_count?: number
+  total_minutes?: number
+  last_studied?: string | null
+}
+
+export interface LearningSession {
+  id: number
+  date: string
+  topic_id: number | null
+  /**
+   * HH:MM. Optional - but when present they are what let two sessions fifteen
+   * minutes apart count as one interrupted block rather than two short ones,
+   * which is the difference between an honest Focus score and a punitive one.
+   */
+  started_at: string | null
+  ended_at: string | null
+  duration_minutes: number
+  /** 1-5, self-reported. Recorded and charted, deliberately never scored. */
+  focus_rating: number | null
+  difficulty: number | null
+  notes: string | null
+  topic_name?: string | null
+  area_name?: string | null
+  area_accent?: string | null
+}
+
+export interface LearningSummary {
+  recent: LearningSession[]
+  by_day: { date: string; minutes: number; sessions: number }[]
+  by_topic: {
+    topic: string
+    area: string
+    accent: string
+    minutes: number
+    sessions: number
+  }[]
+  totals: {
+    sessions: number
+    minutes: number
+    this_week_minutes: number
+    weekly_target_minutes: number
+    streak_days: number
+    /** Duration-weighted mean block length, as a % of the target block. */
+    depth_pct: number | null
+    target_block_minutes: number
+  }
+}
+
+export interface LearningAreasResponse {
+  areas: LearningArea[]
+}
+
+export interface LearningTopicsResponse {
+  topics: LearningTopic[]
+}
+
+export interface LearningSessionsResponse {
+  sessions: LearningSession[]
+}
