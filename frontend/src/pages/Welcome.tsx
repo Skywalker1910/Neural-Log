@@ -154,12 +154,30 @@ function StepFields({
 
     case 'activity':
       return (
-        <ChoiceGroup
-          name="Activity level"
-          value={answers.activity_level ?? null}
-          options={ACTIVITY}
-          onChange={(activity_level) => set({ activity_level })}
-        />
+        <div className="flex flex-col gap-5">
+          <ChoiceGroup
+            name="Activity level"
+            value={answers.activity_level ?? null}
+            options={ACTIVITY}
+            onChange={(activity_level) => set({ activity_level })}
+          />
+          <Field
+            label="Training days a week"
+            hint="What a full week of volume means for you. Leave blank and it assumes four."
+            error={errors.training_days_per_week}
+          >
+            {(id) => (
+              <TextInput
+                id={id} type="number" inputMode="numeric" min={0} max={7} placeholder="4"
+                className="sm:max-w-48"
+                value={answers.training_days_per_week ?? ''}
+                onChange={(e) =>
+                  set({ training_days_per_week: e.target.value ? Number(e.target.value) : null })
+                }
+              />
+            )}
+          </Field>
+        </div>
       )
 
     case 'body_goal':

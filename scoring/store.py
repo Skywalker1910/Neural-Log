@@ -302,6 +302,7 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     sleep_targets = {iso: t.get('sleep_minutes') for iso, t in targets.items()}
     step_targets = {iso: t.get('steps') for iso, t in targets.items()}
     study_targets = {iso: t.get('weekly_study_minutes') for iso, t in targets.items()}
+    training_days = {iso: t.get('training_days_per_week') for iso, t in targets.items()}
 
     # Five measured producers now, and several of them speak to the same
     # attribute: sleep consistency and adherence both feed Discipline, steps and
@@ -309,7 +310,7 @@ def recompute_scores(conn, user_id, from_date=None, config=DEFAULT_CONFIG):
     # overlap - a plain dict update would have let whichever ran last silently
     # win.
     measured = producers.merge_measured(
-        producers.training_ratios(training_sets, all_dates, config),
+        producers.training_ratios(training_sets, all_dates, training_days, config),
         producers.sleep_ratios(sleep_rows, all_dates, sleep_targets, config),
         producers.steps_ratios(lifestyle_rows, all_dates, step_targets, config),
         producers.adherence_ratios(lifestyle_rows, nutrition_totals, targets, config),

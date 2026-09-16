@@ -186,6 +186,9 @@ def resolve_targets(profile, weight_kg, today):
         # R5. Lives here with the other targets rather than in a learning-specific
         # resolver, so there is one place that answers "what am I aiming at today".
         'weekly_study_minutes': profile.get('weekly_study_minutes') or 300,
+        # R10. Lives with the other targets for the same reason the study target
+        # does: one place answers "what am I aiming at today".
+        'training_days_per_week': profile.get('training_days_per_week'),
         'estimated_tdee': round(estimated_tdee) if estimated_tdee is not None else None,
         'estimated_bmr': (round(bmr(weight_kg, profile.get('height_cm'), age, profile.get('sex')))
                           if estimated_tdee is not None else None),

@@ -84,8 +84,9 @@ STEPS = [
     {
         'key': 'activity',
         'title': 'How active are you?',
-        'blurb': 'Outside deliberate training. This scales your daily energy estimate.',
-        'fields': ['activity_level'],
+        'blurb': 'Activity scales your energy estimate; training frequency sets what a '
+                 'full week of volume means for you.',
+        'fields': ['activity_level', 'training_days_per_week'],
     },
     {
         'key': 'body_goal',
@@ -141,6 +142,7 @@ RANGES = {
     'height_cm': (60, 260),
     'weight_kg': (20, 400),
     'sleep_target_minutes': (180, 840),
+    'training_days_per_week': (0, 7),
     'weekly_study_minutes': (0, 10080),
 }
 

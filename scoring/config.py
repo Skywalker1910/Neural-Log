@@ -134,7 +134,25 @@ class ScoringConfig:
 
     # Weekly targets a fully-credited window represents. Deliberately modest -
     # these describe "training consistently", not "training like an athlete".
-    weekly_strength_volume: float = 12000.0   # kg x reps across the window
+    #
+    # Strength is the one that scales with how often you train, because kg x reps
+    # is per-session work that accumulates: a flat weekly figure asks someone on a
+    # deliberate twice-a-week programme to do a four-day week's volume, so they
+    # score permanently low for executing their plan perfectly.
+    #
+    # The denominator being partly self-declared is not a departure. The whole
+    # engine already works that way - your Path decides which attributes have a
+    # denominator at all, and you choose your Path. Declaring how often you train
+    # is the same kind of act, and it is bounded below so that declaring "once a
+    # week" cannot collapse the bar into a free 100.
+    per_session_strength_volume: float = 3000.0   # kg x reps in one session
+    default_training_days: int = 4                # 4 x 3000 = the old flat 12000
+    min_training_days: int = 2
+    max_training_days: int = 6
+
+    # Cardio and mobility stay absolute. They are weekly time budgets rather than
+    # per-session work products - how many days you lift says nothing about how
+    # many minutes of cardio a week is a reasonable ask.
     weekly_cardio_minutes: float = 90.0
     weekly_mobility_minutes: float = 30.0
 
