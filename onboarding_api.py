@@ -40,6 +40,7 @@ from datetime import date as _date
 
 from flask import Blueprint, jsonify, request, session
 
+import habits as habits_store
 from scoring import nutrition as nut
 
 onboarding_bp = Blueprint('onboarding', __name__)
@@ -70,10 +71,13 @@ def _auth(view):
 # disagree about how many steps there are or what each one writes. The client
 # renders these; it does not define them.
 #
-# `fields` are user_profile columns. The two exceptions are called out on their
-# own steps: weight is a body measurement (it changes weekly; the profile is for
-# things that do not), and the Path lives on `users` because it predates this
-# table by the whole project.
+# `fields` are user_profile columns. Weight is the exception, on its own step:
+# it changes weekly, and the profile is for things that do not.
+#
+# There used to be a "Choose your Path" step. It is gone with the Paths - picking
+# one quietly decided which of your attributes could be measured at all, which is
+# not a thing to ask somebody on their first evening. Everyone answers the same
+# survey now, so the step shows it rather than asking anything.
 STEPS = [
     {
         'key': 'profile',
@@ -108,11 +112,11 @@ STEPS = [
         'fields': ['weekly_study_minutes'],
     },
     {
-        'key': 'path',
-        'title': 'Choose your Path',
-        'blurb': 'The daily checklist you will run through each evening.',
+        'key': 'survey',
+        'title': 'Your evening check-in',
+        'blurb': 'The same ten questions for everyone, so the numbers mean the '
+                 'same thing. Add your own at any time.',
         'fields': [],
-        'extra': ['selected_path'],
     },
     {
         'key': 'baselines',
@@ -152,7 +156,7 @@ def _validate(payload):
     cleaned, errors = {}, {}
 
     for key, value in payload.items():
-        if key not in PROFILE_FIELDS and key not in ('weight_kg', 'selected_path'):
+        if key not in PROFILE_FIELDS and key != 'weight_kg':
             continue
         if value is None or value == '':
             cleaned[key] = None
@@ -213,12 +217,10 @@ def _profile_row(conn, user_id):
 def _state(conn, user_id):
     """Everything the flow and the banner need, in one response."""
     profile = _profile_row(conn, user_id)
-    user = conn.execute('SELECT selected_path FROM users WHERE id = ?', (user_id,)).fetchone()
     weight = _latest_weight(conn, user_id)
 
     answers = {field: profile.get(field) for field in PROFILE_FIELDS}
     answers['weight_kg'] = weight
-    answers['selected_path'] = user['selected_path'] if user else None
 
     targets = nut.resolve_targets(profile, weight, _date.today())
 
@@ -238,6 +240,9 @@ def _state(conn, user_id):
         'answers': answers,
         'baselines': _baselines(profile, weight, targets),
         'targets': targets,
+        # The last-but-one step shows these rather than asking anything - the
+        # survey is the same for everybody, so there is nothing to choose.
+        'survey': habits_store.load_survey(conn, user_id),
     }
 
 
@@ -299,7 +304,6 @@ def save_onboarding():
     conn = _get_db()
     try:
         weight = cleaned.pop('weight_kg', None)
-        path = cleaned.pop('selected_path', None)
 
         if cleaned:
             _upsert_profile(conn, user_id, cleaned)
@@ -313,9 +317,6 @@ def save_onboarding():
                 'ON CONFLICT(user_id, date, metric) DO UPDATE SET value = excluded.value',
                 (user_id, _date.today().isoformat(), weight),
             )
-
-        if path:
-            conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (path, user_id))
 
         updates = {}
         if 'step' in data:

@@ -218,7 +218,11 @@ def init_db():
     cursor = conn.cursor()
     columns = [row[1] for row in cursor.execute('PRAGMA table_info(users)').fetchall()]
     if 'selected_path' not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN selected_path TEXT DEFAULT 'Batman Path'")
+        # No default. Paths were retired in 011 and nothing reads this column
+        # any more; a default of 'Batman Path' would keep asserting a concept
+        # the app no longer has. Kept rather than dropped because dropping it
+        # means another table rebuild for nothing.
+        cursor.execute('ALTER TABLE users ADD COLUMN selected_path TEXT')
     if 'custom_path_items' not in columns:
         cursor.execute('ALTER TABLE users ADD COLUMN custom_path_items TEXT')
 
@@ -712,9 +716,13 @@ def register():
         # Create new user
         password_hash = generate_password_hash(password)
         cursor = conn.cursor()
+        # selected_path is written explicitly as NULL. The baseline schema still
+        # declares DEFAULT 'Batman Path' and SQLite cannot change a column default
+        # without rebuilding the table - so leaving it out would keep stamping
+        # every new account with a Path that no longer exists.
         cursor.execute(
-            'INSERT INTO users (username, password_hash, email, is_admin) '
-            'VALUES (?, ?, ?, ?)',
+            'INSERT INTO users (username, password_hash, email, is_admin, selected_path) '
+            'VALUES (?, ?, ?, ?, NULL)',
             (username, password_hash, email, is_admin)
         )
         conn.commit()

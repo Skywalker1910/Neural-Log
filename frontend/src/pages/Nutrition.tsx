@@ -21,6 +21,7 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
+import { amountLabel } from '../lib/foodUnits'
 import { shiftISO, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
 
@@ -179,7 +180,7 @@ function MealSection({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-label text-ink">{entry.name}</span>
                 <span className="block truncate text-meta text-ink-subtle">
-                  {Math.round(entry.grams)}g · P {Math.round(entry.macros.protein_g)}g
+                  {amountLabel(Math.round(entry.grams), entry)} · P {Math.round(entry.macros.protein_g)}g
                   {' · '}C {Math.round(entry.macros.carbs_g)}g
                   {' · '}F {Math.round(entry.macros.fat_g)}g
                 </span>

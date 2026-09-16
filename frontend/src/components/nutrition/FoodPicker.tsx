@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+
 import { ChefHat, Plus, Search, UtensilsCrossed } from 'lucide-react'
 
 import type { Food, FoodCategory, Meal } from '../../api/types'
@@ -10,6 +11,7 @@ import { Modal } from '../ui/Modal'
 import { QueryBoundary } from '../ui/QueryBoundary'
 import { SkeletonGrid } from '../ui/Skeleton'
 import { cn } from '../../lib/cn'
+import { amountLabel, unitOf } from '../../lib/foodUnits'
 
 const CATEGORIES: { value: '' | FoodCategory; label: string }[] = [
   { value: '', label: 'All' },
@@ -111,7 +113,9 @@ export function FoodPicker({
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-meta text-ink-muted">Amount (grams)</span>
+            <span className="text-meta text-ink-muted">
+              Amount ({unitOf(selected) === 'ml' ? 'millilitres' : 'grams'})
+            </span>
             <input
               type="number" min="1" inputMode="decimal" value={grams} autoFocus
               onChange={(event) => setGrams(event.target.value)}
@@ -125,7 +129,7 @@ export function FoodPicker({
               onClick={() => setGrams(String(selected.serving_grams))}
               className="self-start"
             >
-              {selected.serving_name ?? 'One serving'} ({selected.serving_grams}g)
+              {selected.serving_name ?? 'One serving'} ({amountLabel(selected.serving_grams, selected)})
             </Button>
           )}
 

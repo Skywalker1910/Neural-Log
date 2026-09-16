@@ -56,6 +56,8 @@ def _food_row(row):
         'fibre_per_100g': row['fibre_per_100g'],
         'serving_name': row['serving_name'],
         'serving_grams': row['serving_grams'],
+        # Display unit only - storage and all the macro maths stay in grams.
+        'unit': row['unit'] if 'unit' in row.keys() else 'g',
         'is_custom': row['user_id'] is not None,
     }
 
@@ -377,7 +379,7 @@ def _entries_for(conn, user_id, day):
     rows = conn.execute(
         '''
         SELECT e.id, e.meal, e.grams, e.position, e.food_id,
-               f.name, f.category, f.source, f.serving_name, f.serving_grams,
+               f.name, f.category, f.source, f.serving_name, f.serving_grams, f.unit,
                f.kcal_per_100g, f.protein_per_100g, f.carbs_per_100g,
                f.fat_per_100g, f.fibre_per_100g
         FROM food_entries e

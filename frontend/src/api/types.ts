@@ -362,6 +362,13 @@ export interface Food {
   fibre_per_100g: number
   serving_name: string | null
   serving_grams: number | null
+  /**
+   * Display unit only: 'g' or 'ml'. Storage and every macro calculation stay in
+   * grams, and 1 ml is taken as 1 g - true to within ~3% for water-based drinks
+   * and milk, which is well inside the error already in "one mug". Oils keep
+   * grams: at 0.92 g/ml, ml would misstate them by 8%.
+   */
+  unit: 'g' | 'ml'
   is_custom: boolean
 }
 
@@ -374,6 +381,8 @@ export interface Macros {
 }
 
 export interface FoodEntry {
+  /** The food's display unit, joined through from `foods`. */
+  unit?: 'g' | 'ml'
   id: number
   food_id: number
   name: string
@@ -824,7 +833,6 @@ export interface OnboardingAnswers {
   target_wake_time: string | null
   weekly_study_minutes: number | null
   weight_kg: number | null
-  selected_path: string | null
 }
 
 export interface Baselines {
@@ -857,6 +865,8 @@ export interface NutritionTargets {
 
 export interface OnboardingState {
   steps: OnboardingStep[]
+  /** The shared daily survey, shown on its own step rather than chosen. */
+  survey: ChecklistItem[]
   step: number
   completed: boolean
   completed_at: string | null

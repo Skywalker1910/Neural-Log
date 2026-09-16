@@ -9,6 +9,8 @@ import type { OnboardingAnswers, OnboardingState } from '../api/types'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { ChoiceGroup, Field, Select, TextInput } from '../components/ui/Field'
+import { ItemIcon } from '../components/ui/ItemIcon'
+import { iconForItem } from '../lib/itemIcons'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
@@ -16,6 +18,13 @@ import { duration, EASE } from '../lib/motion'
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion'
 
 type Answers = Partial<OnboardingAnswers>
+
+/** Props for one numeric field: what to display, and what to do with a keystroke. */
+type NumericProps = {
+  value: string
+  onChange: (event: { target: { value: string } }) => void
+}
+type Numeric = (key: keyof OnboardingAnswers, stored: number | null | undefined) => NumericProps
 
 const ACTIVITY = [
   { value: 'sedentary', label: 'Sedentary', hint: 'Desk job, little deliberate movement' },
@@ -29,13 +38,6 @@ const GOALS = [
   { value: 'cut', label: 'Lose fat', hint: '20% below maintenance' },
   { value: 'maintain', label: 'Maintain', hint: 'Hold steady' },
   { value: 'bulk', label: 'Build muscle', hint: '10% above maintenance' },
-]
-
-const PATHS = [
-  { value: 'Batman Path', label: 'Batman', hint: 'Discipline and relentless preparation' },
-  { value: 'Thor Path', label: 'Thor', hint: 'Strength and physical dominance' },
-  { value: 'Captain America Path', label: 'Captain America', hint: 'Consistency and duty' },
-  { value: 'Ironman Path', label: 'Ironman', hint: 'Learning and invention' },
 ]
 
 /** Minutes <-> "7h 30m", so sleep is entered in the units people think in. */
@@ -105,17 +107,58 @@ function Baselines({ state }: { state: OnboardingState }) {
   )
 }
 
+/**
+ * The evening check-in, shown rather than chosen.
+ *
+ * This step used to be "Choose your Path" - Batman, Thor, Captain America or
+ * Ironman, each with its own ten questions. Picking one quietly decided which of
+ * your attributes could be measured at all, which is not a thing to ask somebody
+ * on their first evening. Everyone answers the same survey now.
+ */
+function SurveyPreview({ state }: { state: OnboardingState }) {
+  const scored = state.survey.filter((question) => question.type !== 'rating')
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-1.5">
+        {state.survey.map((question) => (
+          <li
+            key={question.id}
+            className="flex min-w-0 items-center gap-3 rounded-md border border-line bg-surface-base px-3 py-2"
+          >
+            <ItemIcon name={iconForItem(question.icon, question.name)} size={28} />
+            <span className="min-w-0 flex-1 text-label text-ink">{question.name}</span>
+            {question.weight > 1 && (
+              <span className="shrink-0 text-caption uppercase text-ink-subtle">
+                weight {question.weight}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-meta text-ink-subtle">
+        {scored.length} scored questions, the same for everyone — which is what makes two
+        people's completion percentages comparable. You can add your own from Today at any
+        time, and they sit below these.
+      </p>
+    </div>
+  )
+}
+
 function StepFields({
   stepKey,
   answers,
   errors,
   set,
+  numeric,
   state,
 }: {
   stepKey: string
   answers: Answers
   errors: Record<string, string>
   set: (patch: Answers) => void
+  numeric: Numeric
   state: OnboardingState
 }) {
   switch (stepKey) {
@@ -125,18 +168,16 @@ function StepFields({
           <Field label="Birth year" hint="Only the year — a full date is more than a calorie estimate justifies." error={errors.birth_year}>
             {(id) => (
               <TextInput
-                id={id} type="number" inputMode="numeric" placeholder="1995"
-                value={answers.birth_year ?? ''}
-                onChange={(e) => set({ birth_year: e.target.value ? Number(e.target.value) : null })}
+                id={id} type="text" inputMode="numeric" placeholder="1995"
+                {...numeric('birth_year', answers.birth_year)}
               />
             )}
           </Field>
           <Field label="Height" hint="Centimetres." error={errors.height_cm}>
             {(id) => (
               <TextInput
-                id={id} type="number" inputMode="decimal" placeholder="178"
-                value={answers.height_cm ?? ''}
-                onChange={(e) => set({ height_cm: e.target.value ? Number(e.target.value) : null })}
+                id={id} type="text" inputMode="decimal" placeholder="178"
+                {...numeric('height_cm', answers.height_cm)}
               />
             )}
           </Field>
@@ -168,12 +209,10 @@ function StepFields({
           >
             {(id) => (
               <TextInput
-                id={id} type="number" inputMode="numeric" min={0} max={7} placeholder="4"
+                id={id} type="text" inputMode="numeric" placeholder="4"
+                min={0} max={7}
                 className="sm:max-w-48"
-                value={answers.training_days_per_week ?? ''}
-                onChange={(e) =>
-                  set({ training_days_per_week: e.target.value ? Number(e.target.value) : null })
-                }
+                {...numeric('training_days_per_week', answers.training_days_per_week)}
               />
             )}
           </Field>
@@ -192,10 +231,10 @@ function StepFields({
           <Field label="Current weight" hint="Kilograms. Stored as a measurement, so it can move." error={errors.weight_kg}>
             {(id) => (
               <TextInput
-                id={id} type="number" inputMode="decimal" step="0.1" placeholder="75"
+                id={id} type="text" inputMode="decimal" placeholder="75"
+                step="0.1"
                 className="sm:max-w-48"
-                value={answers.weight_kg ?? ''}
-                onChange={(e) => set({ weight_kg: e.target.value ? Number(e.target.value) : null })}
+                {...numeric('weight_kg', answers.weight_kg)}
               />
             )}
           </Field>
@@ -212,9 +251,9 @@ function StepFields({
           >
             {(id) => (
               <TextInput
-                id={id} type="number" inputMode="numeric" step="15" placeholder="480"
-                value={answers.sleep_target_minutes ?? ''}
-                onChange={(e) => set({ sleep_target_minutes: e.target.value ? Number(e.target.value) : null })}
+                id={id} type="text" inputMode="numeric" placeholder="480"
+                step="15"
+                {...numeric('sleep_target_minutes', answers.sleep_target_minutes)}
               />
             )}
           </Field>
@@ -248,24 +287,17 @@ function StepFields({
         >
           {(id) => (
             <TextInput
-              id={id} type="number" inputMode="numeric" step="30" placeholder="300"
+              id={id} type="text" inputMode="numeric" placeholder="300"
+              step="30"
               className="sm:max-w-48"
-              value={answers.weekly_study_minutes ?? ''}
-              onChange={(e) => set({ weekly_study_minutes: e.target.value ? Number(e.target.value) : null })}
+              {...numeric('weekly_study_minutes', answers.weekly_study_minutes)}
             />
           )}
         </Field>
       )
 
-    case 'path':
-      return (
-        <ChoiceGroup
-          name="Path"
-          value={answers.selected_path ?? null}
-          options={PATHS}
-          onChange={(selected_path) => set({ selected_path })}
-        />
-      )
+    case 'survey':
+      return <SurveyPreview state={state} />
 
     case 'baselines':
       return <Baselines state={state} />
@@ -284,6 +316,31 @@ function Flow({ state }: { state: OnboardingState }) {
   const [draft, setDraft] = useState<Answers>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  /*
+    What was typed, as text, for the numeric fields.
+
+    Round-tripping through Number() on every keystroke is the usual way these
+    fields misbehave: "1" becomes 1 becomes "1" and everything looks fine, until
+    a value cannot survive the trip. A trailing decimal point ("75.") parses to
+    75 and re-renders as "75", eating the character. A leading zero vanishes. An
+    empty field that should stay empty fills back in.
+
+    Keeping the raw text and parsing only on the way out means the field shows
+    exactly what was typed, and the server still receives a number.
+  */
+  const [typed, setTyped] = useState<Record<string, string>>({})
+
+  const numeric: Numeric = (key, stored) => ({
+    value: typed[key] ?? (stored ?? '').toString(),
+    onChange: (event) => {
+      const text = event.target.value
+      setTyped((current) => ({ ...current, [key]: text }))
+
+      const parsed = text.trim() === '' ? null : Number(text)
+      set({ [key]: parsed !== null && Number.isNaN(parsed) ? null : parsed } as Answers)
+    },
+  })
+
   // Server answers underneath, unsaved edits on top - derived rather than copied
   // into state by an effect, so a refetch never clobbers something half-typed.
   const answers = useMemo(() => ({ ...state.answers, ...draft }), [state.answers, draft])
@@ -295,15 +352,20 @@ function Flow({ state }: { state: OnboardingState }) {
      here rather than in an effect on `index`: the effect ran on the first render
      too, and "clear on navigate" is a property of navigating, not of the index
      having a value. */
+  const set = (patch: Answers) => setDraft((current) => ({ ...current, ...patch }))
+
   const goTo = (next: number) => {
     setIndex(next)
     setErrors({})
+    // The raw text belongs to the step that was on screen.
+    setTyped({})
   }
 
   const commit = async (next: number, complete = false) => {
     try {
       await save.mutateAsync({ answers: draft, step: next, complete })
       setDraft({})
+      setTyped({})
       if (complete) navigate('/', { replace: true })
       else goTo(next)
     } catch (error) {
@@ -347,7 +409,8 @@ function Flow({ state }: { state: OnboardingState }) {
                 stepKey={step.key}
                 answers={answers}
                 errors={errors}
-                set={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+                set={set}
+                numeric={numeric}
                 state={state}
               />
             </div>
