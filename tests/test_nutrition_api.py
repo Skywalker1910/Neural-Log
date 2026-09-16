@@ -339,3 +339,75 @@ def test_nutrition_endpoints_require_login(client):
     for url in ('/api/foods', '/api/recipes', '/api/sleep', '/api/lifestyle',
                 '/api/profile', f'/api/nutrition/{_iso()}'):
         assert client.get(url).status_code == 302
+
+
+# --- a serving is a portion, not the whole pan -------------------------------
+
+def _dish(client, servings, grams=600, total_grams=None):
+    """A two-ingredient dish, so the arithmetic is easy to check by hand."""
+    food = _food(client)
+    payload = {
+        'name': f'Test Dish {servings}',
+        'servings': servings,
+        'ingredients': [{'food_id': food['id'], 'grams': grams}],
+    }
+    if total_grams is not None:
+        payload['total_grams'] = total_grams
+    return client.post('/api/recipes', json=payload).get_json()
+
+
+def _as_food(client, recipe):
+    return next(f for f in client.get('/api/foods').get_json()['foods']
+                if f['id'] == recipe['food_id'])
+
+
+def test_one_serving_is_the_dish_divided_by_its_servings(client_with_foods):
+    """The bug this replaced: serving_grams held the WHOLE cooked weight while
+    calling itself "1 serving", so logging a curry cooked for six charged you
+    six portions, and the counter at 2 charged twelve."""
+    recipe = _dish(client_with_foods, servings=6, grams=840)
+    food = _as_food(client_with_foods, recipe)
+
+    assert food['serving_grams'] == 140.0
+    assert food['serving_name'] == '1 serving'
+
+
+def test_a_single_serving_dish_is_the_whole_thing(client_with_foods):
+    """Dividing by one has to leave it alone - that was the only case the old
+    behaviour got right, and it must stay right."""
+    recipe = _dish(client_with_foods, servings=1, grams=300)
+    assert _as_food(client_with_foods, recipe)['serving_grams'] == 300.0
+
+
+def test_the_cooked_weight_wins_over_the_raw_total(client_with_foods):
+    """Rice absorbs water and roasting drives it off, so a declared cooked
+    weight is the honest divisor."""
+    recipe = _dish(client_with_foods, servings=4, grams=400, total_grams=1000)
+    assert _as_food(client_with_foods, recipe)['serving_grams'] == 250.0
+
+
+def test_editing_the_servings_recomputes_the_portion(client_with_foods):
+    """Deciding a dish actually feeds four rather than two has to move what one
+    serving means, or the number goes stale the moment you correct it."""
+    recipe = _dish(client_with_foods, servings=2, grams=800)
+    assert _as_food(client_with_foods, recipe)['serving_grams'] == 400.0
+
+    client_with_foods.put(f"/api/recipes/{recipe['id']}", json={'servings': 4})
+    assert _as_food(client_with_foods, recipe)['serving_grams'] == 200.0
+
+
+def test_logging_two_servings_is_two_portions_not_two_dishes(client_with_foods):
+    """End to end, in the units the picker actually sends: it converts servings
+    to grams before posting, so two servings of a six-portion dish is a third of
+    it, not twice it."""
+    recipe = _dish(client_with_foods, servings=6, grams=840)
+    food = _as_food(client_with_foods, recipe)
+
+    two_servings = food['serving_grams'] * 2
+    client_with_foods.post('/api/nutrition/2026-09-16/entries', json={
+        'food_id': food['id'], 'grams': two_servings, 'meal': 'dinner'})
+
+    day = client_with_foods.get('/api/nutrition/2026-09-16').get_json()
+    assert day['entries'][0]['grams'] == 280.0
+    # A third of the pan, not double it.
+    assert day['totals']['calories'] < food['kcal_per_100g'] * 840 / 100
