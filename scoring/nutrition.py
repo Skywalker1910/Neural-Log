@@ -76,6 +76,25 @@ def tdee(weight_kg, height_cm, age, sex='unspecified', activity_level='moderate'
     return base * multiplier
 
 
+def bmi(weight_kg, height_cm):
+    """Body mass index. None if either input is missing.
+
+    Returned as a bare number, with no category attached, and that is deliberate.
+    BMI is a ratio of mass to height squared - it cannot see muscle, and the
+    standard bands would tell a lifter at 15% body fat that they are overweight.
+
+    This app's whole position is that it reports what it can actually observe and
+    stays quiet about what it cannot. A number someone can interpret against
+    their own situation is observable. A verdict is not.
+    """
+    if not weight_kg or not height_cm:
+        return None
+    if weight_kg <= 0 or height_cm <= 0:
+        return None
+    metres = height_cm / 100.0
+    return round(weight_kg / (metres * metres), 1)
+
+
 def age_from_birth_year(birth_year, today):
     """Whole years, from a birth year alone.
 
