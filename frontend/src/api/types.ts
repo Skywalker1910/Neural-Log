@@ -243,6 +243,12 @@ export interface Exercise {
   difficulty: 'beginner' | 'intermediate' | 'advanced'
   is_compound: boolean
   instructions: string[]
+  /**
+   * Which of the seventeen movement shapes this is, so the UI can animate it.
+   * Keyed to the movement rather than the exercise: a barbell, dumbbell and
+   * machine chest press are one movement done three ways.
+   */
+  movement_pattern: string | null
   is_custom: boolean
 }
 
