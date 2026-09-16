@@ -240,7 +240,11 @@ export function Profile() {
                     label="Goal"
                     value={state.answers.goal ? GOAL_LABELS[state.answers.goal] ?? '—' : '—'}
                   />
-                  <Detail label="Path" value={state.answers.selected_path ?? '—'} />
+                  <Detail
+                    label="Check-in"
+                    value={`${state.survey.filter((q) => q.type !== 'rating').length} questions`}
+                    note="Shared by everyone"
+                  />
                 </dl>
               </Card>
             </Reveal>

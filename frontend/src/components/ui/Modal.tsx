@@ -24,6 +24,22 @@ export function Modal({ open, onClose, title, description, footer, size = 'md', 
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
+  /*
+    Focus the panel when the modal OPENS, and only then.
+
+    This used to live in the effect below, whose deps include `onClose`. Callers
+    pass an inline arrow - `onClose={() => { reset(); onClose() }}` in FoodPicker -
+    so that identity changes on every render, the effect re-ran on every render,
+    and the panel stole focus back after every keystroke. Typing in the food
+    search meant one character, then clicking the box again, then one more.
+
+    Splitting it on `open` alone is the fix: opening is the only moment focus
+    should move.
+  */
+  useEffect(() => {
+    if (open) panelRef.current?.focus()
+  }, [open])
+
   useEffect(() => {
     if (!open) return
 
@@ -35,8 +51,6 @@ export function Modal({ open, onClose, title, description, footer, size = 'md', 
     // Stop the page behind the overlay from scrolling.
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-
-    panelRef.current?.focus()
 
     return () => {
       document.removeEventListener('keydown', onKeyDown)

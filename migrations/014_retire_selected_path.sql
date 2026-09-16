@@ -1,0 +1,12 @@
+-- users.selected_path is vestigial; stop it saying "Batman Path".
+--
+-- The column was added long before the migration ledger existed, by a patch-up
+-- ALTER in init_db() carrying DEFAULT 'Batman Path'. Since 011 nothing reads it:
+-- the compatibility view synthesises its one path from the shared survey, and
+-- registration stopped writing it.
+--
+-- What it does still do is answer "Batman Path" to anyone who looks, which is a
+-- confident, wrong answer about a concept the app no longer has. Nulling it
+-- makes the column say what is true - nothing - without dropping it, because a
+-- DROP COLUMN here would mean another table rebuild for no gain.
+UPDATE users SET selected_path = NULL;

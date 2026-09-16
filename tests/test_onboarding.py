@@ -51,7 +51,7 @@ def test_the_steps_are_declared_by_the_server(hero):
     steps = _state(hero)["steps"]
     assert len(steps) == 7
     assert [step["key"] for step in steps] == [
-        "profile", "activity", "body_goal", "sleep", "learning", "path", "baselines"]
+        "profile", "activity", "body_goal", "sleep", "learning", "survey", "baselines"]
     assert all(step["title"] and step["blurb"] for step in steps)
 
 
@@ -120,16 +120,28 @@ def test_correcting_a_typo_does_not_create_a_second_weigh_in(hero, app_module):
     assert _state(hero)["answers"]["weight_kg"] == 78.5
 
 
-def test_the_path_step_writes_to_the_user_not_the_profile(hero, app_module):
-    """selected_path lives on users, and predates user_profile by the whole
-    project. Three clients read it from there."""
-    _save(hero, {"selected_path": "Thor Path"})
+def test_the_survey_step_shows_rather_than_asks(hero):
+    """It used to be "Choose your Path", and choosing one quietly chose which of
+    your attributes could be measured at all. Everyone answers the same survey
+    now, so the step has nothing to write - it shows what you will be asked."""
+    state = _state(hero)
+    survey = state["survey"]
+    step = next(s for s in state["steps"] if s["key"] == "survey")
+
+    assert step["fields"] == [], "the step writes nothing"
+    assert len(survey) == 10
+    assert all(question["is_core"] for question in survey)
+
+
+def test_finishing_never_writes_a_path(hero, app_module):
+    """users.selected_path is vestigial. Nothing in the flow should touch it."""
+    _save(hero, {"birth_year": 1990}, complete=True)
 
     conn = sqlite3.connect(app_module.DATABASE)
     conn.row_factory = sqlite3.Row
     row = conn.execute("SELECT selected_path FROM users WHERE username = 'hero'").fetchone()
     conn.close()
-    assert row["selected_path"] == "Thor Path"
+    assert row["selected_path"] is None
 
 
 # --- validation --------------------------------------------------------------

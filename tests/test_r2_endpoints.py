@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from conftest import register
+from conftest import register, survey_items
 
 # The real current date, not a fixed one: /api/home computes "today" from the
 # server clock, so a hardcoded date here passes only on the day it was written.
@@ -16,8 +16,7 @@ TODAY = date.today()
 
 
 def _items(client):
-    paths = client.get('/api/paths').get_json()
-    return [p for p in paths['paths'] if p['id'] == 'batman-path'][0]['checklist_items']
+    return survey_items(client)
 
 
 def _submit(client, day, items, strong=True):

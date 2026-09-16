@@ -44,9 +44,24 @@ def _owned(conn, table, row_id, user_id):
     ).fetchone() is not None
 
 
+def _linkable_habit(conn, habit_id, user_id):
+    """A goal may be linked to your own question or to a shared core one.
+
+    _owned() is not enough here: a core question has no owner, so it fails an
+    ownership test and the link was silently dropped - which read as a goal that
+    refused to track anything.
+    """
+    if not habit_id:
+        return True
+    return conn.execute(
+        'SELECT 1 FROM habits WHERE id = ? AND (is_core = 1 OR user_id = ?)',
+        (habit_id, user_id),
+    ).fetchone() is not None
+
+
 # --- progress ---------------------------------------------------------------
 
-def _habit_progress(conn, goal_id, since_iso):
+def _habit_progress(conn, goal_id, user_id, since_iso):
     """How the linked habits have actually gone, since the goal started.
 
     Adherence is completions-with-credit over days-elapsed, per habit, averaged.
@@ -61,11 +76,15 @@ def _habit_progress(conn, goal_id, since_iso):
                COUNT(CASE WHEN c.credit > 0 THEN 1 END) AS done
         FROM goal_habits gh
         JOIN habits h ON h.id = gh.habit_id
-        LEFT JOIN habit_completions c ON c.habit_id = h.id AND c.date >= ?
+        -- c.user_id matters since the survey became shared: a core question is
+        -- one row answered by every account, so an unfiltered join would count
+        -- everyone's completions towards one person's goal.
+        LEFT JOIN habit_completions c
+               ON c.habit_id = h.id AND c.user_id = ? AND c.date >= ?
         WHERE gh.goal_id = ? AND h.archived = 0
         GROUP BY h.id
         ''',
-        (since_iso, goal_id),
+        (user_id, since_iso, goal_id),
     ).fetchall()
     if not rows:
         return None, []
@@ -96,7 +115,7 @@ def _goal_progress(conn, goal, milestones):
       none       - nothing to measure, and saying so beats inventing a percentage
     """
     since = goal['started_on'] or goal['created_at'][:10]
-    habit_pct, linked = _habit_progress(conn, goal['id'], since)
+    habit_pct, linked = _habit_progress(conn, goal['id'], goal['user_id'], since)
 
     if habit_pct is not None:
         return {'percent': habit_pct, 'source': 'habits', 'linked_habits': linked}
@@ -151,7 +170,7 @@ def _goal_payload(conn, row):
 def _set_links(conn, goal_id, user_id, habit_ids):
     conn.execute('DELETE FROM goal_habits WHERE goal_id = ?', (goal_id,))
     for habit_id in habit_ids or []:
-        if _owned(conn, 'habits', habit_id, user_id):
+        if _linkable_habit(conn, habit_id, user_id):
             conn.execute(
                 'INSERT OR IGNORE INTO goal_habits (goal_id, habit_id) VALUES (?, ?)',
                 (goal_id, habit_id),
@@ -465,15 +484,15 @@ def goals_summary():
         (user_id,),
     ).fetchall()
 
-    # Scoped to the selected path, like /api/habits: the four stock paths share
-    # most of their items, so the unscoped list offers "What time did you wake
-    # up?" four times and there is no way to tell the copies apart.
+    # The shared survey plus this person's own questions. This used to be scoped
+    # to the selected Path, because the four stock paths shared most of their
+    # items and the unscoped list offered "What time did you wake up?" four times
+    # with no way to tell the copies apart. One survey has nothing to scope to.
     habit_rows = conn.execute(
-        'SELECT h.id, h.name, h.icon, g.name AS group_name '
-        'FROM habits h JOIN habit_groups g ON g.id = h.group_id '
-        'WHERE h.user_id = ? AND h.archived = 0 AND g.archived = 0 '
-        'AND g.is_selected = 1 '
-        'ORDER BY g.position, h.position',
+        'SELECT h.id, h.name, h.icon, h.is_core '
+        'FROM habits h '
+        'WHERE h.archived = 0 AND (h.is_core = 1 OR h.user_id = ?) '
+        'ORDER BY h.is_core DESC, h.position',
         (user_id,),
     ).fetchall()
 

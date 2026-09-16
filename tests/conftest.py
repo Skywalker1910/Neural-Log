@@ -36,9 +36,35 @@ def client(app_module):
 
 
 def register(client, username="alice", password="password123", **extra):
-    payload = {"username": username, "password": password, "selected_path": "Batman Path"}
+    payload = {"username": username, "password": password}
     payload.update(extra)
     return client.post("/register", json=payload)
+
+
+def survey_items(client):
+    """The questions this account is asked, through the compatibility view.
+
+    Migration 011 replaced the four hero Paths with one shared survey, so the
+    paths payload now holds exactly one entry and there is no id to look it up
+    by - which is why so many tests used to say `p['id'] == 'batman-path'`.
+    """
+    paths = client.get("/api/paths").get_json()["paths"]
+    return paths[0]["checklist_items"] if paths else []
+
+
+def core_survey(app_module):
+    """The shared survey straight from the database.
+
+    For tests that call the scoring engine directly rather than over HTTP.
+    user_id=None returns the core set alone.
+    """
+    import habits
+
+    conn = app_module.get_db_connection()
+    try:
+        return habits.load_survey(conn, None)
+    finally:
+        conn.close()
 
 
 def login(client, username="alice", password="password123"):

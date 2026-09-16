@@ -112,9 +112,22 @@ def update_habit(habit_id):
     user_id = session.get('user_id')
     conn = _get_db()
 
-    row = conn.execute('SELECT * FROM habits WHERE id = ? AND user_id = ?',
-                       (habit_id, user_id)).fetchone()
+    row = conn.execute('SELECT * FROM habits WHERE id = ?', (habit_id,)).fetchone()
     if row is None:
+        conn.close()
+        return jsonify({'error': 'not found'}), 404
+
+    # A core question belongs to everyone. Letting one person reschedule it would
+    # silently reschedule it for all five accounts, so it is refused here; the
+    # survey endpoints are where changing it for everyone is the stated intent.
+    if row['is_core']:
+        conn.close()
+        return jsonify({
+            'error': 'That question is part of the shared survey. Only an admin '
+                     'can change it, and the change applies to everyone.'
+        }), 403
+
+    if row['user_id'] != user_id:
         conn.close()
         return jsonify({'error': 'not found'}), 404
 

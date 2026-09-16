@@ -10,6 +10,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from conftest import core_survey
+
 import scoring
 from scoring import producers
 from scoring.config import DEFAULT_CONFIG
@@ -60,8 +62,7 @@ def _log_session(conn, user_id, day, exercise_id, sets, **kw):
 
 
 def _items(app_module):
-    return [p for p in app_module.build_default_paths()
-            if p['id'] == 'batman-path'][0]['checklist_items']
+    return core_survey(app_module)
 
 
 def _answers(items, yes=True):
@@ -230,9 +231,16 @@ def test_a_rest_day_does_not_crater_the_score(db):
     assert active[-1]['score'] > 40, 'two rest days should not collapse Strength'
 
 
-def test_mobility_work_unlocks_agility(db):
+def test_mobility_work_raises_agility_above_the_claim(db):
     """Agility was 'locked' for the whole of R2 with the note "unlocks in R3".
-    This is that promise being kept."""
+    This is that promise being kept.
+
+    Since the shared survey replaced the Paths it also asks "did you stretch or
+    do mobility work?", so Agility is no longer unobserved beforehand - it sits
+    at the self-report ceiling. Logged mobility work is what lifts it past that,
+    which is the same rule the ceiling has always encoded: a claim gets you half
+    the range, evidence opens the rest.
+    """
     conn, user_id, app_module = db
     items = _items(app_module)
     stretch = _exercise(conn, 'hamstring-stretch', 'hamstrings', category='mobility')
@@ -243,7 +251,9 @@ def test_mobility_work_unlocks_agility(db):
     conn.commit()
     scoring.recompute_scores(conn, user_id)
     conn.commit()
-    assert _score(conn, user_id, 'Agility') == (None, 'unobserved')
+    claimed_score, claimed_status = _score(conn, user_id, 'Agility')
+    assert claimed_status == 'active'
+    assert claimed_score <= 50, 'an unevidenced claim is capped at half the range'
 
     for offset in range(5, 15):
         day = (START + timedelta(days=offset)).isoformat()
@@ -255,7 +265,7 @@ def test_mobility_work_unlocks_agility(db):
 
     score, status = _score(conn, user_id, 'Agility')
     assert status == 'active'
-    assert score is not None and score > 0
+    assert score > claimed_score, 'logging the work should beat claiming it'
 
 
 def test_attribute_stays_silent_before_its_first_measurement(db):

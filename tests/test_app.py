@@ -4,7 +4,7 @@ These don't aim for full coverage - they exist to catch regressions in the
 paths that matter most (a broken login or a broken checklist save ruins the
 app for everyone using it). Fixtures (app_module, client) come from conftest.py.
 """
-from conftest import register, login
+from conftest import core_survey, register, login
 
 
 def test_register_creates_first_user_as_admin(client):
@@ -34,13 +34,16 @@ def test_current_user_requires_login(client):
     assert resp.status_code == 302
 
 
-def test_current_user_reports_selected_path_after_registration(client):
+def test_current_user_reports_the_account_after_registration(client):
+    """selected_path used to be here and used to be a real choice. Migration 011
+    retired the four hero Paths for one shared survey, so the field survives only
+    as the synthetic name three clients still read."""
     register(client)
     resp = client.get("/api/current-user")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["username"] == "alice"
-    assert data["selected_path"] == "Batman Path"
+    assert data["selected_path"] == "Daily survey"
 
 
 def test_activity_create_list_delete_roundtrip(client):
@@ -117,21 +120,38 @@ def test_classic_page_renders_for_logged_in_user(client):
     assert b"checklistWizard" in resp.data
 
 
-def test_paths_endpoint_lists_default_paths_for_new_user(client):
+def test_paths_endpoint_returns_the_one_shared_survey(client):
+    """Four hero Paths became one shared survey. The endpoint keeps its shape
+    because the Jinja app, static/js/app.js and the SPA all read it, and all
+    three only ever used it to find the list of questions."""
     register(client)
     resp = client.get("/api/paths")
     assert resp.status_code == 200
     data = resp.get_json()
-    path_names = {path["name"] for path in data["paths"]}
-    assert path_names == {"Batman Path", "Thor Path", "Captain America Path", "Ironman Path"}
+
+    assert [path["name"] for path in data["paths"]] == ["Daily survey"]
+    assert data["selected_path_id"] == "daily-survey"
+    assert len(data["paths"][0]["checklist_items"]) == 10
 
 
-def test_every_default_path_item_has_a_valid_icon_key(app_module):
-    """Every default-path checklist item must reference an icon that actually
-    exists in static/images/icons/ - see ICON_KEYS and scripts/build_icons.py."""
-    for path in app_module.DEFAULT_PATH_LIBRARY:
-        for item in path["checklist_items"]:
-            assert item["icon"] in app_module.ICON_KEYS, (path["name"], item["name"])
+def test_every_survey_question_has_a_valid_icon_key(app_module):
+    """Every shared question must reference an icon the resolver knows - see
+    ICON_KEYS, and ICON_ATTRIBUTES in scoring/config.py, which reads the same
+    vocabulary to decide what an item feeds."""
+    for item in core_survey(app_module):
+        assert item["icon"] in app_module.ICON_KEYS, item["name"]
+
+
+def test_every_survey_question_states_the_attributes_it_feeds(app_module):
+    """The shared survey uses the resolver's explicit tier rather than leaving it
+    to keyword matching, so rewording a question cannot silently change which
+    attribute it feeds. An empty dict is a real answer - "this feeds none".
+    """
+    inferred_ok = {"core-connection", "core-rating"}  # both feed nothing, by design
+    for item in core_survey(app_module):
+        if item["id"] in inferred_ok:
+            continue
+        assert item.get("attributes"), item["name"]
 
 
 def test_deleting_a_user_removes_all_their_data(client, app_module):
@@ -148,8 +168,7 @@ def test_deleting_a_user_removes_all_their_data(client, app_module):
     victim = conn.execute(
         "SELECT id FROM users WHERE username = 'victim'").fetchone()["id"]
 
-    items = [p for p in app_module.build_default_paths()
-             if p["id"] == "batman-path"][0]["checklist_items"]
+    items = core_survey(app_module)
     answers = {i["name"]: "Yes" for i in items if i["type"] == "yes-no"}
 
     conn.execute("INSERT INTO activities (user_id, date, activity_name) "
