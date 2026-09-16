@@ -43,8 +43,8 @@ def sync_library(conn, path=None):
         row['slug']: row
         for row in conn.execute(
             'SELECT id, slug, name, primary_muscle, secondary_muscles, equipment, '
-            'category, difficulty, is_compound, instructions, archived '
-            'FROM exercises WHERE user_id IS NULL'
+            'category, difficulty, is_compound, instructions, movement_pattern, '
+            'archived FROM exercises WHERE user_id IS NULL'
         )
     }
 
@@ -59,6 +59,7 @@ def sync_library(conn, path=None):
             entry.get('difficulty'),
             1 if entry.get('is_compound') else 0,
             json.dumps(entry.get('instructions', [])),
+            entry.get('movement_pattern'),
         )
 
         current = existing.get(entry['slug'])
@@ -66,7 +67,8 @@ def sync_library(conn, path=None):
             conn.execute(
                 'INSERT INTO exercises (user_id, slug, name, primary_muscle, '
                 'secondary_muscles, equipment, category, difficulty, is_compound, '
-                'instructions) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'instructions, movement_pattern) '
+                'VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (entry['slug'], *values),
             )
             added += 1
@@ -81,6 +83,7 @@ def sync_library(conn, path=None):
             and current['difficulty'] == values[5]
             and current['is_compound'] == values[6]
             and (current['instructions'] or '[]') == values[7]
+            and current['movement_pattern'] == values[8]
             and not current['archived']
         )
         if unchanged:
@@ -89,7 +92,7 @@ def sync_library(conn, path=None):
         conn.execute(
             'UPDATE exercises SET name = ?, primary_muscle = ?, secondary_muscles = ?, '
             'equipment = ?, category = ?, difficulty = ?, is_compound = ?, '
-            'instructions = ?, archived = 0 WHERE id = ?',
+            'instructions = ?, movement_pattern = ?, archived = 0 WHERE id = ?',
             (*values, current['id']),
         )
         updated += 1

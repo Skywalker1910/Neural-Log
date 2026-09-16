@@ -1,332 +1,6 @@
 {
   "exercises": [
     {
-      "slug": "hiit-intervals",
-      "name": "HIIT Intervals",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [],
-      "equipment": "none",
-      "category": "cardio",
-      "difficulty": "intermediate",
-      "instructions": [
-        "Pick one machine or movement and warm up easily before the first hard effort.",
-        "Alternate a hard effort you can hold with clean form against an easy recovery long enough to catch your breath.",
-        "End the session when your form starts falling apart rather than pushing through sloppy work."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "incline-treadmill-walk",
-      "name": "Incline Treadmill Walk",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "glutes",
-        "quads",
-        "calves"
-      ],
-      "equipment": "machine",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Clip the safety stop to your clothing before you start the belt.",
-        "Set a walking pace you can hold, then raise the incline until it feels like steady work.",
-        "Stand upright and let your arms swing; touch the rails for balance, not to carry your weight."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "jump-rope",
-      "name": "Jump Rope",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "calves",
-        "shoulders",
-        "forearms"
-      ],
-      "equipment": "none",
-      "category": "cardio",
-      "difficulty": "intermediate",
-      "instructions": [
-        "Turn the rope with your wrists and keep your elbows close to your sides.",
-        "Jump just high enough to clear the rope and land softly on the balls of your feet with soft knees.",
-        "Use a forgiving surface like a mat or wood floor rather than concrete."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "jumping-jack",
-      "name": "Jumping Jack",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "shoulders",
-        "calves",
-        "quads"
-      ],
-      "equipment": "bodyweight",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Stand tall with your feet together and your arms at your sides.",
-        "Jump your feet out as you sweep your arms overhead, then jump them back together as your arms come down.",
-        "Land softly on the balls of your feet with soft knees, and step the feet out instead of jumping if you want less impact."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "rowing-machine",
-      "name": "Rowing Machine",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "back",
-        "quads",
-        "glutes",
-        "core"
-      ],
-      "equipment": "machine",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Drive with your legs first, then swing your hips back, then pull the handle to your ribs.",
-        "Reverse that order on the way back: arms away, hips forward, then bend your knees.",
-        "Keep your back flat and hinge from the hips instead of rounding your spine to reach."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "running",
-      "name": "Running",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "quads",
-        "hamstrings",
-        "calves",
-        "glutes"
-      ],
-      "equipment": "none",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Land with your foot under your hips rather than far out in front, and keep your steps quiet.",
-        "Run tall with relaxed shoulders and swing your elbows back instead of across your body.",
-        "Breathe in a steady rhythm rather than holding your breath on hills."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "stair-climber",
-      "name": "Stair Climber",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "glutes",
-        "quads",
-        "calves"
-      ],
-      "equipment": "machine",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Start the machine on its slowest setting and step on before speeding it up.",
-        "Take full steps and place your whole foot on the step rather than just your toes.",
-        "Stand upright and rest your hands lightly on the rails instead of leaning into them."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "stationary-bike",
-      "name": "Stationary Bike",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "quads",
-        "hamstrings",
-        "calves"
-      ],
-      "equipment": "machine",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Set the seat height so your knee stays slightly bent at the bottom of the pedal stroke.",
-        "Keep enough resistance that you are not spinning loosely, and drive down smoothly through the ball of your foot on each stroke.",
-        "Stay relaxed through your shoulders instead of leaning your weight onto the bars."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "swimming",
-      "name": "Swimming",
-      "primary_muscle": "cardio",
-      "secondary_muscles": [
-        "back",
-        "shoulders",
-        "core"
-      ],
-      "equipment": "none",
-      "category": "cardio",
-      "difficulty": "intermediate",
-      "instructions": [
-        "Turn your head to the side to breathe on a steady rhythm instead of lifting it forward.",
-        "Keep your core lightly braced so your hips stay near the surface and your legs do not drag.",
-        "Swim where a lifeguard is on duty and rest at the wall whenever you need to."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "mountain-climber",
-      "name": "Mountain Climber",
-      "primary_muscle": "core",
-      "secondary_muscles": [
-        "shoulders",
-        "quads"
-      ],
-      "equipment": "bodyweight",
-      "category": "cardio",
-      "difficulty": "beginner",
-      "instructions": [
-        "Start in a push-up position with your hands under your shoulders and your body in one straight line.",
-        "Drive one knee toward your chest and switch legs, keeping your hips low and level rather than piking up.",
-        "Slow the pace down as soon as your lower back starts to sag."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "burpee",
-      "name": "Burpee",
-      "primary_muscle": "full-body",
-      "secondary_muscles": [
-        "chest",
-        "shoulders",
-        "quads",
-        "core"
-      ],
-      "equipment": "bodyweight",
-      "category": "cardio",
-      "difficulty": "intermediate",
-      "instructions": [
-        "From standing, squat down, plant your hands, and jump or step your feet back into a plank.",
-        "Keep your hips level as your chest drops, then drive back to a squat and stand or jump up.",
-        "Step the feet back and forward instead of jumping to lower the impact and protect your lower back."
-      ],
-      "is_compound": true
-    },
-    {
-      "slug": "cat-cow",
-      "name": "Cat-Cow",
-      "primary_muscle": "back",
-      "secondary_muscles": [
-        "core"
-      ],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Start on hands and knees with your hands under your shoulders and your knees under your hips.",
-        "Exhale as you round your back and tuck your chin, then inhale as you arch and lift your chest.",
-        "Move slowly through the middle of your range instead of forcing the end of each position."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "open-book-thoracic-rotation",
-      "name": "Open-Book Thoracic Rotation",
-      "primary_muscle": "back",
-      "secondary_muscles": [
-        "chest",
-        "shoulders"
-      ],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Lie on your side with your knees stacked and bent, both arms straight out in front of you.",
-        "Keep your knees pinned together and sweep the top arm across your body to open your chest toward the ceiling.",
-        "Turn from your upper back and let your head follow your hand, moving slowly in both directions."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "knee-to-wall-ankle-stretch",
-      "name": "Knee-to-Wall Ankle Stretch",
-      "primary_muscle": "calves",
-      "secondary_muscles": [],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Stand a few inches from a wall in a short split stance, front foot pointing straight ahead.",
-        "Drive your front knee forward over your toes while keeping that heel flat on the floor.",
-        "Slide the foot back until your heel only just stays down, and keep the pressure gentle."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "90-90-hip-switch",
-      "name": "90/90 Hip Switch",
-      "primary_muscle": "glutes",
-      "secondary_muscles": [
-        "core"
-      ],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "intermediate",
-      "instructions": [
-        "Sit on the floor with both knees bent about 90 degrees, one shin in front of you and one out to the side.",
-        "Sit tall on your sit bones, then rotate both knees down to the other side under control.",
-        "Sit on a cushion or keep your hands behind you for support if your lower back rounds."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "seated-hamstring-stretch",
-      "name": "Seated Hamstring Stretch",
-      "primary_muscle": "hamstrings",
-      "secondary_muscles": [
-        "calves"
-      ],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Sit with one leg straight and the other bent, that foot tucked toward your inner thigh.",
-        "Hinge forward from your hips with your back flat instead of rounding over to reach your toes.",
-        "Ease into a firm stretch behind the thigh, pull your toes gently back toward you to include the calf, and breathe there rather than bouncing."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "kneeling-hip-flexor-stretch",
-      "name": "Kneeling Hip Flexor Stretch",
-      "primary_muscle": "quads",
-      "secondary_muscles": [
-        "core"
-      ],
-      "equipment": "bodyweight",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Kneel on one knee with the other foot flat in front, and pad the down knee if the floor is hard.",
-        "Tuck your tailbone under and squeeze the glute on the kneeling side, then shift forward slightly.",
-        "Stop at a stretch across the front of the hip; you should not feel this in your lower back."
-      ],
-      "is_compound": false
-    },
-    {
-      "slug": "shoulder-dislocates",
-      "name": "Shoulder Dislocates",
-      "primary_muscle": "shoulders",
-      "secondary_muscles": [
-        "chest",
-        "back"
-      ],
-      "equipment": "band",
-      "category": "mobility",
-      "difficulty": "beginner",
-      "instructions": [
-        "Hold a light resistance band with your hands far outside shoulder width and keep tension on it the whole time.",
-        "Keep your elbows straight and your ribs down as you sweep it overhead and behind you, then back.",
-        "Widen your grip if your shoulders feel pinched, and move slowly instead of forcing the range."
-      ],
-      "is_compound": false
-    },
-    {
       "slug": "assisted-pull-up",
       "name": "Assisted Pull-Up",
       "primary_muscle": "back",
@@ -343,7 +17,8 @@
         "Kneel or stand on the pad, grip the bar, and pull your chest up toward it.",
         "Lower under control, and take a little assistance off once the movement feels easy."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-pull"
     },
     {
       "slug": "band-pull-apart",
@@ -360,7 +35,8 @@
         "Hold a resistance band at shoulder height with your arms straight in front of you.",
         "Pull the band apart by drawing your shoulder blades together, stopping when it reaches your chest.",
         "Return under control, and use a lighter band if your shoulders shrug up toward your ears."
-      ]
+      ],
+      "movement_pattern": "fly"
     },
     {
       "slug": "barbell-bent-over-row",
@@ -380,7 +56,26 @@
         "Row the bar to your lower ribs by pulling your elbows back, not by shrugging.",
         "Lower the bar under control, and stand up to reset if your lower back starts to round."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "cat-cow",
+      "name": "Cat-Cow",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "core"
+      ],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Start on hands and knees with your hands under your shoulders and your knees under your hips.",
+        "Exhale as you round your back and tuck your chin, then inhale as you arch and lift your chest.",
+        "Move slowly through the middle of your range instead of forcing the end of each position."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
     },
     {
       "slug": "chest-supported-machine-row",
@@ -399,7 +94,25 @@
         "Pull the handles back until your hands reach your ribs, keeping your chest against the pad.",
         "Return under control, and keep your neck relaxed rather than craning it forward."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "chest-supported-row",
+      "name": "Chest-Supported Row",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Lie chest-down on an incline bench so the torso cannot swing.",
+        "Row the dumbbells to your ribs and lower them all the way."
+      ],
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
     },
     {
       "slug": "chin-up",
@@ -418,7 +131,8 @@
         "Pull your chest toward the bar by driving your elbows down toward your ribs, without kicking your legs.",
         "Lower under control until your arms are straight, and use a band or the assisted machine if you cannot yet control the way down."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-pull"
     },
     {
       "slug": "dumbbell-shrug",
@@ -436,7 +150,8 @@
         "Lift your shoulders straight up toward your ears, then lower them all the way down.",
         "Keep your arms straight and move your shoulders up and down only - no rolling."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "raise"
     },
     {
       "slug": "inverted-row",
@@ -455,7 +170,8 @@
         "Keep your body in one straight line from head to heels and pull your chest to the bar.",
         "Raise the bar to make it easier, or lower it and walk your feet further out to make it harder."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
     },
     {
       "slug": "lat-pulldown",
@@ -473,7 +189,8 @@
         "Pull the bar to your upper chest, leading with your elbows and keeping your chest tall.",
         "Let the bar rise under control instead of letting it yank your shoulders upward."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-pull"
     },
     {
       "slug": "one-arm-dumbbell-row",
@@ -492,7 +209,27 @@
         "Row the dumbbell up toward your hip, keeping your shoulders square instead of twisting.",
         "Lower until your arm is straight, then switch sides."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "open-book-thoracic-rotation",
+      "name": "Open-Book Thoracic Rotation",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "chest",
+        "shoulders"
+      ],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Lie on your side with your knees stacked and bent, both arms straight out in front of you.",
+        "Keep your knees pinned together and sweep the top arm across your body to open your chest toward the ceiling.",
+        "Turn from your upper back and let your head follow your hand, moving slowly in both directions."
+      ],
+      "is_compound": false,
+      "movement_pattern": "core-rotation"
     },
     {
       "slug": "pull-up",
@@ -511,7 +248,26 @@
         "Pull your chest toward the bar by driving your elbows down, without kicking your legs.",
         "Lower yourself under control until your arms are straight again."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-pull"
+    },
+    {
+      "slug": "rack-pull",
+      "name": "Rack Pull",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Set the pins just below the knee and take a deadlift stance.",
+        "Drive the hips through to lockout and lower to the pins under control."
+      ],
+      "is_compound": true,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "seated-cable-row",
@@ -529,7 +285,57 @@
         "Pull the handle to your stomach, keeping your torso upright and squeezing your shoulder blades together.",
         "Let your arms straighten under control without being pulled into a rounded slump."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "straight-arm-pulldown",
+      "name": "Straight-Arm Pulldown",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "core"
+      ],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Stand a step back from a high pulley with arms almost straight.",
+        "Sweep the bar to your thighs using the lats, not the triceps."
+      ],
+      "is_compound": false,
+      "movement_pattern": "vertical-pull"
+    },
+    {
+      "slug": "t-bar-row",
+      "name": "T-Bar Row",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Hinge to about forty-five degrees and brace hard before the first rep.",
+        "Row to the lower ribs; stop the set when the hips start doing the lifting."
+      ],
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "thoracic-extension-over-foam-roller",
+      "name": "Thoracic Extension over Foam Roller",
+      "primary_muscle": "back",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Place the roller across the upper back with the hips down.",
+        "Extend over it a segment at a time, breathing out at the end range."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
     },
     {
       "slug": "towel-row",
@@ -546,7 +352,25 @@
         "Loop a towel around a sturdy post or closed door hinge and hold one end in each hand.",
         "Lean back with straight arms, feet planted, then pull your chest toward your hands.",
         "Straighten your arms under control, and check the anchor point holds your weight before starting."
-      ]
+      ],
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "wide-grip-lat-pulldown",
+      "name": "Wide-Grip Lat Pulldown",
+      "primary_muscle": "back",
+      "secondary_muscles": [
+        "biceps"
+      ],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Take a grip wider than your shoulders and set your chest tall.",
+        "Pull to the collarbone, then control the bar all the way back up."
+      ],
+      "is_compound": true,
+      "movement_pattern": "vertical-pull"
     },
     {
       "slug": "band-curl",
@@ -563,7 +387,8 @@
         "Curl your hands up to shoulder height with your elbows pinned at your sides.",
         "Lower all the way down against the band's pull, and check the band for nicks or tears before you start so it cannot snap back at you."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
     },
     {
       "slug": "barbell-curl",
@@ -580,7 +405,8 @@
         "Curl the bar up by bending only your elbows, keeping them tucked at your sides.",
         "Lower it all the way down under control instead of swinging your hips to move it."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
     },
     {
       "slug": "cable-curl",
@@ -597,7 +423,23 @@
         "Curl the bar up with your elbows at your sides and your torso still.",
         "Resist the cable on the way down rather than letting it snap your arms straight."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "concentration-curl",
+      "name": "Concentration Curl",
+      "primary_muscle": "biceps",
+      "secondary_muscles": [],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit and brace the working elbow against the inside of your thigh.",
+        "Curl slowly and squeeze hard at the top."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
     },
     {
       "slug": "dumbbell-curl",
@@ -614,7 +456,8 @@
         "Curl the weights up to shoulder height without letting your elbows drift forward.",
         "Lower under control until your arms are fully straight."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
     },
     {
       "slug": "hammer-curl",
@@ -631,7 +474,73 @@
         "Curl the weight up keeping your palms facing inward the whole way and your elbows pinned to your sides.",
         "Lower all the way down before starting the next rep."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "incline-dumbbell-curl",
+      "name": "Incline Dumbbell Curl",
+      "primary_muscle": "biceps",
+      "secondary_muscles": [
+        "forearms"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Lie back on a shallow incline and let the arms hang behind you.",
+        "Curl without letting the elbows drift forward."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "preacher-curl",
+      "name": "Preacher Curl",
+      "primary_muscle": "biceps",
+      "secondary_muscles": [
+        "forearms"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Set the pad under your armpits so the upper arms stay flat.",
+        "Curl to the top and lower until the elbows are almost straight."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "donkey-calf-raise",
+      "name": "Donkey Calf Raise",
+      "primary_muscle": "calves",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Hinge at the hips and rest the forearms on a bench.",
+        "Drive up onto the toes and stretch fully at the bottom."
+      ],
+      "is_compound": false,
+      "movement_pattern": "calf-raise"
+    },
+    {
+      "slug": "knee-to-wall-ankle-stretch",
+      "name": "Knee-to-Wall Ankle Stretch",
+      "primary_muscle": "calves",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Stand a few inches from a wall in a short split stance, front foot pointing straight ahead.",
+        "Drive your front knee forward over your toes while keeping that heel flat on the floor.",
+        "Slide the foot back until your heel only just stays down, and keep the pressure gentle."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
     },
     {
       "slug": "seated-calf-raise",
@@ -646,7 +555,23 @@
         "Press up onto your toes as far as you can, then lower your heels under control for a stretch.",
         "Keep the movement at your ankles and let your legs, not your hands, do the work."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "calf-raise"
+    },
+    {
+      "slug": "single-leg-calf-raise",
+      "name": "Single-Leg Calf Raise",
+      "primary_muscle": "calves",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Stand on one foot on a step with the heel hanging off.",
+        "Rise slowly and lower slower still."
+      ],
+      "is_compound": false,
+      "movement_pattern": "calf-raise"
     },
     {
       "slug": "standing-calf-raise",
@@ -661,7 +586,221 @@
         "Rise as high onto your toes as you can, then lower your heels below the step for a full stretch.",
         "Hold a wall or rail for balance and move slowly instead of bouncing."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "calf-raise"
+    },
+    {
+      "slug": "assault-bike-intervals",
+      "name": "Assault Bike Intervals",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "quads"
+      ],
+      "equipment": "machine",
+      "category": "cardio",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Push with the arms as well as the legs from the first second.",
+        "Alternate hard efforts with easy recovery you can actually recover in."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "hiit-intervals",
+      "name": "HIIT Intervals",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [],
+      "equipment": "none",
+      "category": "cardio",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Pick one machine or movement and warm up easily before the first hard effort.",
+        "Alternate a hard effort you can hold with clean form against an easy recovery long enough to catch your breath.",
+        "End the session when your form starts falling apart rather than pushing through sloppy work."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "incline-treadmill-walk",
+      "name": "Incline Treadmill Walk",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "glutes",
+        "quads",
+        "calves"
+      ],
+      "equipment": "machine",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Clip the safety stop to your clothing before you start the belt.",
+        "Set a walking pace you can hold, then raise the incline until it feels like steady work.",
+        "Stand upright and let your arms swing; touch the rails for balance, not to carry your weight."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "jump-rope",
+      "name": "Jump Rope",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "calves",
+        "shoulders",
+        "forearms"
+      ],
+      "equipment": "none",
+      "category": "cardio",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Turn the rope with your wrists and keep your elbows close to your sides.",
+        "Jump just high enough to clear the rope and land softly on the balls of your feet with soft knees.",
+        "Use a forgiving surface like a mat or wood floor rather than concrete."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "jumping-jack",
+      "name": "Jumping Jack",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "shoulders",
+        "calves",
+        "quads"
+      ],
+      "equipment": "bodyweight",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Stand tall with your feet together and your arms at your sides.",
+        "Jump your feet out as you sweep your arms overhead, then jump them back together as your arms come down.",
+        "Land softly on the balls of your feet with soft knees, and step the feet out instead of jumping if you want less impact."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "rowing-machine",
+      "name": "Rowing Machine",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "back",
+        "quads",
+        "glutes",
+        "core"
+      ],
+      "equipment": "machine",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Drive with your legs first, then swing your hips back, then pull the handle to your ribs.",
+        "Reverse that order on the way back: arms away, hips forward, then bend your knees.",
+        "Keep your back flat and hinge from the hips instead of rounding your spine to reach."
+      ],
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "running",
+      "name": "Running",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "quads",
+        "hamstrings",
+        "calves",
+        "glutes"
+      ],
+      "equipment": "none",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Land with your foot under your hips rather than far out in front, and keep your steps quiet.",
+        "Run tall with relaxed shoulders and swing your elbows back instead of across your body.",
+        "Breathe in a steady rhythm rather than holding your breath on hills."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "shadow-boxing",
+      "name": "Shadow Boxing",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "shoulders",
+        "core"
+      ],
+      "equipment": "none",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Move on the balls of the feet and keep the hands up.",
+        "Work in rounds with a fixed rest, not until you are tired."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "stair-climber",
+      "name": "Stair Climber",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "glutes",
+        "quads",
+        "calves"
+      ],
+      "equipment": "machine",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Start the machine on its slowest setting and step on before speeding it up.",
+        "Take full steps and place your whole foot on the step rather than just your toes.",
+        "Stand upright and rest your hands lightly on the rails instead of leaning into them."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "stationary-bike",
+      "name": "Stationary Bike",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "quads",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": "machine",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Set the seat height so your knee stays slightly bent at the bottom of the pedal stroke.",
+        "Keep enough resistance that you are not spinning loosely, and drive down smoothly through the ball of your foot on each stroke.",
+        "Stay relaxed through your shoulders instead of leaning your weight onto the bars."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "swimming",
+      "name": "Swimming",
+      "primary_muscle": "cardio",
+      "secondary_muscles": [
+        "back",
+        "shoulders",
+        "core"
+      ],
+      "equipment": "none",
+      "category": "cardio",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Turn your head to the side to breathe on a steady rhythm instead of lifting it forward.",
+        "Keep your core lightly braced so your hips stay near the surface and your legs do not drag.",
+        "Swim where a lifeguard is on duty and rest at the wall whenever you need to."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
     },
     {
       "slug": "barbell-bench-press",
@@ -679,7 +818,8 @@
         "Lower the bar under control to mid-chest, keeping your elbows about 45 degrees from your torso.",
         "Press up until your arms are straight, and use a spotter or safety pins when the weight is heavy."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "cable-chest-fly",
@@ -696,7 +836,43 @@
         "Keeping a soft bend in your elbows, bring the handles together in front of your chest.",
         "Let your arms open back out under control and stop where you feel a stretch instead of forcing it further."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "fly"
+    },
+    {
+      "slug": "cable-crossover",
+      "name": "Cable Crossover",
+      "primary_muscle": "chest",
+      "secondary_muscles": [
+        "shoulders"
+      ],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set both pulleys high and take a short stride for balance.",
+        "Bring the handles together in front of your hips and control the return."
+      ],
+      "is_compound": false,
+      "movement_pattern": "fly"
+    },
+    {
+      "slug": "decline-barbell-bench-press",
+      "name": "Decline Barbell Bench Press",
+      "primary_muscle": "chest",
+      "secondary_muscles": [
+        "triceps",
+        "shoulders"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set the bench to a shallow decline and hook your legs before unracking.",
+        "Lower to the lower chest and press back without bouncing off the ribs."
+      ],
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "dumbbell-bench-press",
@@ -714,7 +890,25 @@
         "Lower until your upper arms are about level with your torso, keeping your shoulder blades pinned to the bench.",
         "Press back up over your chest under control, and to finish a set bring the dumbbells to your chest and sit up with them rather than dropping them out to the sides."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
+    },
+    {
+      "slug": "dumbbell-floor-press",
+      "name": "Dumbbell Floor Press",
+      "primary_muscle": "chest",
+      "secondary_muscles": [
+        "triceps"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Lie on the floor with knees bent and the dumbbells over your chest.",
+        "Lower until the upper arms touch the floor, pause, then press."
+      ],
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "incline-barbell-bench-press",
@@ -732,7 +926,25 @@
         "Lower the bar to your upper chest with your wrists stacked over your elbows.",
         "Press up and slightly back until your arms are straight, and use a spotter or safety pins when the weight is heavy."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
+    },
+    {
+      "slug": "incline-dumbbell-fly",
+      "name": "Incline Dumbbell Fly",
+      "primary_muscle": "chest",
+      "secondary_muscles": [
+        "shoulders"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set a shallow incline and keep a soft bend in the elbows throughout.",
+        "Open until you feel a stretch across the chest, then squeeze back together."
+      ],
+      "is_compound": false,
+      "movement_pattern": "fly"
     },
     {
       "slug": "incline-dumbbell-press",
@@ -750,7 +962,8 @@
         "Press straight up until your arms are extended, keeping your elbows slightly tucked rather than flared wide.",
         "Lower under control until you feel a stretch across your chest."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "incline-push-up",
@@ -769,7 +982,8 @@
         "Hold a straight line from head to heels and lower your chest to the surface.",
         "Press back up, and use a lower surface as you get stronger to work toward floor push-ups."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "machine-chest-press",
@@ -787,7 +1001,8 @@
         "Press out until your arms are straight without snapping your elbows into lockout, keeping your back on the pad.",
         "Return slowly until your hands are back beside your chest."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "push-up",
@@ -806,7 +1021,25 @@
         "Lower your chest toward the floor with your elbows tracking back at about 45 degrees.",
         "Press back up without letting your hips sag or pike."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
+    },
+    {
+      "slug": "ab-wheel-rollout",
+      "name": "Ab Wheel Rollout",
+      "primary_muscle": "core",
+      "secondary_muscles": [
+        "shoulders"
+      ],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Kneel with the wheel under your shoulders and the ribs down.",
+        "Roll out only as far as you can keep the back flat."
+      ],
+      "is_compound": false,
+      "movement_pattern": "core-brace"
     },
     {
       "slug": "bird-dog",
@@ -825,7 +1058,23 @@
         "Reach one arm forward and the opposite leg back until both are level with your torso.",
         "Keep your hips square to the floor and resist any twisting or arching of your lower back."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-brace"
+    },
+    {
+      "slug": "cable-crunch",
+      "name": "Cable Crunch",
+      "primary_muscle": "core",
+      "secondary_muscles": [],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Kneel below a high pulley with the rope beside your head.",
+        "Crunch by rounding the spine, not by pulling with the arms."
+      ],
+      "is_compound": false,
+      "movement_pattern": "core-flexion"
     },
     {
       "slug": "crunch",
@@ -840,7 +1089,8 @@
         "Curl your shoulder blades off the floor by shortening your abs, then lower under control.",
         "Keep a fist's width between chin and chest and never pull on your head or neck."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-flexion"
     },
     {
       "slug": "dead-bug",
@@ -855,7 +1105,8 @@
         "Press your lower back flat into the floor and keep it there the whole time.",
         "Lower one arm and the opposite leg slowly, return to the start, then switch sides."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-brace"
     },
     {
       "slug": "hanging-knee-raise",
@@ -872,7 +1123,44 @@
         "Raise your knees toward your chest by curling your pelvis upward, not just lifting your legs.",
         "Lower under control and let any swinging settle before the next rep."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-flexion"
+    },
+    {
+      "slug": "hanging-leg-raise",
+      "name": "Hanging Leg Raise",
+      "primary_muscle": "core",
+      "secondary_muscles": [
+        "forearms"
+      ],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Hang from a bar with the shoulders active.",
+        "Raise the legs without swinging, and lower under control."
+      ],
+      "is_compound": false,
+      "movement_pattern": "core-flexion"
+    },
+    {
+      "slug": "mountain-climber",
+      "name": "Mountain Climber",
+      "primary_muscle": "core",
+      "secondary_muscles": [
+        "shoulders",
+        "quads"
+      ],
+      "equipment": "bodyweight",
+      "category": "cardio",
+      "difficulty": "beginner",
+      "instructions": [
+        "Start in a push-up position with your hands under your shoulders and your body in one straight line.",
+        "Drive one knee toward your chest and switch legs, keeping your hips low and level rather than piking up.",
+        "Slow the pace down as soon as your lower back starts to sag."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
     },
     {
       "slug": "pallof-press",
@@ -889,7 +1177,8 @@
         "Step away until the cable pulls on you, then press your hands straight out in front of your chest.",
         "Resist the twist - your shoulders and hips stay facing forward throughout."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-brace"
     },
     {
       "slug": "plank",
@@ -907,7 +1196,8 @@
         "Squeeze your glutes and brace your abs so hips, ribs and head form one straight line.",
         "End the hold when your hips start to sag or pike rather than pushing through it."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-brace"
     },
     {
       "slug": "reverse-crunch",
@@ -922,7 +1212,8 @@
         "Curl your hips off the floor to bring your knees toward your chest.",
         "Lower slowly and stop your lower back from arching away from the floor."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-flexion"
     },
     {
       "slug": "russian-twist",
@@ -937,7 +1228,8 @@
         "Keep your chest tall and a long spine, then rotate your ribcage to one side and back to the other.",
         "Turn slowly and deliberately instead of swinging your arms side to side."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-rotation"
     },
     {
       "slug": "side-plank",
@@ -955,7 +1247,40 @@
         "Lift your hips until your body is a straight line from ankle to ear.",
         "Keep your top shoulder stacked over the bottom one instead of rolling your chest toward the floor."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "core-brace"
+    },
+    {
+      "slug": "barbell-wrist-curl",
+      "name": "Barbell Wrist Curl",
+      "primary_muscle": "forearms",
+      "secondary_muscles": [],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Rest the forearms on your thighs with palms facing up.",
+        "Let the bar roll to the fingers, then curl it back up."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "dead-hang",
+      "name": "Dead Hang",
+      "primary_muscle": "forearms",
+      "secondary_muscles": [
+        "back"
+      ],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Hang from a bar with a full grip and relaxed shoulders.",
+        "Hold for time; stop before the hands slip rather than after."
+      ],
+      "is_compound": false,
+      "movement_pattern": "carry"
     },
     {
       "slug": "dumbbell-wrist-curl",
@@ -970,7 +1295,8 @@
         "Let the dumbbells roll toward your fingertips, then curl your wrists back up.",
         "Keep your forearms flat on your thighs and stay light - the wrist has a short range of motion."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
     },
     {
       "slug": "farmers-carry",
@@ -991,7 +1317,95 @@
         "Stand tall with your shoulders back and your ribs down, and walk a straight line at a steady pace.",
         "Stop and set the weights down with a hip hinge before your grip fails or your posture breaks - do not walk into a grip failure."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "carry"
+    },
+    {
+      "slug": "plate-pinch-hold",
+      "name": "Plate Pinch Hold",
+      "primary_muscle": "forearms",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Pinch two smooth plates together in each hand.",
+        "Stand tall and hold until the grip is genuinely failing."
+      ],
+      "is_compound": false,
+      "movement_pattern": "carry"
+    },
+    {
+      "slug": "reverse-wrist-curl",
+      "name": "Reverse Wrist Curl",
+      "primary_muscle": "forearms",
+      "secondary_muscles": [],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Rest the forearms on a bench with palms facing down.",
+        "Lift the backs of the hands towards you and lower slowly."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "burpee",
+      "name": "Burpee",
+      "primary_muscle": "full-body",
+      "secondary_muscles": [
+        "chest",
+        "shoulders",
+        "quads",
+        "core"
+      ],
+      "equipment": "bodyweight",
+      "category": "cardio",
+      "difficulty": "intermediate",
+      "instructions": [
+        "From standing, squat down, plant your hands, and jump or step your feet back into a plank.",
+        "Keep your hips level as your chest drops, then drive back to a squat and stand or jump up.",
+        "Step the feet back and forward instead of jumping to lower the impact and protect your lower back."
+      ],
+      "is_compound": true,
+      "movement_pattern": "cardio-cyclic"
+    },
+    {
+      "slug": "kettlebell-clean-and-press",
+      "name": "Kettlebell Clean and Press",
+      "primary_muscle": "full-body",
+      "secondary_muscles": [
+        "shoulders",
+        "glutes"
+      ],
+      "equipment": "kettlebell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Clean the bell to the rack position in one movement.",
+        "Press overhead, then return to the rack before the next rep."
+      ],
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
+    },
+    {
+      "slug": "sled-push",
+      "name": "Sled Push",
+      "primary_muscle": "full-body",
+      "secondary_muscles": [
+        "quads",
+        "glutes"
+      ],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set a low grip and drive with short, hard steps.",
+        "Stop the set when the pace drops rather than when the distance ends."
+      ],
+      "is_compound": true,
+      "movement_pattern": "carry"
     },
     {
       "slug": "thruster",
@@ -1012,7 +1426,44 @@
         "Squat to a depth you can control, then drive up and press the bar overhead in one motion.",
         "Finish with the bar over your mid-foot and your ribs pulled down rather than your lower back arched."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
+    },
+    {
+      "slug": "turkish-get-up",
+      "name": "Turkish Get-Up",
+      "primary_muscle": "full-body",
+      "secondary_muscles": [
+        "core",
+        "shoulders"
+      ],
+      "equipment": "kettlebell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Start on your back with one arm locked out overhead.",
+        "Stand up and reverse the sequence, keeping the weight stacked."
+      ],
+      "is_compound": true,
+      "movement_pattern": "core-brace"
+    },
+    {
+      "slug": "90-90-hip-switch",
+      "name": "90/90 Hip Switch",
+      "primary_muscle": "glutes",
+      "secondary_muscles": [
+        "core"
+      ],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Sit on the floor with both knees bent about 90 degrees, one shin in front of you and one out to the side.",
+        "Sit tall on your sit bones, then rotate both knees down to the other side under control.",
+        "Sit on a cushion or keep your hands behind you for support if your lower back rounds."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
     },
     {
       "slug": "barbell-hip-thrust",
@@ -1030,7 +1481,40 @@
         "Drive through your heels until your hips are level with your knees and squeeze your glutes.",
         "Keep your ribs down and your chin tucked at the top instead of arching your lower back."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "cable-kickback",
+      "name": "Cable Kickback",
+      "primary_muscle": "glutes",
+      "secondary_muscles": [],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Attach the cuff to one ankle and hold the frame for balance.",
+        "Drive the leg back from the hip without arching the lower back."
+      ],
+      "is_compound": false,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "curtsy-lunge",
+      "name": "Curtsy Lunge",
+      "primary_muscle": "glutes",
+      "secondary_muscles": [
+        "quads"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Step the rear foot diagonally behind the front one.",
+        "Lower until the front thigh is parallel, then return to standing."
+      ],
+      "is_compound": true,
+      "movement_pattern": "lunge"
     },
     {
       "slug": "deadlift",
@@ -1051,7 +1535,23 @@
         "Set your back flat and chest up to take the slack out of the bar, then stand by pushing the floor away, keeping the bar against your legs.",
         "Lower it by pushing your hips back first, and end the set once your lower back can no longer stay flat."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "frog-pump",
+      "name": "Frog Pump",
+      "primary_muscle": "glutes",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Lie on your back with the soles of the feet together, knees wide.",
+        "Drive the hips up and squeeze, then lower just short of the floor."
+      ],
+      "is_compound": false,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "glute-bridge",
@@ -1069,7 +1569,23 @@
         "Press through your heels to lift your hips into a straight line from knees to shoulders.",
         "Squeeze your glutes at the top, then lower without letting your lower back arch."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "hip-abduction-machine",
+      "name": "Hip Abduction Machine",
+      "primary_muscle": "glutes",
+      "secondary_muscles": [],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit with the pads against the outside of both knees.",
+        "Press the knees apart, pause, and return slowly."
+      ],
+      "is_compound": false,
+      "movement_pattern": "raise"
     },
     {
       "slug": "kettlebell-swing",
@@ -1089,7 +1605,8 @@
         "Snap your hips forward and squeeze your glutes to float the bell up - this is a hinge, not a squat or a front raise.",
         "Keep your back flat and your arms relaxed so your hips do the work, not your shoulders."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "single-leg-glute-bridge",
@@ -1107,7 +1624,8 @@
         "Press through the planted heel to lift your hips, keeping both hip bones level with each other.",
         "Lower under control and switch sides so both hips do equal work."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "dumbbell-romanian-deadlift",
@@ -1126,7 +1644,26 @@
         "Hinge at the hips and lower the dumbbells close to your legs, keeping your back flat.",
         "Stand up by squeezing your glutes rather than pulling with your lower back, and stop lowering where your back would start to round."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "good-morning",
+      "name": "Good Morning",
+      "primary_muscle": "hamstrings",
+      "secondary_muscles": [
+        "glutes",
+        "back"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Set a light bar on the upper back and take a shoulder-width stance.",
+        "Hinge forward with a flat back and return by squeezing the glutes."
+      ],
+      "is_compound": true,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "lying-leg-curl",
@@ -1143,7 +1680,23 @@
         "Keep your hips pressed into the bench and curl your heels toward your glutes.",
         "Lower under control instead of letting the weight stack drop."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "nordic-hamstring-curl",
+      "name": "Nordic Hamstring Curl",
+      "primary_muscle": "hamstrings",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Kneel with the ankles anchored and the body in one line.",
+        "Lower as slowly as you can control, then push back with the hands."
+      ],
+      "is_compound": false,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "romanian-deadlift",
@@ -1163,7 +1716,59 @@
         "Push your hips back and slide the bar down your legs until you feel a stretch in the back of your thighs.",
         "Stop the moment your lower back starts to round, then drive your hips forward to stand tall."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "hinge"
+    },
+    {
+      "slug": "seated-hamstring-stretch",
+      "name": "Seated Hamstring Stretch",
+      "primary_muscle": "hamstrings",
+      "secondary_muscles": [
+        "calves"
+      ],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit with one leg straight and the other bent, that foot tucked toward your inner thigh.",
+        "Hinge forward from your hips with your back flat instead of rounding over to reach your toes.",
+        "Ease into a firm stretch behind the thigh, pull your toes gently back toward you to include the calf, and breathe there rather than bouncing."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
+    },
+    {
+      "slug": "seated-leg-curl",
+      "name": "Seated Leg Curl",
+      "primary_muscle": "hamstrings",
+      "secondary_muscles": [],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Set the pad just above the heels with the knees at the pivot.",
+        "Curl as far as the machine allows and return slowly."
+      ],
+      "is_compound": false,
+      "movement_pattern": "curl"
+    },
+    {
+      "slug": "single-leg-romanian-deadlift",
+      "name": "Single-Leg Romanian Deadlift",
+      "primary_muscle": "hamstrings",
+      "secondary_muscles": [
+        "glutes",
+        "core"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Stand on one leg with a soft knee and the weight in the opposite hand.",
+        "Hinge until you feel the hamstring, then stand tall again."
+      ],
+      "is_compound": true,
+      "movement_pattern": "hinge"
     },
     {
       "slug": "sliding-leg-curl",
@@ -1181,7 +1786,8 @@
         "Lie on your back with your heels on a towel or sliders on a smooth floor, knees bent.",
         "Lift your hips into a bridge, then slide your heels away until your legs are almost straight.",
         "Pull your heels back in without letting your hips drop, and stop the set if your hamstrings start to cramp."
-      ]
+      ],
+      "movement_pattern": "curl"
     },
     {
       "slug": "barbell-back-squat",
@@ -1200,7 +1806,8 @@
         "Rest the bar across your upper back, brace your core, and sit straight down until your thighs are about parallel.",
         "Drive up through your midfoot with your chest tall and your lower back flat."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
     },
     {
       "slug": "barbell-front-squat",
@@ -1219,7 +1826,8 @@
         "Keep your torso upright and your elbows up as you sit straight down.",
         "If your elbows drop and the bar rolls forward, stand up and reset rather than finishing the rep."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
     },
     {
       "slug": "bodyweight-squat",
@@ -1237,7 +1845,8 @@
         "Push your hips back and bend your knees, keeping your heels down and your chest lifted.",
         "Go only as deep as you can before your lower back starts to round, then stand tall."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
     },
     {
       "slug": "bulgarian-split-squat",
@@ -1256,7 +1865,41 @@
         "Lower straight down until your front thigh is near parallel, keeping your front heel flat on the floor.",
         "Push through your front heel to stand back up, holding a rail or touching a wall for balance until the position feels steady."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "lunge"
+    },
+    {
+      "slug": "couch-stretch",
+      "name": "Couch Stretch",
+      "primary_muscle": "quads",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set the rear foot up a wall with the knee on a pad.",
+        "Square the hips and breathe rather than forcing depth."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
+    },
+    {
+      "slug": "front-squat",
+      "name": "Front Squat",
+      "primary_muscle": "quads",
+      "secondary_muscles": [
+        "glutes",
+        "core"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "advanced",
+      "instructions": [
+        "Rack the bar on the front delts with the elbows held high.",
+        "Squat down with an upright torso and stand back up."
+      ],
+      "is_compound": true,
+      "movement_pattern": "squat"
     },
     {
       "slug": "goblet-squat",
@@ -1274,7 +1917,43 @@
         "Sit straight down between your knees with your heels flat and your chest up.",
         "Stand back up by pushing the floor away, keeping the weight tight to your body."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
+    },
+    {
+      "slug": "hack-squat",
+      "name": "Hack Squat",
+      "primary_muscle": "quads",
+      "secondary_muscles": [
+        "glutes"
+      ],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Set the feet mid-platform and brace against the shoulder pads.",
+        "Descend to at least parallel and drive back without locking hard."
+      ],
+      "is_compound": true,
+      "movement_pattern": "squat"
+    },
+    {
+      "slug": "kneeling-hip-flexor-stretch",
+      "name": "Kneeling Hip Flexor Stretch",
+      "primary_muscle": "quads",
+      "secondary_muscles": [
+        "core"
+      ],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Kneel on one knee with the other foot flat in front, and pad the down knee if the floor is hard.",
+        "Tuck your tailbone under and squeeze the glute on the kneeling side, then shift forward slightly.",
+        "Stop at a stretch across the front of the hip; you should not feel this in your lower back."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
     },
     {
       "slug": "leg-extension",
@@ -1289,7 +1968,8 @@
         "Straighten your knees smoothly and pause for a moment at the top.",
         "Lower slowly rather than swinging the weight or letting the stack bang down."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "extension"
     },
     {
       "slug": "leg-press",
@@ -1307,7 +1987,8 @@
         "Lower the sled until your knees reach roughly 90 degrees, stopping before your hips lift off the seat.",
         "Press back up smoothly without snapping your knees into a hard lockout."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "squat"
     },
     {
       "slug": "reverse-lunge",
@@ -1326,7 +2007,25 @@
         "Keep your front shin close to vertical and your weight in your front heel.",
         "Push through the front foot to return to standing, then alternate sides."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "lunge"
+    },
+    {
+      "slug": "step-up",
+      "name": "Step-Up",
+      "primary_muscle": "quads",
+      "secondary_muscles": [
+        "glutes"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Use a box that puts the working thigh roughly parallel at the start.",
+        "Drive through the top foot and lower the trailing leg quietly."
+      ],
+      "is_compound": true,
+      "movement_pattern": "lunge"
     },
     {
       "slug": "walking-lunge",
@@ -1345,7 +2044,8 @@
         "Step forward and lower until your back knee is just above the floor, keeping your torso upright.",
         "Push through your front heel to stand and step straight into the next lunge."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "lunge"
     },
     {
       "slug": "barbell-overhead-press",
@@ -1363,7 +2063,40 @@
         "Press straight up, moving your head slightly back out of the bar's path, and finish with the bar over your mid-foot.",
         "Lower it back to your shoulders under control rather than dropping it."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
+    },
+    {
+      "slug": "bent-over-reverse-fly",
+      "name": "Bent-Over Reverse Fly",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "back"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Hinge until your torso is close to parallel with the floor.",
+        "Raise the dumbbells out to the sides without shrugging."
+      ],
+      "is_compound": false,
+      "movement_pattern": "fly"
+    },
+    {
+      "slug": "cable-lateral-raise",
+      "name": "Cable Lateral Raise",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Stand side-on to a low pulley and take the handle in the far hand.",
+        "Raise to shoulder height with a soft elbow, then lower slowly."
+      ],
+      "is_compound": false,
+      "movement_pattern": "raise"
     },
     {
       "slug": "dumbbell-lateral-raise",
@@ -1378,7 +2111,8 @@
         "Raise your arms out to the sides until they are about shoulder height, leading with your elbows.",
         "Lower slowly - if you have to swing your body to get them up, the dumbbells are too heavy."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "raise"
     },
     {
       "slug": "dumbbell-rear-delt-fly",
@@ -1395,7 +2129,8 @@
         "Open your arms out to the sides with a soft elbow bend, leading with the backs of your hands and keeping your shoulder blades still.",
         "Lower under control and keep your neck relaxed instead of craning it upward."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "fly"
     },
     {
       "slug": "dumbbell-shoulder-press",
@@ -1412,7 +2147,8 @@
         "Press up until your arms are straight, keeping your ribs down instead of arching your lower back.",
         "Lower the dumbbells back to shoulder height under control."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
     },
     {
       "slug": "face-pull",
@@ -1430,7 +2166,43 @@
         "Pull the rope toward your face, driving your elbows high and spreading your hands apart.",
         "Stay light enough to move the weight without leaning back or shrugging, and return under control."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-pull"
+    },
+    {
+      "slug": "landmine-press",
+      "name": "Landmine Press",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "chest",
+        "triceps"
+      ],
+      "equipment": "barbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Hold the end of the bar at shoulder height in a split stance.",
+        "Press up and slightly forward, following the natural arc of the bar."
+      ],
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
+    },
+    {
+      "slug": "machine-shoulder-press",
+      "name": "Machine Shoulder Press",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "triceps"
+      ],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Set the seat so the handles start level with your shoulders.",
+        "Press to nearly straight arms and lower all the way back down."
+      ],
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
     },
     {
       "slug": "pike-push-up",
@@ -1448,7 +2220,93 @@
         "Start in a push-up position and walk your feet in so your hips pike up toward the ceiling.",
         "Lower the top of your head toward the floor between your hands, keeping your elbows tracking back.",
         "Press back up until your arms are straight; raise your feet on a step to make it harder."
-      ]
+      ],
+      "movement_pattern": "horizontal-press"
+    },
+    {
+      "slug": "reverse-pec-deck",
+      "name": "Reverse Pec Deck",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "back"
+      ],
+      "equipment": "machine",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit facing the pad with the handles set at shoulder height.",
+        "Open the arms wide and squeeze the shoulder blades together."
+      ],
+      "is_compound": false,
+      "movement_pattern": "fly"
+    },
+    {
+      "slug": "seated-dumbbell-shoulder-press",
+      "name": "Seated Dumbbell Shoulder Press",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "triceps"
+      ],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit with your back supported and the dumbbells at ear height.",
+        "Press overhead without arching the lower back to get there."
+      ],
+      "is_compound": true,
+      "movement_pattern": "vertical-press"
+    },
+    {
+      "slug": "shoulder-dislocates",
+      "name": "Shoulder Dislocates",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [
+        "chest",
+        "back"
+      ],
+      "equipment": "band",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Hold a light resistance band with your hands far outside shoulder width and keep tension on it the whole time.",
+        "Keep your elbows straight and your ribs down as you sweep it overhead and behind you, then back.",
+        "Widen your grip if your shoulders feel pinched, and move slowly instead of forcing the range."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
+    },
+    {
+      "slug": "wall-slide",
+      "name": "Wall Slide",
+      "primary_muscle": "shoulders",
+      "secondary_muscles": [],
+      "equipment": "bodyweight",
+      "category": "mobility",
+      "difficulty": "beginner",
+      "instructions": [
+        "Stand with the back flat to a wall and the forearms touching it.",
+        "Slide the arms up as far as contact is kept, then come back down."
+      ],
+      "is_compound": false,
+      "movement_pattern": "mobility"
+    },
+    {
+      "slug": "bench-dip",
+      "name": "Bench Dip",
+      "primary_muscle": "triceps",
+      "secondary_muscles": [
+        "chest"
+      ],
+      "equipment": "bodyweight",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Sit on a bench edge with hands beside your hips and feet out front.",
+        "Lower until the elbows reach ninety degrees, then press back up."
+      ],
+      "is_compound": true,
+      "movement_pattern": "extension"
     },
     {
       "slug": "cable-triceps-pushdown",
@@ -1463,7 +2321,8 @@
         "Push the bar or rope down until your arms are straight, keeping your upper arms still.",
         "Let the handle rise back to chest height under control without your elbows drifting forward."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "extension"
     },
     {
       "slug": "close-grip-bench-press",
@@ -1481,7 +2340,8 @@
         "Lower the bar to your lower chest with your elbows tucked close to your sides.",
         "Press back up until your arms are straight with your shoulder blades pinned to the bench, and use a spotter or safety pins when the weight is heavy."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
     },
     {
       "slug": "diamond-push-up",
@@ -1500,7 +2360,38 @@
         "Hold a straight line from head to heels and lower your chest toward your hands, elbows brushing your ribs.",
         "Press back up, and do these with your hands on a bench first if your hips start to sag."
       ],
-      "is_compound": true
+      "is_compound": true,
+      "movement_pattern": "horizontal-press"
+    },
+    {
+      "slug": "dumbbell-skull-crusher",
+      "name": "Dumbbell Skull Crusher",
+      "primary_muscle": "triceps",
+      "secondary_muscles": [],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Lie flat with the dumbbells above your chest, palms facing in.",
+        "Bend at the elbow to lower beside your ears, then extend."
+      ],
+      "is_compound": false,
+      "movement_pattern": "extension"
+    },
+    {
+      "slug": "overhead-cable-extension",
+      "name": "Overhead Cable Extension",
+      "primary_muscle": "triceps",
+      "secondary_muscles": [],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "intermediate",
+      "instructions": [
+        "Face away from the pulley with the rope behind your head.",
+        "Straighten the arms overhead, keeping the elbows narrow."
+      ],
+      "is_compound": false,
+      "movement_pattern": "extension"
     },
     {
       "slug": "overhead-dumbbell-triceps-extension",
@@ -1515,7 +2406,38 @@
         "Bend your elbows to lower the weight behind your head, keeping your upper arms pointing up.",
         "Extend back to the top with your elbows close to your head rather than flaring wide."
       ],
-      "is_compound": false
+      "is_compound": false,
+      "movement_pattern": "extension"
+    },
+    {
+      "slug": "rope-pushdown",
+      "name": "Rope Pushdown",
+      "primary_muscle": "triceps",
+      "secondary_muscles": [],
+      "equipment": "cable",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Stand tall with elbows pinned to your sides.",
+        "Push down and spread the rope at the bottom, then return slowly."
+      ],
+      "is_compound": false,
+      "movement_pattern": "extension"
+    },
+    {
+      "slug": "triceps-kickback",
+      "name": "Triceps Kickback",
+      "primary_muscle": "triceps",
+      "secondary_muscles": [],
+      "equipment": "dumbbell",
+      "category": "strength",
+      "difficulty": "beginner",
+      "instructions": [
+        "Hinge forward and pin the upper arm alongside your ribs.",
+        "Straighten the elbow behind you and pause before returning."
+      ],
+      "is_compound": false,
+      "movement_pattern": "extension"
     }
   ]
 }

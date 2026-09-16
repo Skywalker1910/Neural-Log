@@ -4,6 +4,7 @@ import { Dumbbell, Search } from 'lucide-react'
 import type { Exercise, MuscleGroup } from '../../api/types'
 import { useExercises } from '../../api/queries'
 import { Badge } from '../ui/Badge'
+import { ExerciseAnimation } from './ExerciseAnimation'
 import { EmptyState } from '../ui/EmptyState'
 import { Modal } from '../ui/Modal'
 import { QueryBoundary } from '../ui/QueryBoundary'
@@ -145,8 +146,9 @@ export function ExercisePicker({ open, onClose, onPick }: ExercisePickerProps) {
                           onPick(exercise)
                           onClose()
                         }}
-                        className="flex items-center gap-3 rounded-md border border-line bg-surface-card px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface-raised"
+                        className="flex min-w-0 items-center gap-3 rounded-md border border-line bg-surface-card px-2 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface-raised"
                       >
+                        <ExerciseAnimation pattern={exercise.movement_pattern} size={52} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-label text-ink">
                             {exercise.name}
