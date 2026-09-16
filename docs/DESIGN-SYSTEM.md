@@ -145,7 +145,8 @@ Primitives live in `frontend/src/components/ui/`, charts in
 | `ProgressRing` | Circular progress, 0-100 |
 | `AttributeBadge` | One RPG attribute as a ring |
 | `ItemIcon` | Checklist / attribute glyph in a tinted tile, accent-coloured |
-| `Button` | primary / secondary / ghost / danger, with loading state |
+| `Button` | primary / secondary / ghost / danger, loading state, `iconPosition` |
+| `Field` / `TextInput` / `Select` / `ChoiceGroup` | Labelled form controls, with hint and per-field error |
 | `Badge` | Small status pill |
 | `EmptyState` | Never show a blank card - say what's missing and offer the action |
 | `Skeleton`, `SkeletonCard`, `SkeletonGrid` | Loading placeholders |

@@ -8,6 +8,9 @@ import { NotFound } from './pages/NotFound'
 import { Today } from './pages/Today'
 import { Achievements } from './pages/Achievements'
 import { Analytics } from './pages/Analytics'
+import { Welcome } from './pages/Welcome'
+import { Profile } from './pages/Profile'
+import { Settings } from './pages/Settings'
 import { Goals } from './pages/Goals'
 import { Learning } from './pages/Learning'
 import { Lifestyle } from './pages/Lifestyle'
@@ -19,7 +22,7 @@ import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
 
 /** Sections that have a real page now. Anything else still gets a placeholder. */
 const BUILT = new Set(['/today', '/training', '/nutrition', '/lifestyle', '/learning',
-  '/goals', '/achievements', '/analytics'])
+  '/goals', '/achievements', '/analytics', '/profile'])
 
 // Dev-facing gallery - no reason for it to ride along in the main bundle.
 const DesignSystem = lazy(() =>
@@ -35,6 +38,11 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Outside AppShell on purpose: the first-run flow is a full-screen task,
+          and framing it with the sidebar of an app you have not set up yet is
+          both noisy and an invitation to wander off mid-question. */}
+      <Route path="/welcome" element={<Welcome />} />
+
       <Route element={<AppShell />}>
         <Route index element={<Home />} />
         <Route path="/today" element={<Today />} />
@@ -46,6 +54,7 @@ export default function App() {
         <Route path="/goals" element={<Goals />} />
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/profile" element={<Profile />} />
         {rest
           .filter((section) => !BUILT.has(section.path))
           .map((section) => (
@@ -55,10 +64,7 @@ export default function App() {
               element={<PlaceholderPage section={section} />}
             />
           ))}
-        <Route
-          path={SETTINGS_SECTION.path}
-          element={<PlaceholderPage section={SETTINGS_SECTION} />}
-        />
+        <Route path={SETTINGS_SECTION.path} element={<Settings />} />
         <Route
           path={DESIGN_SECTION.path}
           element={

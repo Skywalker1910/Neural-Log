@@ -2,6 +2,43 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R9 - Onboarding
+
+The seven-step first-run flow, the Profile page and Settings. Full write-up in
+[ONBOARDING.md](ONBOARDING.md).
+
+- **Onboarding sets targets, never scores.** Body metrics produce baselines, and
+  baselines produce the denominators the engine already measures against - so the
+  questionnaire genuinely changes what your first logged day scores. It does not
+  write attribute scores: a claim is capped at half the range and an attribute
+  reports `calibrating` until three days of history exist, and seeding Strength at
+  signup would walk past both rules. A test pins it.
+- **Non-blocking.** A banner on Home, not a redirect. Declining is permanent - a
+  prompt that reappears after being declined is nagging - and the flow stays
+  reachable from Profile and Settings.
+- **Seven steps, declared server-side** so the API and UI cannot disagree about
+  what each writes. Saving is partial and per step; skipping discards that step.
+- **Baselines** return `None` rather than guessing, and name what is missing so
+  the last step says "add your height and this fills in". BMI carries no
+  category: it cannot see muscle, and the standard bands would call a lifter at
+  15% body fat overweight.
+- **Closed sets are rejected, not coerced.** `resolve_targets` falls back to
+  `moderate` for an unknown activity level, so a typo would have quietly become a
+  1.55 multiplier on someone's calorie target.
+- **Profile and Settings** replace their placeholders, closing the last of the
+  cutover parity table. Each target shows whether it is `set` or `estimated`.
+
+Two things R9 deliberately did not change, both checked against the code rather
+than assumed: Discipline's schedule-consistency signal still measures the spread
+of your own bedtimes rather than adherence to a declared one, and
+`weekly_strength_volume` is still flat for everyone. Both are scoring decisions
+rather than onboarding ones, so `training_days_per_week` is not collected at all
+rather than stored unused.
+
+Shared primitives gained `Field`/`TextInput`/`Select`/`ChoiceGroup`, `Button`
+gained `iconPosition` (a forward arrow belongs after the label), and `ApiError`
+now carries the response body so field-level validation can reach the field.
+
 ## R8 - Analytics
 
 Long-range trends across every workspace. Full write-up in

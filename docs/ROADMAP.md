@@ -23,7 +23,7 @@ This tracks where that's headed, in order.
 | R7 | Gamification depth - achievements, XP ledger, attributes | Done |
 | UI | Interface pass - design language, the `/` cutover, standard icons | Done |
 | R8 | Analytics - long-range trends, calendar, comparisons | Done |
-| R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Not started |
+| R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Done |
 | R10 | Polish - responsive, animation, a11y, performance | Not started |
 | Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
 
@@ -120,7 +120,7 @@ Parity is reached phase by phase, not in one step:
 | Path management, custom items | R6 - Goals and Habits |
 | Badges, leaderboard | R7 - Gamification depth |
 | Milestone insights, Excel export | R8 - Analytics (export surfaced; insights still `/classic`) |
-| Profile, password, settings | R9 - Onboarding |
+| Profile, password, settings | R9 - Onboarding (done) |
 | Admin dashboard | Ship |
 
 **This plan was wrong, and the interface pass corrected it.** Waiting for parity
@@ -301,10 +301,24 @@ pointing at the endpoint the classic dashboard already used.
 
 ## R9 - Onboarding
 
-The seven-step first-run flow: profile, fitness profile, goals, sleep schedule,
-learning intent, goal selection, and computed baselines (BMI, BMR via Mifflin-St
-Jeor, estimated TDEE). Behavioural scores start conservative and from questionnaire
-answers - they are explicitly not derived from height and weight.
+The seven-step first-run flow, plus the Profile and Settings pages. Full write-up
+in [ONBOARDING.md](ONBOARDING.md).
+
+Every phase before this assumed the numbers it scores against already existed.
+They did not: `user_profile` is created lazily, so an account could reach
+Analytics with no height and no targets, and the engine would honestly report
+nearly everything as unobserved - which reads as "this app is broken" rather than
+"you have not told it anything yet".
+
+The brief asked for behavioural scores to "start conservative and from
+questionnaire answers". That is satisfied by the **targets**, not by the scores.
+Onboarding sets the denominators the engine already measures against; it never
+writes an attribute score, because a questionnaire answer is a claim and the
+engine caps claims at half the range and reports `calibrating` until three days
+of real history exist. A test pins that boundary.
+
+Non-blocking by choice: a banner on Home rather than a redirect, and declining is
+permanent, with the flow left reachable from Profile.
 
 ## R10 - Polish
 

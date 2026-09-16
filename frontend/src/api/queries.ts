@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
   AnalyticsPeriod,
+  OnboardingAnswers,
+  OnboardingState,
   AnalyticsResponse,
   AttributesResponse,
   ChecklistItemsResponse,
@@ -88,6 +90,7 @@ export const queryKeys = {
   habits: (days?: number) => ['habits', days ?? 'default'] as const,
   xpLedger: ['xp-ledger'] as const,
   analytics: (period: string) => ['analytics', period] as const,
+  onboarding: ['onboarding'] as const,
 }
 
 export function useCurrentUser() {
@@ -821,4 +824,45 @@ export function useAnalytics(period: AnalyticsPeriod) {
     // switching from 30 to 90 days redraws rather than collapsing to skeletons.
     placeholderData: (previous) => previous,
   })
+}
+
+/* --- R9: onboarding ------------------------------------------------------- */
+
+export function useOnboarding() {
+  return useQuery({
+    queryKey: queryKeys.onboarding,
+    queryFn: () => api.get<OnboardingState>('/api/onboarding'),
+  })
+}
+
+export function useSaveOnboarding() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      answers?: Partial<OnboardingAnswers>
+      step?: number
+      complete?: boolean
+    }) => api.put<OnboardingState>('/api/onboarding', body),
+    onSuccess: (state) => {
+      queryClient.setQueryData(queryKeys.onboarding, state)
+      // Targets are denominators the engine scores against, so saving one
+      // re-judges history - every page showing a score is now stale.
+      queryClient.invalidateQueries({ queryKey: queryKeys.home })
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile })
+      queryClient.invalidateQueries({ queryKey: queryKeys.attributes() })
+    },
+  })
+}
+
+export function useOnboardingPrompt() {
+  const queryClient = useQueryClient()
+  const update = (path: string) => async () => {
+    const state = await api.post<OnboardingState>(path, {})
+    queryClient.setQueryData(queryKeys.onboarding, state)
+    return state
+  }
+  return {
+    dismiss: useMutation({ mutationFn: update('/api/onboarding/dismiss') }),
+    reopen: useMutation({ mutationFn: update('/api/onboarding/reopen') }),
+  }
 }
