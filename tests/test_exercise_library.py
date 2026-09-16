@@ -153,3 +153,68 @@ def test_missing_library_file_is_survivable(app_module, tmp_path):
     conn = app_module.get_db_connection()
     assert scoring.sync_library(conn, path=tmp_path / 'nope.json') == (0, 0, 0)
     conn.close()
+
+
+# --- movement patterns ------------------------------------------------------
+
+# Kept in step with PATTERNS in frontend/src/components/training/ExerciseAnimation.tsx.
+# A pattern here with no drawing there shows no animation; a drawing with no
+# exercise is dead code. Neither is fatal, which is exactly why it needs a test -
+# the failure is silent on both sides.
+ANIMATED_PATTERNS = {
+    'horizontal-press', 'vertical-press', 'horizontal-pull', 'vertical-pull',
+    'squat', 'hinge', 'lunge', 'curl', 'extension', 'raise', 'fly', 'calf-raise',
+    'core-flexion', 'core-brace', 'core-rotation', 'carry', 'cardio-cyclic',
+    'mobility',
+}
+
+
+def test_every_exercise_names_a_movement_pattern():
+    """The animation is keyed to the pattern, so an exercise without one is an
+    exercise that silently shows nothing."""
+    from scoring.library import load_library
+
+    missing = [e['name'] for e in load_library() if not e.get('movement_pattern')]
+    assert missing == [], f'no movement_pattern: {missing}'
+
+
+def test_every_pattern_used_has_an_animation():
+    """A typo in a pattern name would leave the exercise looking fine in the
+    library and blank in the UI."""
+    from scoring.library import load_library
+
+    used = {e['movement_pattern'] for e in load_library()}
+    assert used <= ANIMATED_PATTERNS, f'no animation drawn for: {sorted(used - ANIMATED_PATTERNS)}'
+
+
+def test_no_animation_is_drawn_for_nothing():
+    """The other direction: a pattern nothing uses is dead art."""
+    from scoring.library import load_library
+
+    used = {e['movement_pattern'] for e in load_library()}
+    assert ANIMATED_PATTERNS <= used, f'drawn but unused: {sorted(ANIMATED_PATTERNS - used)}'
+
+
+def test_the_library_covers_every_muscle_group_it_scores():
+    """MUSCLE_ATTRIBUTES decides what a logged set feeds. A muscle group with no
+    exercises is an attribute nobody can train on purpose."""
+    from scoring.config import MUSCLE_ATTRIBUTES
+    from scoring.library import load_library
+
+    covered = {e['primary_muscle'] for e in load_library()}
+    assert set(MUSCLE_ATTRIBUTES) <= covered, sorted(set(MUSCLE_ATTRIBUTES) - covered)
+
+
+def test_the_pattern_survives_a_sync(app_module):
+    """It is a column like any other - if sync_library drops it, every animation
+    disappears the next time the library is re-read."""
+    conn = app_module.get_db_connection()
+    try:
+        rows = conn.execute(
+            'SELECT COUNT(*) AS n FROM exercises '
+            'WHERE user_id IS NULL AND movement_pattern IS NOT NULL').fetchone()
+        total = conn.execute(
+            'SELECT COUNT(*) AS n FROM exercises WHERE user_id IS NULL').fetchone()
+        assert rows['n'] == total['n'] > 100
+    finally:
+        conn.close()

@@ -34,6 +34,7 @@ function page<T extends Record<string, ComponentType<object>>>(
 }
 
 const Training = page(() => import('./pages/Training'), 'Training')
+const ExerciseLibrary = page(() => import('./pages/ExerciseLibrary'), 'ExerciseLibrary')
 const WorkoutSession = page(() => import('./pages/WorkoutSession'), 'WorkoutSession')
 const Nutrition = page(() => import('./pages/Nutrition'), 'Nutrition')
 const Lifestyle = page(() => import('./pages/Lifestyle'), 'Lifestyle')
@@ -76,6 +77,10 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="/today" element={<Today />} />
         <Route path="/training" element={<Lazy><Training /></Lazy>} />
+        {/* Before the :workoutId route so "library" is not read as a session id.
+            React Router ranks static segments above dynamic ones anyway, but the
+            order makes the intent obvious to the next person. */}
+        <Route path="/training/library" element={<Lazy><ExerciseLibrary /></Lazy>} />
         <Route path="/training/:workoutId" element={<Lazy><WorkoutSession /></Lazy>} />
         <Route path="/nutrition" element={<Lazy><Nutrition /></Lazy>} />
         <Route path="/lifestyle" element={<Lazy><Lifestyle /></Lazy>} />

@@ -57,6 +57,10 @@ def _exercise_row(row):
         'difficulty': row['difficulty'],
         'is_compound': bool(row['is_compound']),
         'instructions': _json_list(row['instructions']),
+        # Which of the seventeen movement shapes this is, so the UI can animate
+        # it. Keyed to the movement rather than the exercise: a barbell, dumbbell
+        # and machine chest press are one movement done three ways.
+        'movement_pattern': row['movement_pattern'] if 'movement_pattern' in row.keys() else None,
         'is_custom': row['user_id'] is not None,
     }
 
