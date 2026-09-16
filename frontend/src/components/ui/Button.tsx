@@ -22,6 +22,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   size?: Size
   icon?: LucideIcon
+  /**
+   * Which side the icon sits on. 'start' reads as "this icon describes the
+   * action" (a trash can, a plus); 'end' reads as "this is where it takes you",
+   * which is what a forward arrow means. "→ Continue" points back at the label.
+   */
+  iconPosition?: 'start' | 'end'
   loading?: boolean
 }
 
@@ -29,6 +35,7 @@ export function Button({
   variant = 'secondary',
   size = 'md',
   icon: Icon,
+  iconPosition = 'start',
   loading = false,
   disabled,
   className,
@@ -54,12 +61,17 @@ export function Button({
       )}
       {...props}
     >
+      {/* The spinner always takes the icon's slot, so the label does not shift
+          sideways when a button starts loading. */}
       {loading ? (
         <LoaderCircle size={size === 'sm' ? 14 : 16} className="animate-spin" aria-hidden />
       ) : (
-        Icon && <Icon size={size === 'sm' ? 14 : 16} aria-hidden />
+        Icon && iconPosition === 'start' && <Icon size={size === 'sm' ? 14 : 16} aria-hidden />
       )}
       {children}
+      {!loading && Icon && iconPosition === 'end' && (
+        <Icon size={size === 'sm' ? 14 : 16} aria-hidden />
+      )}
     </button>
   )
 }

@@ -801,3 +801,68 @@ export interface AnalyticsResponse {
   attributes: AttributeComparison[]
   days_logged: number
 }
+
+/* --- R9: onboarding ------------------------------------------------------- */
+
+export interface OnboardingStep {
+  key: string
+  title: string
+  blurb: string
+  fields: string[]
+}
+
+/** Every answer the flow collects. All nullable - a skipped step is a real state. */
+export interface OnboardingAnswers {
+  birth_year: number | null
+  sex: string | null
+  height_cm: number | null
+  activity_level: string | null
+  goal: string | null
+  sleep_target_minutes: number | null
+  target_bedtime: string | null
+  target_wake_time: string | null
+  weekly_study_minutes: number | null
+  weight_kg: number | null
+  selected_path: string | null
+}
+
+export interface Baselines {
+  bmi: number | null
+  bmr: number | null
+  tdee: number | null
+  age: number | null
+  weight_kg: number | null
+  height_cm: number | null
+  /** What is still needed, so the UI can say why a baseline is blank. */
+  missing: string[]
+}
+
+export interface NutritionTargets {
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  fibre_g: number
+  water_ml: number
+  steps: number
+  sleep_minutes: number
+  weekly_study_minutes: number
+  estimated_tdee: number | null
+  estimated_bmr: number | null
+  goal: string
+  /** Per-target: 'set' (chosen), 'estimated' (derived), or 'unknown'. */
+  sources: Record<string, 'set' | 'estimated' | 'unknown'>
+}
+
+export interface OnboardingState {
+  steps: OnboardingStep[]
+  step: number
+  completed: boolean
+  completed_at: string | null
+  dismissed: boolean
+  /** Server-derived so every client agrees about when to show the banner. */
+  should_prompt: boolean
+  answers: OnboardingAnswers
+  baselines: Baselines
+  targets: NutritionTargets
+}

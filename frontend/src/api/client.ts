@@ -12,9 +12,25 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /**
+     * The parsed error body, when the server sent one.
+     *
+     * Kept because a 400 often carries more than a sentence: onboarding returns
+     * `fields` naming which answers were rejected, and throwing that away leaves
+     * the UI able to say "something was wrong" and nothing else.
+     */
+    public body?: Record<string, unknown>,
   ) {
     super(message)
     this.name = 'ApiError'
+  }
+
+  /** Per-field validation messages, or an empty object when there were none. */
+  get fields(): Record<string, string> {
+    const fields = this.body?.fields
+    return fields && typeof fields === 'object'
+      ? (fields as Record<string, string>)
+      : {}
   }
 }
 
@@ -43,7 +59,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
   const body = (await res.json()) as T & { message?: string; error?: string }
 
   if (!res.ok) {
-    throw new ApiError(res.status, body.message ?? body.error ?? `Request failed (${res.status}).`)
+    throw new ApiError(
+      res.status,
+      body.message ?? body.error ?? `Request failed (${res.status}).`,
+      body as Record<string, unknown>,
+    )
   }
 
   return body

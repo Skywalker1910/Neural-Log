@@ -5,6 +5,7 @@ import { m } from 'motion/react'
 import type { AttributeScore, HomeSummary } from '../api/types'
 import { useHomeSummary } from '../api/queries'
 import { AttributeRadar, TrendChart, type AttributeDatum } from '../components/charts'
+import { SetupBanner } from '../components/onboarding/SetupBanner'
 import { PageHeader } from '../components/layout/PageHeader'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { AttributeBadge } from '../components/ui/AttributeBadge'
@@ -15,41 +16,11 @@ import { ProgressRing } from '../components/ui/ProgressRing'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
+import { ATTRIBUTE_ACCENT, attributeHint } from '../lib/attributes'
 import { EASE } from '../lib/motion'
-import type { Accent } from '../navigation'
-
-/**
- * Eight attributes over seven accent tokens. Strength and Stamina deliberately
- * share the fitness accent - they are both physical, and inventing an eighth
- * colour for the sake of uniqueness would weaken the category language the rest
- * of the app uses.
- */
-const ATTRIBUTE_ACCENT: Record<string, Accent> = {
-  Discipline: 'discipline',
-  Knowledge: 'learning',
-  Strength: 'fitness',
-  Stamina: 'fitness',
-  Agility: 'lifestyle',
-  Recovery: 'recovery',
-  Consistency: 'goals',
-  Focus: 'brand',
-}
 
 /** The minimum active attributes before a radar shape means anything. */
 const RADAR_MIN_AXES = 3
-
-function attributeHint(attribute: AttributeScore): string | undefined {
-  switch (attribute.status) {
-    case 'locked':
-      return attribute.unlocks_in ? `Unlocks in ${attribute.unlocks_in}` : 'Locked'
-    case 'unobserved':
-      return 'Not in your Path'
-    case 'calibrating':
-      return attribute.needs_days ? `${attribute.needs_days} more days` : 'Calibrating'
-    default:
-      return undefined
-  }
-}
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -219,6 +190,10 @@ export function Home() {
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(data) => (
           <RevealGroup className="flex flex-col gap-4" step={0.07}>
+            {/* Renders nothing once setup is finished or declined, so it costs
+                an existing user no space. */}
+            <Reveal><SetupBanner /></Reveal>
+
             <Reveal>
             <Card accent="discipline" bodyClassName="flex flex-wrap items-center gap-6">
               <div className="flex items-center gap-4">
