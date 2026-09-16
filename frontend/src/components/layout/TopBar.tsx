@@ -36,10 +36,15 @@ export function TopBar() {
   return (
     <header className="material-chrome sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-line px-4 lg:px-8">
       <div className="min-w-0">
-        <h1 className="truncate text-label font-semibold tracking-tight text-ink">
+        {/*
+          A <p>, not an <h1>. The bar is chrome that persists across every route,
+          so heading it competes with the page's own title - two h1s on every
+          screen, which is what the audit found. The page owns the h1.
+        */}
+        <p className="truncate text-label font-semibold tracking-tight text-ink">
           {greeting(now.getHours())}
           {user.data ? `, ${user.data.username}` : ''}
-        </h1>
+        </p>
         <p className="truncate text-meta text-ink-subtle">
           {now.toLocaleDateString(undefined, DATE_FORMAT)}
         </p>

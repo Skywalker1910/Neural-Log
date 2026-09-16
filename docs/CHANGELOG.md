@@ -4,6 +4,31 @@ Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
 ## R10 - Polish
 
+### Polish
+
+- **Route-level code splitting.** The single chunk holding every page had reached
+  589kB, so opening the app downloaded the recipe builder and the onboarding flow
+  before it could render Home. It is 336kB now (172kB -> 105kB gzipped). Home and
+  Today stay eager - they are the daily loop, and a spinner there would be a worse
+  trade than the bytes.
+- **Responsive review**, as a probe rather than by eye: 12 pages x 5 breakpoints
+  (390/640/768/1024/1280), checking `scrollWidth` against `clientWidth`. No page
+  scrolls sideways at any of them.
+- **Accessibility audit** across every page - accessible names, form labels, image
+  alt text, heading structure. One finding: two `<h1>`s on every shell page,
+  because `TopBar` headed the greeting and `PageHeader` headed the page. The bar
+  is chrome that persists across routes, so it is a `<p>` now.
+- **Level-ups are celebrated**, wherever you are. Derived from the gamification
+  summary rather than from a save response, because a level-up is caused by XP and
+  since R7 every workspace awards it - wiring it into the checklist's response
+  would have congratulated you for ticking boxes and stayed silent for a two-hour
+  training session. Respects reduced motion, and a first observation is a starting
+  point rather than an increase, so it does not fire on every page load.
+- **The LazyMotion comment now says what actually happens.** It claimed the motion
+  features were "loaded as a separate chunk after first paint"; the build had been
+  saying otherwise (`INEFFECTIVE_DYNAMIC_IMPORT`) and they land in the eager
+  vendor chunk. The wording is corrected rather than the claim quietly left.
+
 ### The weekly volume target now scales with training frequency
 
 Strength was measured against a flat 12,000 kg x reps a week for everyone.

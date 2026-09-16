@@ -273,6 +273,46 @@ build back in.
 Charts animate in JS rather than CSS, so they take `isAnimationActive` from
 `usePrefersReducedMotion()` directly.
 
+## Performance
+
+Measured at the R10 pass, so these are numbers rather than intentions.
+
+**Route-level code splitting.** Every page used to live in one chunk, which had
+grown to **589kB** minified - opening the app downloaded the recipe builder, the
+goal editor and the onboarding flow before it could render Home. Splitting the
+routes took the initial chunk to **336kB** (172kB -> 105kB gzipped).
+
+Home and Today stay eager. They are the daily loop and what the bookmark and the
+mobile tab bar point at; splitting them would trade a smaller download for a
+spinner on the screen people open every evening. One `Suspense` boundary wraps the
+outlet rather than one per route, so the chrome stays put while a page chunk
+arrives - a fallback that replaced the sidebar would read as a page load rather
+than a navigation.
+
+**Recharts stays lazy.** It is a 306kB chunk of its own and loads only when a
+chart first renders, which is why charts are imported from `components/charts`
+rather than from their implementation files.
+
+**What LazyMotion does and does not buy.** `m` components carry no features, so
+the feature set registers once in `main.tsx` instead of at every call site, and
+`strict` makes an accidental `motion.*` import throw. It does *not* defer the
+features past first paint, despite how the setup reads: `motion/react` is
+statically imported by ~20 components, so the dynamic import cannot be split out,
+and the features land in the eagerly-preloaded vendor chunk beside React.
+Deferring them properly means importing `m` from `motion/react-m` everywhere -
+a real option if the initial payload ever needs the ~30kB back.
+
+## Accessibility audit
+
+Run across every page as a DOM probe rather than by eye: interactive elements
+without an accessible name, form controls without a label, images without `alt`,
+and heading structure.
+
+The one finding was **two `<h1>`s on every shell page** - `TopBar` headed the
+greeting and `PageHeader` headed the page. The bar is chrome that persists across
+every route, so it competes with the page's own title; it is a `<p>` now and the
+page owns the h1.
+
 ## Layout traps worth knowing
 
 **`min-width: auto`.** A grid or flex item refuses to shrink below its content by

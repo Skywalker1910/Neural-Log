@@ -24,7 +24,7 @@ This tracks where that's headed, in order.
 | UI | Interface pass - design language, the `/` cutover, standard icons | Done |
 | R8 | Analytics - long-range trends, calendar, comparisons | Done |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Done |
-| R10 | Polish - responsive, animation, a11y, performance | Not started |
+| R10 | Polish - responsive, animation, a11y, performance | Done |
 | Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
 
 Shipping is last, and the re-platform goes with it. An earlier plan put both after
@@ -322,9 +322,20 @@ permanent, with the flow left reachable from Profile.
 
 ## R10 - Polish
 
-Responsive review at every breakpoint, XP/level-up/achievement animations that
-respect reduced motion, accessibility pass, loading and empty states everywhere,
-performance work (pagination, lazy loading, bundle budget).
+Responsive review at every breakpoint, level-up animation, accessibility pass and
+performance work - all measured rather than eyeballed. See the Performance and
+Accessibility sections of [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md).
+
+It also fixed the weekly volume target, which had been flat for everyone and so
+scored a deliberate twice-a-week programme permanently low. See
+[TRAINING.md](TRAINING.md).
+
+Two brief items were deliberately not done, because nothing demonstrated the
+need: pagination (the XP ledger already takes a `limit`, and no other list is
+unbounded in practice at 2-5 users) and further empty states (every data-backed
+section already renders through `QueryBoundary`; the pages without an
+`EmptyState` are ones that cannot be empty - Settings, Today's checklist, the
+23-item achievement catalogue).
 
 ## Ship - Re-platform and deploy
 
