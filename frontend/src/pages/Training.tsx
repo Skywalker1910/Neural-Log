@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { m } from 'motion/react'
 import {
   Activity, CalendarDays, Dumbbell, Flame, ListChecks, Pencil, Play, Plus,
@@ -249,7 +249,12 @@ export function Training() {
         icon={Dumbbell}
         accent="fitness"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/training/library">
+              <Button size="sm" icon={Dumbbell}>
+                Library
+              </Button>
+            </Link>
             <Button size="sm" icon={Ruler} onClick={() => setMeasuring(true)}>
               Measure
             </Button>
