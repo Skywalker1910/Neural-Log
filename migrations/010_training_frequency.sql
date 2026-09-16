@@ -1,0 +1,22 @@
+-- R10: how often you intend to train.
+--
+-- R9 deliberately did not collect this, because at the time nothing consumed it
+-- and storing a field "for later" is how schemas rot. What changed is that the
+-- flaw it addresses got fixed rather than filed.
+--
+-- The flaw: weekly_strength_volume was a flat 12,000 kg x reps for everyone.
+-- Strength is measured as volume across a trailing week, so someone on a
+-- deliberate twice-a-week programme is asked to produce a four-day week's work
+-- and scores permanently low for executing their plan perfectly. That is the
+-- engine measuring the plan rather than the adherence.
+--
+-- The fix scales the target by declared frequency, which makes part of the
+-- denominator self-reported. That is not a departure: the opportunity
+-- denominator has always worked this way - your Path decides which attributes
+-- have a denominator at all, and you choose your Path. Declaring how often you
+-- train is the same kind of act, and it is clamped to 2-6 days so that "once a
+-- week" cannot collapse the bar into a free 100.
+--
+-- NULL means undeclared, and undeclared reproduces the old flat 12,000 exactly.
+-- Nobody's history moves until they answer the question.
+ALTER TABLE user_profile ADD COLUMN training_days_per_week INTEGER;

@@ -153,6 +153,25 @@ Three rules matter:
 3. **The first training day is pro-rated.** Measuring one day against a full
    week's target scored a genuine session at 27%, which reads as a punishment for
    starting. The target now scales to the observed window.
+4. **The weekly volume target scales with how often you train** (R10). It used to
+   be a flat 12,000 kg×reps for everyone, which asks someone on a deliberate
+   twice-a-week programme to produce a four-day week's work - they then score
+   permanently low for executing their plan perfectly. That is the engine
+   measuring the *plan* rather than the adherence.
+
+   The target is `per_session_strength_volume × training_days_per_week`, clamped
+   to 2-6 days. Undeclared falls back to four days, which reproduces the old
+   12,000 exactly, so **nobody's history moved when this shipped**.
+
+   Part of the denominator therefore comes from something you declared, and that
+   is not a departure: the opportunity denominator has always worked this way -
+   your Path decides which attributes have a denominator at all, and you choose
+   your Path. The clamp is what closes the obvious hole, because without a floor
+   "I train once a week" would turn a single session into a free 100.
+
+   Cardio and mobility stay absolute. They are weekly time budgets, not
+   per-session work products - how many days you lift says nothing about how many
+   minutes of cardio a week is a reasonable ask.
 
 Mobility work is what unlocks Agility - it was `locked` before R3 because nothing
 fed it.

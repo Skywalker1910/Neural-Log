@@ -817,6 +817,7 @@ export interface OnboardingAnswers {
   sex: string | null
   height_cm: number | null
   activity_level: string | null
+  training_days_per_week: number | null
   goal: string | null
   sleep_target_minutes: number | null
   target_bedtime: string | null

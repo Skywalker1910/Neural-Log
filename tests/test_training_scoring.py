@@ -176,7 +176,7 @@ def test_first_training_day_is_not_measured_against_a_full_week(db):
     conn.commit()
 
     sets = _load_sets(conn, user_id)
-    ratios = producers.training_ratios(sets, [day], DEFAULT_CONFIG)
+    ratios = producers.training_ratios(sets, [day], config=DEFAULT_CONFIG)
     assert ratios[day]['Strength'][0] == 1.0
 
 
@@ -337,3 +337,73 @@ def test_logging_modest_training_always_beats_logging_nothing():
             f'{measured_ratio:.0%} of the weekly target scored {logged:.2f}, '
             f'worse than claiming it and logging nothing ({claimed_only:.2f})'
         )
+
+
+# --- R10: the weekly volume target scales with declared frequency ------------
+
+def test_an_undeclared_frequency_reproduces_the_old_flat_target():
+    """The whole rollout depends on this. Nobody's history moves until they
+    answer the question, so the default has to land on the old 12000 exactly."""
+    assert producers.weekly_strength_volume(None, DEFAULT_CONFIG) == 12000
+
+
+def test_the_target_scales_with_how_often_you_train():
+    """A flat weekly figure asks someone on a deliberate twice-a-week programme
+    to produce a four-day week's volume, so they score permanently low for
+    executing their plan perfectly."""
+    two = producers.weekly_strength_volume(2, DEFAULT_CONFIG)
+    four = producers.weekly_strength_volume(4, DEFAULT_CONFIG)
+    six = producers.weekly_strength_volume(6, DEFAULT_CONFIG)
+
+    assert two < four < six
+    assert four == 12000
+
+
+def test_declaring_almost_nothing_cannot_collapse_the_denominator():
+    """The perverse incentive this clamp exists to close: without a floor,
+    declaring "once a week" would turn one session into a free 100."""
+    floor = producers.weekly_strength_volume(DEFAULT_CONFIG.min_training_days, DEFAULT_CONFIG)
+    assert producers.weekly_strength_volume(1, DEFAULT_CONFIG) == floor
+    assert producers.weekly_strength_volume(0, DEFAULT_CONFIG) == 12000  # 0 reads as undeclared
+
+
+def test_declaring_everything_cannot_inflate_the_denominator():
+    ceiling = producers.weekly_strength_volume(DEFAULT_CONFIG.max_training_days, DEFAULT_CONFIG)
+    assert producers.weekly_strength_volume(7, DEFAULT_CONFIG) == ceiling
+    assert producers.weekly_strength_volume(99, DEFAULT_CONFIG) == ceiling
+
+
+def test_the_same_session_scores_higher_for_a_twice_a_week_lifter(db):
+    """The point of the change, stated as behaviour rather than arithmetic. The
+    identical session is worth more to someone who trains twice a week, because
+    it is a larger share of the week they actually planned."""
+    conn, user_id, app_module = db
+    bench = _exercise(conn, 'bench-press', 'chest')
+
+    day = START.isoformat()
+    _log_session(conn, user_id, day, bench, [{'weight': 60, 'reps': 8} for _ in range(4)])
+    conn.commit()
+    sets = _load_sets(conn, user_id)
+
+    frequent = producers.training_ratios(sets, [day], {day: 6}, config=DEFAULT_CONFIG)
+    occasional = producers.training_ratios(sets, [day], {day: 2}, config=DEFAULT_CONFIG)
+
+    assert occasional[day]['Strength'][0] > frequent[day]['Strength'][0]
+
+
+def test_a_past_day_is_judged_against_the_frequency_that_applied_then(db):
+    """Per-date, like the sleep and step targets - so changing your answer does
+    not retroactively rewrite what every past week was aiming at."""
+    conn, user_id, app_module = db
+    bench = _exercise(conn, 'bench-press', 'chest')
+
+    first = START.isoformat()
+    second = (START + timedelta(days=1)).isoformat()
+    for day in (first, second):
+        _log_session(conn, user_id, day, bench, [{'weight': 60, 'reps': 8} for _ in range(3)])
+    conn.commit()
+    sets = _load_sets(conn, user_id)
+
+    ratios = producers.training_ratios(
+        sets, [first, second], {first: 2, second: 6}, config=DEFAULT_CONFIG)
+    assert ratios[first]['Strength'][0] > ratios[second]['Strength'][0]

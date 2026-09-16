@@ -2,6 +2,30 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+## R10 - Polish
+
+### The weekly volume target now scales with training frequency
+
+Strength was measured against a flat 12,000 kg x reps a week for everyone.
+Because it is a trailing-window measure, someone on a deliberate twice-a-week
+programme is asked to produce a four-day week's volume and scores permanently low
+for executing their plan perfectly - the engine measuring the plan rather than
+the adherence.
+
+The target is now `per_session_strength_volume x training_days_per_week`, clamped
+to 2-6 days, and onboarding collects the frequency. Undeclared reproduces the old
+12,000 exactly, so **nobody's history moved when this shipped** - a test pins that
+default.
+
+Part of the denominator is therefore self-declared, which is not a departure:
+the opportunity denominator has always worked that way, since your Path decides
+which attributes have a denominator at all and you choose your Path. The clamp is
+what closes the hole - without a floor, "I train once a week" would turn one
+session into a free 100.
+
+Cardio and mobility stay absolute: they are weekly time budgets rather than
+per-session work products.
+
 ## R9 - Onboarding
 
 The seven-step first-run flow, the Profile page and Settings. Full write-up in

@@ -27,6 +27,30 @@ from .config import (
 )
 
 
+def weekly_strength_volume(training_days_per_week, config=DEFAULT_CONFIG):
+    """The weekly kg x reps a fully-credited training window represents.
+
+    Scales with how often you train, because kg x reps is per-session work that
+    accumulates. A flat weekly figure asks someone on a deliberate twice-a-week
+    programme to produce a four-day week's volume, so they score permanently low
+    for executing their plan perfectly.
+
+    The denominator being partly self-declared is not a departure from doctrine.
+    The engine already works this way - your Path decides which attributes have a
+    denominator at all, and you choose your Path (see the opportunity denominator
+    in docs/SCORING.md). Declaring how often you train is the same kind of act.
+
+    Clamped at both ends anyway. The lower bound is what stops "I train once a
+    week" collapsing the denominator into a free 100; the upper bound stops a
+    declared seven-day week setting a target nobody could hit. Undeclared falls
+    back to the default, which reproduces the old flat 12000 exactly - so nobody's
+    history moves until they answer the question.
+    """
+    days = training_days_per_week or config.default_training_days
+    days = max(config.min_training_days, min(int(days), config.max_training_days))
+    return config.per_session_strength_volume * days
+
+
 def set_contribution(row, config=DEFAULT_CONFIG):
     """One logged set -> (attribute, magnitude) or None.
 
@@ -73,7 +97,7 @@ def _to_kg(weight, unit):
     return weight * 0.45359237 if (unit or 'kg').lower() in ('lb', 'lbs') else weight
 
 
-def training_ratios(set_rows, dates, config=DEFAULT_CONFIG):
+def training_ratios(set_rows, dates, strength_targets=None, config=DEFAULT_CONFIG):
     """Per-day training ratios over a trailing window.
 
     `set_rows` is every logged set for one user, each a mapping with at least:
@@ -98,11 +122,13 @@ def training_ratios(set_rows, dates, config=DEFAULT_CONFIG):
     if not by_date:
         return {}
 
-    targets = {
-        'Strength': config.weekly_strength_volume,
-        'Stamina': config.weekly_cardio_minutes,
-        'Agility': config.weekly_mobility_minutes,
-    }
+    # Strength's target is per-date, because it follows a declared training
+    # frequency that can change - the same treatment sleep and step targets get,
+    # so a past day is judged against what applied then rather than against
+    # today's answer. Values are days per week; the conversion to volume happens
+    # below. Cardio and mobility stay absolute weekly time budgets.
+    strength_targets = strength_targets or {}
+    default_strength = weekly_strength_volume(None, config)
 
     # An attribute only becomes observable once there is a first signal for it.
     # Before that it is genuinely unobserved, and back-filling zeroes would
@@ -125,6 +151,13 @@ def training_ratios(set_rows, dates, config=DEFAULT_CONFIG):
             if start <= logged <= day:
                 for attribute, magnitude in buckets.items():
                     totals[attribute] = totals.get(attribute, 0.0) + magnitude
+
+        targets = {
+            'Strength': (weekly_strength_volume(strength_targets[iso], config)
+                         if strength_targets.get(iso) else default_strength),
+            'Stamina': config.weekly_cardio_minutes,
+            'Agility': config.weekly_mobility_minutes,
+        }
 
         for attribute, target in targets.items():
             if attribute not in first_seen or iso < first_seen[attribute]:
