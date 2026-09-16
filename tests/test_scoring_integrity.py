@@ -6,12 +6,18 @@ shouldn't. See docs/CHANGELOG.md under "R2 prerequisites".
 """
 from datetime import datetime
 
-from conftest import register
+from conftest import core_survey, register
 from test_gamification import _answer_all, _submit_checklist
 
 
 def _batman(app_module):
-    return [p for p in app_module.build_default_paths() if p["id"] == "batman-path"][0]
+    """The shared survey, wrapped as a path so the helpers below read the same.
+
+    Named for the Path it replaced; every caller just wants a realistic set of
+    checklist items.
+    """
+    return {"id": "daily-survey", "name": "Daily survey",
+            "checklist_items": core_survey(app_module)}
 
 
 # --- server-side completion -------------------------------------------------
@@ -74,60 +80,8 @@ def test_perfect_day_badge_still_awarded_when_genuinely_perfect(client, app_modu
     assert "perfect-day" in earned
 
 
-# --- stock-path repair ------------------------------------------------------
-
-def test_repair_restores_shipped_weights_and_icons(app_module):
-    """Simulates an account created before weights/icons existed: every item
-    flattened to weight 1 / icon 'default'."""
-    paths = app_module.build_default_paths()
-    for path in paths:
-        for item in path["checklist_items"]:
-            item["weight"] = 1
-            item["icon"] = "default"
-
-    assert app_module.repair_default_path_items(paths) is True
-
-    batman = [p for p in paths if p["id"] == "batman-path"][0]
-    by_name = {i["name"]: i for i in batman["checklist_items"]}
-    assert by_name["Did you complete strength training today?"]["weight"] == 3
-    assert by_name["Did you complete strength training today?"]["icon"] == "workout"
-    assert by_name["What time did you wake up?"]["icon"] == "sun"
-
-
-def test_repair_leaves_user_customisation_alone(app_module):
-    """A stock path the user has deliberately edited must not be reverted."""
-    paths = app_module.build_default_paths()
-    batman = [p for p in paths if p["id"] == "batman-path"][0]
-    target = next(i for i in batman["checklist_items"] if i["weight"] == 3)
-    target["weight"] = 5
-    target["icon"] = "chess"
-
-    app_module.repair_default_path_items(paths)
-
-    assert target["weight"] == 5
-    assert target["icon"] == "chess"
-
-
-def test_repair_ignores_custom_paths(app_module):
-    custom = [{
-        "id": "custom-abc",
-        "name": "My Path",
-        "is_default": False,
-        "checklist_items": [
-            {"name": "Did you complete strength training today?", "type": "yes-no",
-             "weight": 1, "icon": "default"}
-        ],
-    }]
-    assert app_module.repair_default_path_items(custom) is False
-    assert custom[0]["checklist_items"][0]["weight"] == 1
-
-
-def test_repair_is_idempotent(app_module):
-    paths = app_module.build_default_paths()
-    for path in paths:
-        for item in path["checklist_items"]:
-            item["weight"] = 1
-            item["icon"] = "default"
-
-    assert app_module.repair_default_path_items(paths) is True
-    assert app_module.repair_default_path_items(paths) is False
+# The stock-path repair tests lived here. repair_default_path_items() existed to
+# restore shipped weights and icons onto the four hero Paths after a user had
+# edited them, and both the function and the Paths are gone - the shared survey
+# is a single set of rows that an admin edits deliberately, with nothing to
+# drift back from.

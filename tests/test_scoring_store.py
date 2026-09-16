@@ -7,6 +7,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from conftest import core_survey
+
 import scoring
 
 START = date(2026, 9, 1)
@@ -26,8 +28,7 @@ def db(app_module):
 
 
 def _items(app_module):
-    return [p for p in app_module.build_default_paths()
-            if p['id'] == 'batman-path'][0]['checklist_items']
+    return core_survey(app_module)
 
 
 def _answers(items, yes=True, wake=0):
@@ -134,9 +135,12 @@ def test_early_days_are_calibrating_not_zero(db):
 
 
 def test_attribute_with_no_signal_is_unobserved_not_zero(db):
-    """Agility stopped being locked when R3 added mobility work. With a Path
-    containing no mobility and no logged training it is now 'unobserved' -
-    still no number, but for a different and more accurate reason.
+    """Consistency is the one attribute no question feeds: it comes from whether
+    you logged, not from what you answered.
+
+    Agility used to be the example here - the Batman path had no mobility item.
+    The shared survey has one, which is the point of it: picking a Path used to
+    decide which of your attributes could be measured at all.
     """
     conn, user_id, app_module = db
     _log_days(conn, user_id, _items(app_module), 5)
@@ -144,8 +148,8 @@ def test_attribute_with_no_signal_is_unobserved_not_zero(db):
     row = conn.execute(
         "SELECT * FROM attribute_scores WHERE user_id = ? AND attribute = 'Agility' "
         "ORDER BY date DESC LIMIT 1", (user_id,)).fetchone()
-    assert row['status'] == 'unobserved'
-    assert row['score'] is None
+    assert row['status'] == 'active', 'the shared survey feeds Agility for everyone'
+    assert row['score'] is not None
 
 
 def test_history_is_preserved_for_past_dates(db):

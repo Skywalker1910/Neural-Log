@@ -33,6 +33,22 @@ def _first_habit(client):
     return client.get("/api/habits").get_json()["habits"][0]
 
 
+def _own_question(client, name="Did you practise guitar?"):
+    """A personal survey question, which is the only kind one person may edit.
+
+    The core questions are shared by every account, so scheduling or renaming one
+    is an admin action - these tests are about what an ordinary user can do to
+    their own.
+    """
+    return client.post("/api/survey/questions", json={"name": name}).get_json()
+
+
+def _habit_id(client, slug):
+    """Survey questions come back keyed by slug; /api/habits keys by row id."""
+    return next(h["id"] for h in client.get("/api/habits").get_json()["habits"]
+                if h["slug"] == slug)
+
+
 # --- goals ------------------------------------------------------------------
 
 def test_a_goal_round_trips(planner):
@@ -148,17 +164,30 @@ def test_goals_are_scoped_to_their_owner(planner, client):
     assert client.put(f"/api/goals/{goal['id']}", json={"title": "mine"}).status_code == 404
 
 
-def test_you_cannot_link_someone_elses_habit(planner, client):
-    planner_habit = _first_habit(planner)
+def test_you_cannot_link_someone_elses_personal_question(planner, client):
+    """Core questions are shared and linkable by anyone - that is the point of
+    them. A question somebody added for themselves is not."""
+    private_id = _habit_id(planner, _own_question(planner, "Did you call Mum?")["id"])
     planner.get("/logout")
 
     register(client, username="intruder")
     goal = client.post("/api/goals", json={
-        "title": "Borrowed", "habit_ids": [planner_habit["id"]],
+        "title": "Borrowed", "habit_ids": [private_id],
     }).get_json()
 
     assert goal["habit_ids"] == []
     assert goal["progress"]["source"] != "habits"
+
+
+def test_a_goal_can_track_a_shared_question(planner):
+    """The common survey is what most goals will want to hang off."""
+    core = _first_habit(planner)
+    goal = planner.post("/api/goals", json={
+        "title": "Train consistently", "habit_ids": [core["id"]],
+    }).get_json()
+
+    assert goal["habit_ids"] == [core["id"]]
+    assert goal["progress"]["source"] == "habits"
 
 
 # --- tasks --------------------------------------------------------------------
@@ -262,18 +291,15 @@ def test_habits_endpoint_reports_stats(planner):
     assert entry["schedule_type"] == "daily", "migrated path items are daily"
 
 
-def test_habits_are_scoped_to_the_path_you_are_following(planner):
-    """The four stock paths share most of their items. Listing all of them shows
-    "What time did you wake up?" four times, which reads as a bug."""
-    scoped = planner.get("/api/habits").get_json()
-    everything = planner.get("/api/habits?all=1").get_json()
+def test_the_habit_list_has_no_duplicates(planner):
+    """This used to need scoping to the Path you were following: the four stock
+    paths shared most of their items, so the unscoped list showed "What time did
+    you wake up?" four times. One shared survey has nothing to scope to."""
+    listed = planner.get("/api/habits").get_json()["habits"]
+    names = [habit["name"] for habit in listed]
 
-    assert scoped["scope"] == "selected"
-    assert everything["scope"] == "all"
-    assert len(everything["habits"]) > len(scoped["habits"])
-
-    names = [habit["name"] for habit in scoped["habits"]]
-    assert len(names) == len(set(names)), f"duplicate habits in the scoped list: {names}"
+    assert names
+    assert len(names) == len(set(names)), f"duplicate habits: {names}"
 
 
 def test_the_goal_link_picker_offers_no_duplicates(planner):
@@ -283,9 +309,20 @@ def test_the_goal_link_picker_offers_no_duplicates(planner):
     assert len(names) == len(set(names))
 
 
+def test_a_core_question_cannot_be_rescheduled_by_one_person(planner):
+    """It belongs to all five accounts. Rescheduling it for yourself would
+    reschedule it for everyone, so it is refused with the reason rather than a
+    404 about a question you can plainly see on your own Today page."""
+    core = _first_habit(planner)
+    resp = planner.put(f"/api/habits/{core['id']}", json={"schedule_type": "weekdays"})
+
+    assert resp.status_code == 403
+    assert "admin" in resp.get_json()["error"].lower()
+
+
 def test_a_habit_schedule_can_be_changed(planner):
-    habit = _first_habit(planner)
-    updated = planner.put(f"/api/habits/{habit['id']}", json={
+    habit_id = _habit_id(planner, _own_question(planner)["id"])
+    updated = planner.put(f"/api/habits/{habit_id}", json={
         "schedule_type": "days", "schedule_days": [0, 2, 4],
     }).get_json()
 
@@ -294,8 +331,8 @@ def test_a_habit_schedule_can_be_changed(planner):
 
 
 def test_an_invalid_schedule_is_rejected_without_breaking_the_habit(planner):
-    habit = _first_habit(planner)
-    updated = planner.put(f"/api/habits/{habit['id']}", json={
+    habit_id = _habit_id(planner, _own_question(planner)["id"])
+    updated = planner.put(f"/api/habits/{habit_id}", json={
         "schedule_type": "lunar", "schedule_days": [9, "x", 2],
     }).get_json()
 
@@ -304,18 +341,18 @@ def test_an_invalid_schedule_is_rejected_without_breaking_the_habit(planner):
 
 
 def test_switching_away_from_times_per_week_clears_the_target(planner):
-    habit = _first_habit(planner)
-    planner.put(f"/api/habits/{habit['id']}",
+    habit_id = _habit_id(planner, _own_question(planner)["id"])
+    planner.put(f"/api/habits/{habit_id}",
                 json={"schedule_type": "times-per-week", "target_per_week": 3})
-    updated = planner.put(f"/api/habits/{habit['id']}",
+    updated = planner.put(f"/api/habits/{habit_id}",
                           json={"schedule_type": "daily"}).get_json()
     assert updated["target_per_week"] is None
 
 
 def test_due_reflects_the_schedule(planner):
-    habit = _first_habit(planner)
+    habit_id = _habit_id(planner, _own_question(planner)["id"])
     # Only Mondays.
-    planner.put(f"/api/habits/{habit['id']}",
+    planner.put(f"/api/habits/{habit_id}",
                 json={"schedule_type": "days", "schedule_days": [0]})
 
     monday = "2026-09-14"
@@ -324,8 +361,8 @@ def test_due_reflects_the_schedule(planner):
     due_monday = planner.get(f"/api/habits/due?date={monday}").get_json()["habits"]
     due_tuesday = planner.get(f"/api/habits/due?date={tuesday}").get_json()["habits"]
 
-    assert habit["id"] in {h["id"] for h in due_monday}
-    assert habit["id"] not in {h["id"] for h in due_tuesday}
+    assert habit_id in {h["id"] for h in due_monday}
+    assert habit_id not in {h["id"] for h in due_tuesday}
 
 
 def test_due_rejects_a_malformed_date(planner):

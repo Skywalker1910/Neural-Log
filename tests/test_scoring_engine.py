@@ -8,6 +8,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from conftest import core_survey
+
 from scoring import (
     ATTRIBUTES,
     DEFAULT_CONFIG,
@@ -84,8 +86,9 @@ def test_rating_items_never_earn_credit():
 # --- whole-day scoring ------------------------------------------------------
 
 def _batman(app_module):
-    return [p for p in app_module.build_default_paths()
-            if p['id'] == 'batman-path'][0]['checklist_items']
+    """The shared survey. Named for the Path it replaced, because every caller
+    below just wants "a realistic set of checklist items"."""
+    return core_survey(app_module)
 
 
 def _answers(items, yes=True, wake=0):
@@ -114,11 +117,21 @@ def test_late_wake_costs_discipline_but_not_knowledge(app_module):
 
 
 def test_attribute_with_no_feeding_item_is_absent_not_zero(app_module):
-    """The opportunity denominator: Agility is not in the Batman path at all, so
-    it must be missing from the result rather than present with earned=0."""
+    """The opportunity denominator: an attribute no question feeds must be
+    missing from the result rather than present with earned=0.
+
+    This used to be demonstrated with Agility, which the Batman path happened not
+    to cover. The shared survey covers every attribute a question *can* feed - one
+    of the reasons for replacing the Paths, since choosing one quietly chose which
+    of your attributes were measurable at all.
+
+    Consistency is the permanent example: nothing in any survey feeds it, by
+    design. It is derived from whether you logged, not from what you answered.
+    """
     items = _batman(app_module)
     attributes = score_day(items, _answers(items))['attributes']
-    assert 'Agility' not in attributes
+    assert 'Consistency' not in attributes
+    assert 'Agility' in attributes, 'the shared survey should cover every feedable attribute'
     assert 'Strength' in attributes
 
 

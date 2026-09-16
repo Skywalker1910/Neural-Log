@@ -11,6 +11,11 @@ import achievements
 from conftest import register, login
 
 
+def _survey_path(client):
+    """The one path the compatibility view now returns - the shared survey."""
+    return client.get("/api/paths").get_json()["paths"][0]
+
+
 def _answer_all(path, all_yes=True):
     """Build a custom_responses dict that answers every scorable item on a
     Path (skips rating items, same as the real wizard would for a "did
@@ -72,13 +77,13 @@ def test_compute_level_thresholds(app_module):
 
 def test_daily_checklist_awards_weighted_xp_and_first_day_badges(client, app_module):
     register(client)
-    batman_path = next(p for p in app_module.DEFAULT_PATH_LIBRARY if p["id"] == "batman-path")
+    survey = _survey_path(client)
     expected_base_xp = sum(
-        item["weight"] for item in batman_path["checklist_items"] if item["type"] != "rating"
+        item["weight"] for item in survey["checklist_items"] if item["type"] != "rating"
     ) * app_module.XP_PER_WEIGHT_POINT
 
     today = datetime.now().strftime("%Y-%m-%d")
-    resp = _submit_checklist(client, today, batman_path)
+    resp = _submit_checklist(client, today, survey)
     assert resp.status_code == 201
 
     newly_earned = {b["code"] for b in resp.get_json()["newly_earned_badges"]}
@@ -108,21 +113,21 @@ def test_daily_checklist_awards_weighted_xp_and_first_day_badges(client, app_mod
 
 def test_resubmitting_same_day_recalculates_instead_of_stacking(client, app_module):
     register(client)
-    batman_path = next(p for p in app_module.DEFAULT_PATH_LIBRARY if p["id"] == "batman-path")
+    survey = _survey_path(client)
     today = datetime.now().strftime("%Y-%m-%d")
 
-    _submit_checklist(client, today, batman_path, all_yes=True)
+    _submit_checklist(client, today, survey, all_yes=True)
     first_total = client.get("/api/gamification/summary").get_json()["total_xp"]
 
     # Resubmit the same day answering "No" to every yes/no item - should
     # replace the day's XP, not add to it. The wake-time item still counts
     # (it's a "time" item, always answered, no yes/no state), so the floor
     # is that item's weight, not zero.
-    _submit_checklist(client, today, batman_path, all_yes=False, completion_percent=0)
+    _submit_checklist(client, today, survey, all_yes=False, completion_percent=0)
     second_total = client.get("/api/gamification/summary").get_json()["total_xp"]
 
     time_only_base_xp = sum(
-        item["weight"] for item in batman_path["checklist_items"] if item["type"] == "time"
+        item["weight"] for item in survey["checklist_items"] if item["type"] == "time"
     ) * app_module.XP_PER_WEIGHT_POINT
 
     # Achievements unlocked by the first submission keep their XP - they are
@@ -142,13 +147,13 @@ def test_resubmitting_same_day_recalculates_instead_of_stacking(client, app_modu
 
 def test_seven_day_streak_unlocks_badge_and_scales_multiplier(client, app_module):
     register(client)
-    batman_path = next(p for p in app_module.DEFAULT_PATH_LIBRARY if p["id"] == "batman-path")
+    survey = _survey_path(client)
     today = datetime.now().date()
 
     last_response = None
     for offset in range(6, -1, -1):  # oldest -> newest, ending today
         day = (today - timedelta(days=offset)).strftime("%Y-%m-%d")
-        last_response = _submit_checklist(client, day, batman_path)
+        last_response = _submit_checklist(client, day, survey)
 
     newly_earned = {b["code"] for b in last_response.get_json()["newly_earned_badges"]}
     assert "week-streak" in newly_earned

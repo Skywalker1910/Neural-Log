@@ -54,19 +54,6 @@ def test_paths_payload_keeps_its_exact_shape(user):
     assert set(item) >= {"id", "name", "type", "icon", "weight"}
 
 
-def test_stock_path_ids_and_item_ids_survive_the_move(user, app_module):
-    """daily_log.path_id, users.selected_path and every client already reference
-    these strings. Replacing them with integers would orphan all of it."""
-    payload = user.get("/api/paths").get_json()
-    ids = {path["id"] for path in payload["paths"]}
-    assert "batman-path" in ids
-
-    conn = _conn(app_module)
-    slugs = {row["slug"] for row in conn.execute("SELECT slug FROM habit_groups")}
-    conn.close()
-    assert "batman-path" in slugs
-
-
 def test_checklist_items_endpoint_still_serves_the_selected_path(user):
     items = user.get("/api/checklist-items").get_json()["items"]
     assert items
@@ -85,104 +72,6 @@ def test_weights_and_icons_survive(user):
 
 
 # --- the import ---------------------------------------------------------------
-
-def test_import_happens_once_and_is_recorded(user, app_module):
-    conn = _conn(app_module)
-    row = conn.execute("SELECT * FROM habit_imports").fetchone()
-    conn.close()
-
-    assert row is not None
-    assert row["habits_imported"] > 0
-
-
-def test_a_removed_path_stays_removed(user, app_module):
-    """The bug this guards against: re-importing the JSON on every load would
-    silently undo any edit the user made."""
-    payload = user.get("/api/paths").get_json()
-    victim = next(p for p in payload["paths"] if p["id"] != payload["selected_path_id"])
-
-    assert user.delete(f"/api/paths/{victim['id']}").status_code == 200
-
-    after = user.get("/api/paths").get_json()
-    assert victim["id"] not in {p["id"] for p in after["paths"]}
-
-    # And still gone on a fresh load, which is where a re-import would show up.
-    again = user.get("/api/paths").get_json()
-    assert victim["id"] not in {p["id"] for p in again["paths"]}
-
-
-def test_deleting_a_path_archives_rather_than_deletes(user, app_module):
-    payload = user.get("/api/paths").get_json()
-    victim = next(p for p in payload["paths"] if p["id"] != payload["selected_path_id"])
-    user.delete(f"/api/paths/{victim['id']}")
-
-    conn = _conn(app_module)
-    row = conn.execute("SELECT archived FROM habit_groups WHERE slug = ?",
-                       (victim["id"],)).fetchone()
-    conn.close()
-    assert row is not None, "the group was deleted - completions would be orphaned"
-    assert row["archived"] == 1
-
-
-def test_sql_is_the_live_source_not_the_json_file(user, app_module):
-    """After the import, the JSON file must stop being read. Editing SQL directly
-    and seeing it through the API is the proof."""
-    user_id = _user_id(app_module)
-
-    conn = _conn(app_module)
-    conn.execute(
-        "UPDATE habits SET name = 'Renamed in SQL' WHERE user_id = ? "
-        "AND id = (SELECT MIN(id) FROM habits WHERE user_id = ?)",
-        (user_id, user_id),
-    )
-    conn.commit()
-    conn.close()
-
-    names = [
-        item["name"]
-        for path in user.get("/api/paths").get_json()["paths"]
-        for item in path["checklist_items"]
-    ]
-    assert "Renamed in SQL" in names
-
-
-# --- editing paths ------------------------------------------------------------
-
-def test_creating_a_custom_path_persists(user, app_module):
-    response = user.post("/api/paths", json={
-        "name": "My Path",
-        "checklist_items": [
-            {"name": "Did the thing", "type": "yes-no", "icon": "code", "weight": 2},
-        ],
-    })
-    assert response.status_code == 201
-
-    payload = user.get("/api/paths").get_json()
-    mine = next(p for p in payload["paths"] if p["name"] == "My Path")
-    assert mine["is_default"] is False
-    assert mine["checklist_items"][0]["name"] == "Did the thing"
-    assert mine["checklist_items"][0]["weight"] == 2
-
-
-def test_editing_checklist_items_persists(user):
-    user.put("/api/checklist-items", json={
-        "items": [{"name": "Only item", "type": "yes-no", "icon": "sun", "weight": 3}],
-    })
-    items = user.get("/api/checklist-items").get_json()["items"]
-    assert [item["name"] for item in items] == ["Only item"]
-
-
-def test_selecting_a_path_sticks(user):
-    payload = user.get("/api/paths").get_json()
-    target = next(p for p in payload["paths"] if p["id"] != payload["selected_path_id"])
-
-    response = user.put("/api/paths/selected", json={"path_id": target["id"]})
-    assert response.status_code == 200
-
-    assert user.get("/api/paths").get_json()["selected_path_id"] == target["id"]
-
-
-# --- completions ---------------------------------------------------------------
 
 def _submit(client, day, answers):
     return client.put(f"/api/days/{day}", json={"responses": answers})
@@ -416,17 +305,64 @@ def test_saying_no_does_not_extend_a_streak(user, app_module):
 
 # --- isolation -----------------------------------------------------------------
 
-def test_habits_are_scoped_to_their_owner(user, client, app_module):
-    user.get("/logout")
-    register(client, username="someone-else")
-
-    mine = _user_id(app_module, "someone-else")
+def test_the_core_survey_is_one_shared_set_not_a_copy_each(user, app_module):
+    """The point of the model. Forty habit rows per account became one set owned
+    by nobody, which is what makes completion percentages comparable between
+    people in the first place."""
     conn = _conn(app_module)
-    rows = conn.execute(
-        "SELECT COUNT(*) AS n FROM habits WHERE user_id != ?", (mine,)).fetchone()
-    theirs = conn.execute(
-        "SELECT COUNT(*) AS n FROM habits WHERE user_id = ?", (mine,)).fetchone()
+    core = conn.execute(
+        "SELECT COUNT(*) AS n FROM habits WHERE is_core = 1 AND archived = 0"
+    ).fetchone()["n"]
+    owned_core = conn.execute(
+        "SELECT COUNT(*) AS n FROM habits WHERE is_core = 1 AND user_id IS NOT NULL"
+    ).fetchone()["n"]
     conn.close()
 
-    assert rows["n"] > 0 and theirs["n"] > 0
-    assert client.get("/api/paths").get_json()["paths"]
+    assert core == 10
+    assert owned_core == 0, "a core question belongs to nobody"
+
+
+def test_a_personal_question_is_yours_alone(user, client, app_module):
+    """Everyone shares the core set; anything added on top is private."""
+    added = user.post("/api/survey/questions",
+                      json={"name": "Did you practise guitar?"}).get_json()
+    assert added["is_core"] is False
+
+    mine = [q["name"] for q in user.get("/api/survey").get_json()["questions"]]
+    assert "Did you practise guitar?" in mine
+
+    user.get("/logout")
+    register(client, username="someone-else")
+    theirs = client.get("/api/survey").get_json()["questions"]
+
+    assert "Did you practise guitar?" not in [q["name"] for q in theirs]
+    # ...but the shared half is identical.
+    assert len([q for q in theirs if q["is_core"]]) == 10
+
+
+def test_two_people_answering_a_shared_question_do_not_collide(user, client, app_module):
+    """Before migration 012 the completions index was unique on (habit_id, date),
+    which was fine when every habit belonged to one account. A shared question
+    made that a contested slot: whoever answered first owned the day, and the
+    next person's answer overwrote theirs."""
+    day = TODAY.isoformat()
+    core = [q for q in user.get("/api/survey").get_json()["questions"]
+            if q["is_core"] and q["type"] == "yes-no"][0]
+
+    _submit(user, day, {core["name"]: "Yes"})
+    user.get("/logout")
+
+    register(client, username="someone-else")
+    _submit(client, day, {core["name"]: "No"})
+
+    conn = _conn(app_module)
+    rows = conn.execute(
+        "SELECT c.user_id, c.response FROM habit_completions c "
+        "JOIN habits h ON h.id = c.habit_id "
+        "WHERE h.slug = ? AND c.date = ? ORDER BY c.user_id",
+        (core["id"], day),
+    ).fetchall()
+    conn.close()
+
+    assert len(rows) == 2, "each person keeps their own answer"
+    assert [row["response"] for row in rows] == ["Yes", "No"]

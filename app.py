@@ -37,118 +37,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 MIGRATIONS_DIR = PROJECT_ROOT / 'migrations'
 FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
 
-DEFAULT_PATHS = [
-    'Batman Path',
-    'Thor Path',
-    'Captain America Path',
-    'Ironman Path'
-]
-
-# Keys map 1:1 to static/images/icons/<key>.png (see scripts/build_icons.py for how
-# those were generated from artifacts/). Any icon value outside this set falls back
-# to 'default' in normalize_checklist_items.
 ICON_KEYS = {
     'sun', 'coffee', 'workout', 'code', 'chess', 'breakfast', 'lunch', 'water',
     'sleep', 'default'
 }
-
-def _time_item(name, options, weight=1, icon='default'):
-    return {
-        'name': name,
-        'type': 'time',
-        'icon': icon,
-        'weight': weight,
-        'options': options
-    }
-
-def _yes_no_item(name, weight=1, icon='default'):
-    return {
-        'name': name,
-        'type': 'yes-no',
-        'icon': icon,
-        'weight': weight
-    }
-
-def _rating_item(name):
-    # Rating items are self-reflection, not a completed task - excluded from XP scoring
-    # (see calculate_daily_xp) and have no icon of their own.
-    return {
-        'name': name,
-        'type': 'rating',
-        'icon': 'default',
-        'weight': 0
-    }
-
-DEFAULT_PATH_LIBRARY = [
-    {
-        'id': 'batman-path',
-        'name': 'Batman Path',
-        'is_default': True,
-        'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
-            _yes_no_item('Did you hydrate or drink coffee this morning?', icon='coffee'),
-            _yes_no_item('Did you complete strength training today?', weight=3, icon='workout'),
-            _yes_no_item('Did you practice a skill today? (coding, martial arts, chess, etc.)', weight=3, icon='chess'),
-            _yes_no_item('Did you study or learn something new today?', weight=3, icon='code'),
-            _yes_no_item('Did you complete your most important task today?'),
-            _yes_no_item('Did you eat balanced meals today?', icon='breakfast'),
-            _yes_no_item('Did you spend time reflecting or journaling?'),
-            _yes_no_item('Did you plan tomorrow’s tasks?'),
-            _rating_item('Rate your day (1–5)')
-        ]
-    },
-    {
-        'id': 'thor-path',
-        'name': 'Thor Path',
-        'is_default': True,
-        'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
-            _yes_no_item('Did you drink enough water today?', icon='water'),
-            _yes_no_item('Did you eat a protein-rich breakfast?', icon='breakfast'),
-            _yes_no_item('Did you complete a strength workout?', weight=3, icon='workout'),
-            _yes_no_item('Did you do cardio or endurance training?', weight=3, icon='workout'),
-            _yes_no_item('Did you eat a healthy lunch?', icon='lunch'),
-            _yes_no_item('Did you stay physically active today?', weight=3, icon='workout'),
-            _yes_no_item('Did you stretch or do recovery exercises?', icon='workout'),
-            _yes_no_item('Did you prepare for good sleep tonight?', icon='sleep'),
-            _rating_item('Rate your energy/performance today (1–5)')
-        ]
-    },
-    {
-        'id': 'captain-america-path',
-        'name': 'Captain America Path',
-        'is_default': True,
-        'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
-            _yes_no_item('Did you start your morning in an organized way?'),
-            _yes_no_item('Did you eat a healthy breakfast?', icon='breakfast'),
-            _yes_no_item('Did you exercise today?', weight=3, icon='workout'),
-            _yes_no_item('Did you complete your most important task?', weight=3, icon='code'),
-            _yes_no_item('Did you help someone or contribute positively today?'),
-            _yes_no_item('Did you keep your workspace clean and organized?'),
-            _yes_no_item('Did you read or learn something new?', weight=3, icon='code'),
-            _yes_no_item('Did you reflect on your day?'),
-            _rating_item('Rate your discipline today (1–5)')
-        ]
-    },
-    {
-        'id': 'ironman-path',
-        'name': 'Ironman Path',
-        'is_default': True,
-        'checklist_items': [
-            _time_item('What time did you wake up?', ['05:00 - 05:30 AM', '05:30 - 06:30 AM', '06:30 - 07:30 AM', 'After 07:30 AM'], icon='sun'),
-            _yes_no_item('Did you review your daily learning goals?'),
-            _yes_no_item('Did you spend at least 1 hour studying or learning?', weight=3, icon='code'),
-            _yes_no_item('Did you practice a technical skill (coding, engineering, etc.)?', weight=3, icon='code'),
-            _yes_no_item('Did you read something educational today?'),
-            _yes_no_item('Did you work on a project or build something?', weight=3, icon='code'),
-            _yes_no_item('Did you solve a problem or learn a new concept?', icon='chess'),
-            _yes_no_item('Did you document what you learned today?'),
-            _yes_no_item('Did you plan tomorrow’s learning tasks?'),
-            _rating_item('Rate your productivity today (1–5)')
-        ]
-    }
-]
 
 def get_checklist_file_path(username):
     """Get per-user checklist JSONL file path"""
@@ -214,153 +106,6 @@ def normalize_checklist_items(items):
 
     return normalized_items
 
-def build_default_paths():
-    """Get cloned and normalized default paths"""
-    paths = []
-    for path in DEFAULT_PATH_LIBRARY:
-        paths.append({
-            'id': path['id'],
-            'name': path['name'],
-            'is_default': True,
-            'checklist_items': normalize_checklist_items(path['checklist_items'])
-        })
-    return paths
-
-
-def repair_default_path_items(paths):
-    """Re-attach shipped weights/icons to stock paths that predate them.
-
-    A per-user path file is created once and never re-seeded from
-    DEFAULT_PATH_LIBRARY, so accounts made before weights and icons existed
-    keep weight=1 / icon='default' on every item. That flattens XP scoring and
-    makes every wizard step show the same fallback artwork.
-
-    Only fills in items that still look untouched (weight 1 AND no real icon)
-    and whose name matches a shipped item exactly, so a user's own edits to a
-    stock path are never overwritten. Returns True if anything changed.
-    """
-    shipped = {
-        path['id']: {item['name']: item for item in path['checklist_items']}
-        for path in DEFAULT_PATH_LIBRARY
-    }
-
-    changed = False
-    for path in paths or []:
-        if not path.get('is_default'):
-            continue
-        by_name = shipped.get(path.get('id'))
-        if not by_name:
-            continue
-        for item in path.get('checklist_items', []):
-            original = by_name.get(item.get('name'))
-            if not original:
-                continue
-            untouched = (
-                int(item.get('weight', 1) or 1) == 1
-                and item.get('icon') in ('', 'default', None)
-            )
-            if not untouched:
-                continue
-            if (original.get('weight') != item.get('weight')
-                    or original.get('icon') != item.get('icon')):
-                item['weight'] = original.get('weight', 1)
-                item['icon'] = original.get('icon', 'default')
-                changed = True
-    return changed
-
-def resolve_selected_path_id(paths, selected_path_name):
-    """Resolve selected path id from legacy/new selected_path values"""
-    if not paths:
-        return None
-
-    normalized_selected_name = (selected_path_name or '').strip()
-
-    for path in paths:
-        if path['id'] == normalized_selected_name or path['name'] == normalized_selected_name:
-            return path['id']
-
-    if normalized_selected_name == 'Thor: God of the Thunder Path':
-        for path in paths:
-            if path['id'] == 'thor-path':
-                return path['id']
-
-    return paths[0]['id']
-
-def _paths_from_json(user_row):
-    """Read a user's legacy paths file, or None if there isn't a usable one.
-
-    R6 moved path storage into SQL. This is no longer the live read path - it is
-    the IMPORT SOURCE, consulted once per user by load_user_paths() and then
-    never again. The file is left on disk rather than deleted, so a bad import
-    can be diagnosed against the original.
-    """
-    username = user_row['username']
-    file_path = get_user_paths_file_path(username)
-
-    if file_path.exists():
-        try:
-            with file_path.open('r', encoding='utf-8') as file:
-                data = json.load(file)
-
-            paths = data.get('paths', []) if isinstance(data, dict) else []
-            selected_path_id = data.get('selected_path_id') if isinstance(data, dict) else None
-            if isinstance(paths, list) and paths:
-                normalized_paths = []
-                for path in paths:
-                    if not isinstance(path, dict):
-                        continue
-                    normalized_paths.append({
-                        'id': str(path.get('id') or uuid4()),
-                        'name': str(path.get('name', 'Untitled Path')).strip() or 'Untitled Path',
-                        'is_default': bool(path.get('is_default', False)),
-                        'checklist_items': normalize_checklist_items(path.get('checklist_items', []))
-                    })
-
-                if normalized_paths:
-                    repair_default_path_items(normalized_paths)
-                    resolved_selected_path_id = resolve_selected_path_id(
-                        normalized_paths, selected_path_id or user_row['selected_path'])
-                    return {
-                        'paths': normalized_paths,
-                        'selected_path_id': resolved_selected_path_id
-                    }
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    return None
-
-
-def _default_paths_payload(user_row):
-    """The stock paths a brand-new account starts with."""
-    paths = build_default_paths()
-
-    custom_path_items = []
-    if user_row['custom_path_items']:
-        try:
-            parsed = json.loads(user_row['custom_path_items'])
-            if isinstance(parsed, list):
-                custom_path_items = [str(item).strip() for item in parsed if str(item).strip()]
-        except json.JSONDecodeError:
-            custom_path_items = []
-
-    if custom_path_items:
-        paths.append({
-            'id': f'custom-{uuid4().hex[:8]}',
-            'name': 'My Custom Path',
-            'is_default': False,
-            'checklist_items': normalize_checklist_items([
-                {'name': item_name, 'type': 'yes-no', 'icon': ''}
-                for item_name in custom_path_items
-            ])
-        })
-
-    selected_path_id = resolve_selected_path_id(paths, user_row['selected_path'])
-    return {
-        'paths': paths,
-        'selected_path_id': selected_path_id
-    }
-
-
 def _resolve_user_id(conn, username):
     row = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
     return row['id'] if row else None
@@ -372,9 +117,16 @@ def load_user_paths(user_row, conn=None):
     Storage moved into SQL in R6; the payload did not change, which is what keeps
     the Jinja app, static/js/app.js and the SPA's Today page working untouched.
 
-    The import is lazy and per-user: the first load for a user reads their legacy
-    JSON file (or builds the stock paths), writes it into SQL, and records that
-    in habit_imports so it never runs again.
+    Since migration 011 there is exactly one path in it, synthesised from the
+    shared daily survey plus that person's own questions. Four hero Paths became
+    one survey because choosing a Path quietly chose your *scores* - the
+    opportunity denominator comes from the items in it, so an Ironman never had a
+    Stamina denominator and a Thor never had a Knowledge one, while the
+    leaderboard ranked them against each other regardless.
+
+    The shape survives rather than the concept: three clients read
+    `{paths: [...], selected_path_id}` and only ever used it to find the list of
+    questions.
 
     `conn` is threaded through by callers that already hold one open. Opening a
     second connection while a caller has uncommitted writes - score_checklist_day
@@ -389,43 +141,15 @@ def load_user_paths(user_row, conn=None):
         if user_id is None:
             return {'paths': [], 'selected_path_id': None}
 
+        # No seeding any more. The shared survey exists in the database from
+        # migration 011 onward, so every account has questions the moment it is
+        # created - there is nothing per-user left to lazily import.
         payload = habits.load_paths(conn, user_id)
-        if payload is None:
-            seed = _paths_from_json(user_row) or _default_paths_payload(user_row)
-            habits.import_paths(
-                conn, user_id, seed,
-                source=str(get_user_paths_file_path(user_row['username'])),
-            )
-            # Only commit a connection we opened. Committing a caller's would
-            # also commit whatever half-finished work they had in flight.
-            if owns_connection:
-                conn.commit()
-            payload = habits.load_paths(conn, user_id)
-
         return payload or {'paths': [], 'selected_path_id': None}
     finally:
         if owns_connection:
             conn.close()
 
-
-def save_user_paths(username, payload, conn=None):
-    """Persist a paths payload. Resolves the user by name so the twelve existing
-    call sites keep working unchanged."""
-    owns_connection = conn is None
-    if owns_connection:
-        conn = get_db_connection()
-
-    try:
-        user_id = _resolve_user_id(conn, username)
-        if user_id is None:
-            return payload
-        habits.save_paths(conn, user_id, payload)
-        if owns_connection:
-            conn.commit()
-        return payload
-    finally:
-        if owns_connection:
-            conn.close()
 
 def get_selected_path(paths_payload):
     """Get selected path object from path payload"""
@@ -967,19 +691,11 @@ def register():
         username = data.get('username')
         password = data.get('password')
         email = data.get('email', '')
-        selected_path = data.get('selected_path', 'Batman Path')
-        custom_path_items = data.get('custom_path_items', [])
-        
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
 
-        if selected_path == 'Thor: God of the Thunder Path':
-            selected_path = 'Thor Path'
-
-        if selected_path not in DEFAULT_PATHS:
-            return jsonify({'success': False, 'message': 'Invalid path selection'}), 400
-
-        custom_path_items = [str(item).strip() for item in (custom_path_items or []) if str(item).strip()]
+        # No path to choose since migration 011. Everyone gets the shared daily
+        # survey, and anything they want on top of it they add afterwards.
         
         conn = get_db_connection()
         
@@ -997,21 +713,17 @@ def register():
         password_hash = generate_password_hash(password)
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO users (username, password_hash, email, is_admin, selected_path, custom_path_items) VALUES (?, ?, ?, ?, ?, ?)',
-            (username, password_hash, email, is_admin, selected_path, json.dumps(custom_path_items))
+            'INSERT INTO users (username, password_hash, email, is_admin) '
+            'VALUES (?, ?, ?, ?)',
+            (username, password_hash, email, is_admin)
         )
         conn.commit()
         user_id = cursor.lastrowid
 
-        # Seed the new account's habits immediately rather than waiting for the
-        # first request that happens to load paths. Without this a just-registered
-        # user has no habit rows at all, so per-habit streaks and adherence read
-        # as empty until they touch the right endpoint.
-        new_user_row = conn.execute(
-            'SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-        if new_user_row:
-            load_user_paths(new_user_row, conn)
-            conn.commit()
+        # Nothing to seed. The shared survey already exists, owned by nobody, so
+        # a just-registered account is asked the same questions as everyone else
+        # from its first request. This used to have to materialise forty habit
+        # rows per user before streaks or adherence would read as anything.
         conn.close()
 
         # Log in the new user
@@ -1023,7 +735,6 @@ def register():
             'success': True,
             'username': username,
             'is_admin': bool(is_admin),
-            'selected_path': selected_path
         }), 201
     
     return render_template('login.html')
@@ -1120,7 +831,8 @@ def update_user_profile():
         if old_paths_file.exists() and not new_paths_file.exists():
             old_paths_file.rename(new_paths_file)
 
-    save_user_paths(new_username, paths_payload)
+    # Nothing to rewrite. Questions live in SQL keyed by user id, not by name,
+    # so a rename no longer touches them.
 
     return jsonify({
         'success': True,
@@ -1153,165 +865,66 @@ def checklist_items():
         items = selected_path.get('checklist_items', [])
         return jsonify({'success': True, 'items': items})
 
-    data = request.json or {}
-    items = data.get('items')
+    # Wholesale rewriting of the question list is retired with Paths. Half of
+    # this list is now shared with four other people, and a PUT that silently
+    # reshaped everyone's survey is not something a client should be able to do
+    # by accident.
+    return jsonify(PATHS_RETIRED), 410
 
-    if not isinstance(items, list):
-        return jsonify({'success': False, 'message': 'Items must be a list'}), 400
+# ---------------------------------------------------------------------------
+# Paths, retired.
+#
+# GET survives as a read-only compatibility view - the Jinja app,
+# static/js/app.js and the SPA's Today page all read
+# `{paths: [...], selected_path_id}`, and all three only ever used it to find the
+# list of questions. It now returns exactly one path: the shared daily survey.
+#
+# The write half is gone. Creating, renaming, deleting and selecting a Path are
+# all operations on a concept that no longer exists, and answering them with a
+# plausible-looking success would leave a client believing it had changed
+# something. 410 with a pointer is the honest reply.
+# ---------------------------------------------------------------------------
 
-    normalized_items = normalize_checklist_items(items)
-    for path in paths_payload['paths']:
-        if path['id'] == selected_path['id']:
-            path['checklist_items'] = normalized_items
-            break
+PATHS_RETIRED = {
+    'success': False,
+    'message': ('Paths were retired: there is one shared daily survey now. '
+                'Add or edit your own questions at /api/survey/questions.'),
+}
 
-    save_user_paths(user_row['username'], paths_payload)
-    return jsonify({'success': True, 'items': normalized_items})
 
 @app.route('/api/paths', methods=['GET', 'POST'])
 @login_required
 def paths_collection():
-    """Get all user paths or create a custom path"""
+    """The daily survey, in the shape Paths used to have."""
+    if request.method == 'POST':
+        return jsonify(PATHS_RETIRED), 410
+
     user_id = session.get('user_id')
     conn = get_db_connection()
-    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+    user_row = conn.execute(
+        'SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
 
     if not user_row:
         return jsonify({'success': False, 'message': 'User not found'}), 404
 
     paths_payload = load_user_paths(user_row)
+    selected_path = get_selected_path(paths_payload)
+    return jsonify({
+        'success': True,
+        'paths': paths_payload.get('paths', []),
+        'selected_path_id': paths_payload.get('selected_path_id'),
+        'selected_path_name': selected_path['name'] if selected_path else None,
+    })
 
-    if request.method == 'GET':
-        selected_path = get_selected_path(paths_payload)
-        return jsonify({
-            'success': True,
-            'paths': paths_payload.get('paths', []),
-            'selected_path_id': paths_payload.get('selected_path_id'),
-            'selected_path_name': selected_path['name'] if selected_path else None
-        })
-
-    data = request.json or {}
-    path_name = (data.get('name') or '').strip()
-    checklist_items = data.get('checklist_items', [])
-
-    if not path_name:
-        return jsonify({'success': False, 'message': 'Path name is required'}), 400
-
-    if any(path['name'].lower() == path_name.lower() for path in paths_payload['paths']):
-        return jsonify({'success': False, 'message': 'A path with this name already exists'}), 400
-
-    normalized_items = normalize_checklist_items(checklist_items)
-    new_path = {
-        'id': f'custom-{uuid4().hex[:8]}',
-        'name': path_name,
-        'is_default': False,
-        'checklist_items': normalized_items
-    }
-    paths_payload['paths'].append(new_path)
-    save_user_paths(user_row['username'], paths_payload)
-    return jsonify({'success': True, 'path': new_path}), 201
 
 @app.route('/api/paths/selected', methods=['PUT'])
-@login_required
-def select_path():
-    """Set selected path for current user"""
-    user_id = session.get('user_id')
-    data = request.json or {}
-    selected_path_id = (data.get('path_id') or '').strip()
-
-    if not selected_path_id:
-        return jsonify({'success': False, 'message': 'Path id is required'}), 400
-
-    conn = get_db_connection()
-    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
-
-    if not user_row:
-        conn.close()
-        return jsonify({'success': False, 'message': 'User not found'}), 404
-
-    paths_payload = load_user_paths(user_row, conn)
-    selected_path = next((path for path in paths_payload['paths'] if path['id'] == selected_path_id), None)
-    if not selected_path:
-        conn.close()
-        return jsonify({'success': False, 'message': 'Path not found'}), 404
-
-    paths_payload['selected_path_id'] = selected_path_id
-    save_user_paths(user_row['username'], paths_payload, conn)
-    conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
-    conn.commit()
-    conn.close()
-
-    return jsonify({'success': True, 'selected_path_id': selected_path_id, 'selected_path_name': selected_path['name']})
-
 @app.route('/api/paths/<string:path_id>', methods=['PUT', 'DELETE'])
 @login_required
-def path_detail(path_id):
-    """Update or delete a user path"""
-    user_id = session.get('user_id')
-    conn = get_db_connection()
-    user_row = conn.execute('SELECT username, selected_path, custom_path_items FROM users WHERE id = ?', (user_id,)).fetchone()
+def paths_write_retired(path_id=None):
+    return jsonify(PATHS_RETIRED), 410
 
-    if not user_row:
-        conn.close()
-        return jsonify({'success': False, 'message': 'User not found'}), 404
 
-    paths_payload = load_user_paths(user_row, conn)
-    paths = paths_payload.get('paths', [])
-    target_index = next((index for index, path in enumerate(paths) if path['id'] == path_id), -1)
-
-    if target_index < 0:
-        conn.close()
-        return jsonify({'success': False, 'message': 'Path not found'}), 404
-
-    target_path = paths[target_index]
-
-    if request.method == 'DELETE':
-        if len(paths) <= 1:
-            conn.close()
-            return jsonify({'success': False, 'message': 'At least one path must remain'}), 400
-
-        deleted_selected = paths_payload.get('selected_path_id') == path_id
-        paths.pop(target_index)
-
-        if deleted_selected:
-            paths_payload['selected_path_id'] = paths[0]['id']
-
-        selected_path = get_selected_path(paths_payload)
-        save_user_paths(user_row['username'], paths_payload, conn)
-        conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (selected_path['name'], user_id))
-        conn.commit()
-        conn.close()
-        return jsonify({'success': True})
-
-    data = request.json or {}
-    new_name = (data.get('name') or target_path['name']).strip()
-    checklist_items = data.get('checklist_items', target_path.get('checklist_items', []))
-
-    if not new_name:
-        conn.close()
-        return jsonify({'success': False, 'message': 'Path name is required'}), 400
-
-    name_exists = any(
-        index != target_index and path['name'].lower() == new_name.lower()
-        for index, path in enumerate(paths)
-    )
-    if name_exists:
-        conn.close()
-        return jsonify({'success': False, 'message': 'A path with this name already exists'}), 400
-
-    target_path['name'] = new_name
-    target_path['checklist_items'] = normalize_checklist_items(checklist_items)
-    paths[target_index] = target_path
-
-    save_user_paths(user_row['username'], paths_payload, conn)
-
-    if paths_payload.get('selected_path_id') == path_id:
-        conn.execute('UPDATE users SET selected_path = ? WHERE id = ?', (new_name, user_id))
-        conn.commit()
-
-    conn.close()
-    return jsonify({'success': True, 'path': target_path})
 
 @app.route('/api/user/reset-password', methods=['POST'])
 @login_required
@@ -2206,6 +1819,7 @@ from habits_api import init_habits  # noqa: E402
 from goals_api import init_goals  # noqa: E402
 from analytics_api import init_analytics  # noqa: E402
 from onboarding_api import init_onboarding  # noqa: E402
+from survey_api import init_survey  # noqa: E402
 
 init_training(app, get_db_connection, login_required, recompute_after_change)
 
@@ -2225,6 +1839,7 @@ init_habits(app, get_db_connection, login_required)
 init_goals(app, get_db_connection, login_required)
 init_analytics(app, get_db_connection, login_required)
 init_onboarding(app, get_db_connection, login_required, recompute_after_change)
+init_survey(app, get_db_connection, login_required, recompute_after_change)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.
