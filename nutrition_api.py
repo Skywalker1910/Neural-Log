@@ -58,6 +58,12 @@ def _food_row(row):
         'serving_grams': row['serving_grams'],
         # Display unit only - storage and all the macro maths stay in grams.
         'unit': row['unit'] if 'unit' in row.keys() else 'g',
+        # Set only where a standard cup measure genuinely exists - a cup is a
+        # volume and grams a mass, so the factor depends on what is in the cup.
+        # None means the UI must not offer cups for this food.
+        'grams_per_cup': row['grams_per_cup'] if 'grams_per_cup' in row.keys() else None,
+        # Things you count rather than weigh. serving_grams says what one weighs.
+        'is_countable': bool(row['is_countable']) if 'is_countable' in row.keys() else False,
         'is_custom': row['user_id'] is not None,
     }
 
@@ -195,15 +201,23 @@ def _recipe_payload(conn, row):
     }
 
 
-def _write_recipe_food(conn, food_id, name, ingredients, total_grams):
+def _write_recipe_food(conn, food_id, name, ingredients, total_grams, servings=1):
     """Recompute the `foods` row a recipe produces.
 
     The recipe's macros are always derived, never typed - so correcting an
     ingredient corrects every dish that uses it.
+
+    `servings` is what makes the dish loggable. It used to write the WHOLE dish's
+    weight as serving_grams while labelling it "1 serving", so picking a curry
+    you had cooked for four defaulted to eating all four portions. One serving is
+    the total divided by how many the recipe makes.
     """
     per_100g = nut.recipe_per_100g(ingredients, total_grams)
     if per_100g is None:
         return None
+
+    portions = max(1.0, float(servings or 1))
+    serving_grams = round(per_100g['total_grams'] / portions, 1)
 
     conn.execute(
         'UPDATE foods SET name = ?, kcal_per_100g = ?, protein_per_100g = ?, '
@@ -211,7 +225,7 @@ def _write_recipe_food(conn, food_id, name, ingredients, total_grams):
         'serving_name = ?, serving_grams = ? WHERE id = ?',
         (name, per_100g['kcal_per_100g'], per_100g['protein_per_100g'],
          per_100g['carbs_per_100g'], per_100g['fat_per_100g'],
-         per_100g['fibre_per_100g'], '1 serving', per_100g['total_grams'], food_id),
+         per_100g['fibre_per_100g'], '1 serving', serving_grams, food_id),
     )
     return per_100g
 
@@ -273,13 +287,13 @@ def recipes():
         food_id = cursor.lastrowid
 
         total_grams = data.get('total_grams')
-        _write_recipe_food(conn, food_id, name, ingredients, total_grams)
+        servings = float(data.get('servings') or 1)
+        _write_recipe_food(conn, food_id, name, ingredients, total_grams, servings)
 
         cursor.execute(
             'INSERT INTO recipes (user_id, food_id, name, servings, total_grams, notes) '
             'VALUES (?, ?, ?, ?, ?, ?)',
-            (user_id, food_id, name, float(data.get('servings') or 1),
-             total_grams, data.get('notes')),
+            (user_id, food_id, name, servings, total_grams, data.get('notes')),
         )
         recipe_id = cursor.lastrowid
         for position, ingredient in enumerate(ingredients):
@@ -350,12 +364,12 @@ def recipe_detail(recipe_id):
                     'ORDER BY position', (recipe_id,))
             ])
 
-        _write_recipe_food(conn, row['food_id'], name, ingredients, total_grams)
+        servings = float(data.get('servings') or row['servings'] or 1)
+        _write_recipe_food(conn, row['food_id'], name, ingredients, total_grams, servings)
         conn.execute(
             'UPDATE recipes SET name = ?, servings = ?, total_grams = ?, notes = ? '
             'WHERE id = ?',
-            (name, float(data.get('servings') or row['servings']), total_grams,
-             data.get('notes', row['notes']), recipe_id),
+            (name, servings, total_grams, data.get('notes', row['notes']), recipe_id),
         )
         conn.commit()
 
