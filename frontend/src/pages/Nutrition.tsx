@@ -436,15 +436,24 @@ export function Nutrition() {
         )}
       </QueryBoundary>
 
+      {/*
+        Mounted only while open, and keyed on the meal, for the same reason the
+        recipe builder below is: FoodPicker seeds its own state from props, so a
+        single long-lived instance kept whichever meal it was first opened with.
+        Every food logged from Breakfast or Lunch was landing under Snack.
+      */}
+      {picking !== null && (
       <FoodPicker
-        open={picking !== null}
-        meal={picking ?? 'snack'}
+        key={picking}
+        open
+        meal={picking}
         onClose={() => setPicking(null)}
         onPick={handlePick}
         busy={logFood.isPending}
         onCreateFood={() => { setPicking(null); setCustomOpen(true) }}
         onCreateRecipe={() => { setPicking(null); setEditingRecipe(null) }}
       />
+      )}
 
       <CustomFoodForm open={customOpen} onClose={() => setCustomOpen(false)} />
 

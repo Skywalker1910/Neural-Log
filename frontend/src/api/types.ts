@@ -375,6 +375,14 @@ export interface Food {
    * grams: at 0.92 g/ml, ml would misstate them by 8%.
    */
   unit: 'g' | 'ml'
+  /**
+   * Grams in one cup, where a standard measure exists. null means the UI must
+   * not offer cups: a cup is a volume and grams a mass, so the factor depends on
+   * what is in the cup.
+   */
+  grams_per_cup: number | null
+  /** Counted rather than weighed - eggs, fruit. serving_grams is one piece. */
+  is_countable: boolean
   is_custom: boolean
 }
 

@@ -39,7 +39,8 @@ def sync_foods(conn, path=None):
         for row in conn.execute(
             'SELECT id, slug, name, category, kcal_per_100g, protein_per_100g, '
             'carbs_per_100g, fat_per_100g, fibre_per_100g, serving_name, '
-            'serving_grams, unit, archived FROM foods WHERE user_id IS NULL'
+            'serving_grams, unit, grams_per_cup, is_countable, archived '
+            'FROM foods WHERE user_id IS NULL'
         )
     }
 
@@ -56,6 +57,8 @@ def sync_foods(conn, path=None):
             entry.get('serving_name'),
             float(entry['serving_grams']) if entry.get('serving_grams') else None,
             entry.get('unit') or 'g',
+            float(entry['grams_per_cup']) if entry.get('grams_per_cup') else None,
+            1 if entry.get('countable') else 0,
         )
 
         current = existing.get(entry['slug'])
@@ -63,8 +66,9 @@ def sync_foods(conn, path=None):
             conn.execute(
                 'INSERT INTO foods (user_id, slug, source, name, category, '
                 'kcal_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, '
-                'fibre_per_100g, serving_name, serving_grams, unit) '
-                "VALUES (NULL, ?, 'library', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                'fibre_per_100g, serving_name, serving_grams, unit, grams_per_cup, '
+                'is_countable) '
+                "VALUES (NULL, ?, 'library', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (entry['slug'], *values),
             )
             added += 1
@@ -81,6 +85,8 @@ def sync_foods(conn, path=None):
             and current['serving_name'] == values[7]
             and current['serving_grams'] == values[8]
             and current['unit'] == values[9]
+            and current['grams_per_cup'] == values[10]
+            and current['is_countable'] == values[11]
             and not current['archived']
         )
         if unchanged:
@@ -90,7 +96,7 @@ def sync_foods(conn, path=None):
             'UPDATE foods SET name = ?, category = ?, kcal_per_100g = ?, '
             'protein_per_100g = ?, carbs_per_100g = ?, fat_per_100g = ?, '
             'fibre_per_100g = ?, serving_name = ?, serving_grams = ?, unit = ?, '
-            'archived = 0 '
+            'grams_per_cup = ?, is_countable = ?, archived = 0 '
             'WHERE id = ?',
             (*values, current['id']),
         )

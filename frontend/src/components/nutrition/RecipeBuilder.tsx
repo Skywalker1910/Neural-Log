@@ -211,11 +211,11 @@ export function RecipeBuilder({ open, onClose, recipe }: RecipeBuilderProps) {
         </form>
       </Modal>
 
-      <FoodPicker
-        open={picking}
-        onClose={() => setPicking(false)}
-        onPick={add}
-      />
+      {/* Mounted only while open, so each ingredient starts from the unit that
+          suits it rather than whatever the last one used. */}
+      {picking && (
+        <FoodPicker open onClose={() => setPicking(false)} onPick={add} />
+      )}
     </>
   )
 }
