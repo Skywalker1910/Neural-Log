@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 import scoring
 import habits
+import security
 import xp
 import xp_config
 import achievements
@@ -23,9 +24,12 @@ import achievements
 load_dotenv()
 
 app = Flask(__name__)
-# In production, SECRET_KEY must be set via the environment - the fallback below
-# only exists so the app still boots for local/dev use without a .env file.
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-only-insecure-secret-key')
+
+# Secret key, session cookie flags, CSRF, and the JSON error shape - see
+# security.py, which holds the whole pre-deploy list in one readable place rather
+# than scattering it through this file.
+security.init_security(app)
+
 DEBUG = os.environ.get('FLASK_DEBUG', '0') == '1'
 
 # Database configuration
@@ -656,19 +660,45 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def render_login_page():
+    """The sign-in page, told how accounts are created here.
+
+    The template needs this to decide whether to show the register tab at all,
+    and whether to ask for an invite code. Getting it from the server rather than
+    guessing means the form matches what the endpoint will actually accept.
+    """
+    return render_template(
+        'login.html',
+        registration_mode=security.registration_mode(),
+    )
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login"""
     if request.method == 'POST':
-        data = request.json
-        username = data.get('username')
-        password = data.get('password')
-        
+        data = request.json or {}
+        username = (data.get('username') or '').strip()
+        password = data.get('password') or ''
+        ip = security.client_ip()
+
         conn = get_db_connection()
+
+        # Checked before the password is, so a locked-out caller learns nothing
+        # about whether the username exists - and so a dictionary run costs the
+        # attacker the wait rather than costing us the hashing.
+        retry_after = security.login_retry_after(conn, username, ip)
+        if retry_after:
+            conn.close()
+            return security.rate_limit_response(retry_after)
+
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        conn.close()
-        
+
         if user and check_password_hash(user['password_hash'], password):
+            security.clear_login_failures(conn, username, ip)
+            conn.close()
+
+            session.clear()
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['is_admin'] = bool(user['is_admin'])
@@ -682,10 +712,15 @@ def login():
                 'selected_path': selected_path['name'] if selected_path else 'Batman Path',
                 'selected_path_id': paths_payload.get('selected_path_id')
             })
-        else:
-            return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+
+        security.record_login_failure(conn, username, ip)
+        conn.close()
+        # One message for both "no such user" and "wrong password". Telling them
+        # apart is a username oracle, and at 2-5 accounts the usernames are the
+        # easy half of the guess.
+        return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
     
-    return render_template('login.html')
+    return render_login_page()
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -698,6 +733,13 @@ def register():
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
 
+        # Checked before the database is touched. In production this is an invite
+        # code; locally it is nothing at all, so the signup flow stays testable
+        # without a secret in the environment.
+        allowed, refusal, status = security.check_registration(data)
+        if not allowed:
+            return jsonify({'success': False, 'message': refusal}), status
+
         # No path to choose since migration 011. Everyone gets the shared daily
         # survey, and anything they want on top of it they add afterwards.
         
@@ -709,9 +751,11 @@ def register():
             conn.close()
             return jsonify({'success': False, 'message': 'Username already exists'}), 400
         
-        # Check if this is the first user (make them admin)
+        # Who gets the admin bit. `ADMIN_USERNAME` names the account outright;
+        # without it the old first-user-wins rule stands, which is fine on a
+        # laptop and a land-grab on a fresh public database.
         user_count = conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
-        is_admin = 1 if user_count == 0 else 0
+        is_admin = 1 if security.grants_admin(username, user_count) else 0
         
         # Create new user
         password_hash = generate_password_hash(password)
@@ -745,13 +789,30 @@ def register():
             'is_admin': bool(is_admin),
         }), 201
     
-    return render_template('login.html')
+    return render_login_page()
 
-@app.route('/logout')
+@app.route('/logout', methods=['GET', 'POST'])
 def logout():
-    """Handle user logout"""
+    """Sign out - on POST only, because GET must not change anything.
+
+    This was a GET, which meant any page anywhere could sign you out with an
+    invisible `<img src="https://neurallog.../logout">`. That is a nuisance
+    rather than a breach, and it is also the plainest possible example of the
+    rule CSRF protection exists to enforce: a request the user did not make
+    should not change their state.
+
+    GET now renders a confirmation instead of a redirect, so the links in the
+    classic app and any old bookmark still lead somewhere sensible rather than
+    404ing. The SPA posts directly and never sees it.
+    """
+    if request.method == 'GET':
+        return render_template('logout.html')
+
     session.clear()
-    return redirect(url_for('login'))
+
+    if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+        return jsonify({'success': True})
+    return redirect(url_for('index'))
 
 @app.route('/api/current-user')
 @login_required
@@ -759,7 +820,8 @@ def current_user():
     """Get current logged in user"""
     conn = get_db_connection()
     user = conn.execute(
-        'SELECT username, selected_path, custom_path_items FROM users WHERE id = ?',
+        'SELECT username, selected_path, custom_path_items, leaderboard_opt_out '
+        'FROM users WHERE id = ?',
         (session.get('user_id'),)
     ).fetchone()
     conn.close()
@@ -772,8 +834,32 @@ def current_user():
         'username': session.get('username'),
         'is_admin': session.get('is_admin', False),
         'selected_path': selected_path['name'] if selected_path else 'Batman Path',
-        'selected_path_id': paths_payload.get('selected_path_id')
+        'selected_path_id': paths_payload.get('selected_path_id'),
+        'leaderboard_opt_out': bool(user['leaderboard_opt_out']) if user else False,
     })
+
+
+@app.route('/api/user/privacy', methods=['PUT'])
+@login_required
+def update_privacy():
+    """Whether this account appears on the leaderboard.
+
+    Its own endpoint rather than a field on the profile update, because that one
+    renames the account and rewrites path selections - a toggle should not be
+    able to fail because a username is taken.
+    """
+    data = request.json or {}
+    opt_out = 1 if data.get('leaderboard_opt_out') else 0
+
+    conn = get_db_connection()
+    conn.execute(
+        'UPDATE users SET leaderboard_opt_out = ? WHERE id = ?',
+        (opt_out, session.get('user_id'))
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'leaderboard_opt_out': bool(opt_out)})
 
 @app.route('/api/user/profile', methods=['PUT'])
 @login_required
@@ -1526,6 +1612,7 @@ def leaderboard(scope):
             SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
             FROM users
             LEFT JOIN daily_xp ON daily_xp.user_id = users.id AND daily_xp.date LIKE ?
+            WHERE users.leaderboard_opt_out = 0
             GROUP BY users.id
             ORDER BY total_xp DESC, users.username ASC
         ''', (f'{month_prefix}%',)).fetchall()
@@ -1534,6 +1621,7 @@ def leaderboard(scope):
             SELECT users.id as user_id, users.username, COALESCE(SUM(daily_xp.total_xp), 0) as total_xp
             FROM users
             LEFT JOIN daily_xp ON daily_xp.user_id = users.id
+            WHERE users.leaderboard_opt_out = 0
             GROUP BY users.id
             ORDER BY total_xp DESC, users.username ASC
         ''').fetchall()
@@ -1549,8 +1637,18 @@ def leaderboard(scope):
             'current_streak': calculate_current_streak(conn, row['user_id'])
         })
 
+    opted_out = conn.execute(
+        'SELECT leaderboard_opt_out FROM users WHERE id = ?', (session.get('user_id'),)
+    ).fetchone()
     conn.close()
-    return jsonify({'scope': scope, 'entries': entries})
+
+    return jsonify({
+        'scope': scope,
+        'entries': entries,
+        # So the page can say "you are hidden" instead of leaving someone to
+        # wonder why they are not on a board they are looking at.
+        'viewer_hidden': bool(opted_out['leaderboard_opt_out']) if opted_out else False,
+    })
 
 @app.route('/api/milestones/<int:days>')
 @login_required

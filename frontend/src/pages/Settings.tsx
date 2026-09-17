@@ -1,8 +1,14 @@
 import { useState } from 'react'
-import { KeyRound, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
+import { EyeOff, KeyRound, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
 
 import { ApiError, api } from '../api/client'
-import { useOnboarding, useProfile, useSaveProfile } from '../api/queries'
+import {
+  useCurrentUser,
+  useOnboarding,
+  useProfile,
+  useSaveProfile,
+  useSetLeaderboardVisibility,
+} from '../api/queries'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -221,6 +227,57 @@ function PasswordSettings() {
   )
 }
 
+/**
+ * A way off the leaderboard.
+ *
+ * It lists every account's name, XP and current streak to every other account,
+ * and until now there was no way to decline - which is defensible among friends
+ * who all opted into a shared tracker, and is still not something anyone agreed
+ * to. "You can stop using the app" is not consent.
+ *
+ * Opting out removes the row rather than anonymising it. Among five people a
+ * blanked-out entry between two named ones is not anonymous; everyone can name
+ * you by elimination.
+ */
+function PrivacySettings() {
+  const user = useCurrentUser()
+  const setVisibility = useSetLeaderboardVisibility()
+
+  const hidden = user.data?.leaderboard_opt_out ?? false
+
+  return (
+    <Card
+      title="Privacy"
+      subtitle="What other people can see about you"
+      icon={EyeOff}
+      accent="brand"
+    >
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={hidden}
+          disabled={user.isPending || setVisibility.isPending}
+          onChange={(event) => setVisibility.mutate(event.target.checked)}
+          className="mt-0.5 size-4 shrink-0 accent-[var(--color-brand)]"
+        />
+        <span className="min-w-0">
+          <span className="block text-label text-ink">Hide me from the leaderboard</span>
+          <span className="block text-meta text-ink-subtle">
+            Your name, level, XP and streak stop appearing for everyone else. Nothing you have
+            logged changes, and your own scores carry on exactly as before.
+          </span>
+        </span>
+      </label>
+
+      {setVisibility.isError && (
+        <p className="mt-3 text-label text-danger">
+          Could not save that. Check your connection and try again.
+        </p>
+      )}
+    </Card>
+  )
+}
+
 export function Settings() {
   const onboarding = useOnboarding()
 
@@ -228,7 +285,7 @@ export function Settings() {
     <>
       <PageHeader
         title="Settings"
-        description="Targets, account, and the classic dashboard."
+        description="Targets, account, privacy, and the classic dashboard."
         icon={SettingsIcon}
         accent="brand"
       />
@@ -236,6 +293,7 @@ export function Settings() {
       <RevealGroup className="flex flex-col gap-4" step={0.05}>
         <Reveal><TargetSettings /></Reveal>
         <Reveal><PasswordSettings /></Reveal>
+        <Reveal><PrivacySettings /></Reveal>
 
         <Reveal>
           <Card title="Elsewhere" subtitle="Things that still live on the classic dashboard">

@@ -1,106 +1,146 @@
 # Deployment
 
-Where Neural Log runs, what it costs, and why. Updated after the cost review —
-the earlier recommendation in this file (a Lightsail VM) was withdrawn; see
-*Why not a VM* below for the reasoning, since it is still worth understanding.
+Where Neural Log runs, what it costs, and why. This file has changed its mind
+twice, and both reversals are kept below rather than deleted — the reasoning is
+the useful part, and a plan whose history is erased looks more certain than it
+earned.
 
-## Target architecture
+**Status:** the security prerequisites are done (see [SECURITY.md](SECURITY.md)).
+The host is chosen and not yet built.
 
-**Serverless, mirroring the Tech-Portfolio stack already in production:**
+## The decision, as it stands
 
-| Layer | Service |
+**Deploy the Flask app as it is**, to a small always-on AWS host, with SQLite on
+a real disk and a nightly backup to S3. No re-platform, no storage rewrite, no
+language change.
+
+| Layer | Choice |
 |---|---|
-| Frontend + backend | Next.js 16 App Router on **AWS Amplify SSR** |
-| API | Next.js route handlers (not a separate service) |
-| Data | **DynamoDB** — replaces SQLite *and* the `artifacts/` JSON files |
-| Blobs / backups | **S3** |
-| Delivery, TLS, DNS | CloudFront (Amplify-managed), `neurallog.adityamore.dev` |
+| Compute | Amazon Lightsail instance, 1 GB plan (~$5/month) |
+| Data | SQLite on the instance's disk — the current file, unchanged |
+| Backup | Nightly snapshot to S3, and Lightsail's own disk snapshots |
+| Delivery, TLS | Caddy on the instance, automatic Let's Encrypt |
+| DNS | `neurallog.adityamore.dev`, domain already owned |
+| Build | Frontend built in CI; the instance pulls a built image |
 
-This is a deliberate re-platform, not a redeploy. Amplify SSR runs **Next.js**
-route handlers as managed serverless compute — it cannot run Flask/gunicorn. So
-"host it like the portfolio" necessarily means the backend becomes TypeScript.
+At ~$5/month, $94 of credits is roughly fifteen months. That is the trade being
+made: real money, later, in exchange for the app being live now.
 
-**Timing:** after R2 (Home + Today) is finished, so the data model and scoring
-have stopped moving. Porting a moving target means doing the DynamoDB key design
-twice.
+## Why this, and not the re-platform
+
+Until 2026-09-17 this file specified **Next.js 16 App Router on AWS Amplify SSR
+with DynamoDB and S3**, at ~$0/month inside AWS's perpetual Always Free
+allowances. That was a sound decision on the facts available, and two of those
+facts have since changed.
+
+**The storage rewrite is no longer forced.** The argument for DynamoDB was not
+really about DynamoDB. It was that `artifacts/paths/<username>.json` was the only
+copy of a user's Paths, not mirrored in the database, and every
+ephemeral-filesystem platform would silently delete it — so *whatever* the
+destination, the storage had to be rewritten first. Migration 011 moved Paths
+into SQL. What is left on disk is a write-only checklist audit log and the
+`exports/` scratch directory, neither of which the app ever reads back. The
+entire live dataset is one 565 KB SQLite file.
+
+**The cost comparison was between $0 and $87/year.** It is now between $0 and
+$60/year *with $94 of credits in hand*, against a re-platform that is, by some
+distance, the largest single piece of work in the project: ~8,300 lines of
+application Python across 71 endpoints, 35 tables, a scoring engine, an XP ledger
+and 441 tests — all of it rewritten in TypeScript, with the relational schema
+redesigned as DynamoDB access patterns. The analytics date-range queries and the
+leaderboard are exactly the shapes DynamoDB is worst at.
+
+So the $0 was never free. It was priced in weeks, and the bill came due before
+anything was live.
+
+**What this gives up**, stated plainly: an always-on instance costs money whether
+or not anyone opens the app, and it comes with the ops that serverless deletes —
+OS patching, a systemd unit, certificate renewal, backup and restore drills. At
+this scale each of those is small. None of them is zero.
+
+**What it keeps open:** the re-platform is now an optional later migration rather
+than a wall between the app and its users. If the credits run out and the bill is
+not worth it, the options are to port then, move to something cheaper, or take
+the app down — and all three are decisions made with a working app in hand.
 
 ## Cost
 
-At 2–5 users the whole thing sits inside AWS's **Always Free** allowances, which
-are perpetual — not a 12-month trial. They apply to every account, old or new,
-for as long as it stays open and usage stays under the caps.
+| | Monthly | Year 1 | After credits |
+|---|---|---|---|
+| Lightsail 1 GB instance | ~$5.00 | covered by credits | ~$60/year |
+| S3 backups (a few MB) | ~$0.00 | — | ~$0 |
+| Data transfer | included (2 TB) | — | included |
+| Domain | already owned | $0 | $0 |
 
-| Service | Always-free allowance | Our usage at 2–5 users |
-|---|---|---|
-| Lambda (behind Amplify SSR) | 1M invocations + 400K GB-s / month | a few thousand invocations |
-| DynamoDB | 25 GB storage + provisioned RCU/WCU | ~120 KB |
-| S3 | see current free tier | a few MB |
-| CloudFront | see current free tier | negligible |
-| Domain | already owned (`adityamore.dev`) | $0 |
+Two things to watch on a real bill rather than trust a table about:
 
-**Expected: ~$0/month, indefinitely.**
+- **Amplify Hosting's free tier is 12 months, not perpetual.** Lambda, DynamoDB,
+  S3, CloudFront and CloudWatch have perpetual Always Free allowances; Amplify's
+  5 GB storage / 15 GB transfer / 1,000 build minutes appear to be a 12-month
+  trial. This matters only if the re-platform ever happens, but it is the thing
+  the original $0/month estimate leaned on hardest, and it was already flagged as
+  unverified in the version of this file that made it.
+- **NAT Gateway, $32.85/month.** The classic hobby-project disaster, acquired by
+  accepting the VPC wizard's defaults. Lightsail structurally cannot contain one,
+  which is a real part of why it is the choice here.
 
-One thing to confirm against a real bill: **Amplify Hosting itself was not in
-the Always Free list** (Lambda, DynamoDB, S3, CloudFront and CloudWatch were).
-Its 5 GB storage / 15 GB transfer / 1,000 build-minute allowances may be
-12-month only. The Tech-Portfolio account is the authoritative source here —
-check what it actually bills after year one.
-
-### Why not a VM
-
-The original plan here was Amazon Lightsail at $7/month ($87/year). It was
-rejected once two things became clear: the user count dropped to 2–5, and the
-owner already operates the serverless stack in production.
-
-Lightsail's advantages were real but situational — it runs the *current* Flask
-app unmodified, and it structurally cannot contain a **NAT Gateway** ($32.85/mo,
-the classic hobby-project disaster you get by accepting the VPC wizard's
-defaults). That second argument only matters for someone new to AWS, which turned
-out not to apply.
-
-Against it: $87/year forever whether anyone opens the app or not, plus the real
-cost — SSH, systemd, OS patching, Caddy, backup scripts, restore drills and
-uptime monitoring, all of which are pure overhead at this scale and all of which
-the serverless option deletes.
+## Why not the other options
 
 ### Why not Elastic Beanstalk, App Runner, or Fargate
 
-These were rejected for the *current* Flask app and the reasoning is worth
-keeping, because it explains why the DynamoDB port is mandatory rather than
-optional:
+All three have ephemeral filesystems, so all three mean either a managed database
+or losing the data. A managed database means porting SQLite to Postgres: 18
+migrations plus raw SQL full of `strftime`, `julianday` and
+`INTEGER PRIMARY KEY AUTOINCREMENT`. That is real work for no benefit at 2–5
+users and 565 KB.
 
-The app as written today writes to local disk on almost every request —
-`load_user_paths()` re-saves unconditionally, so even `GET /api/current-user` is
-a disk write — and `artifacts/paths/<username>.json` is the **only** copy of a
-user's Paths, not mirrored in the database. Every serverless or container
-platform has an ephemeral filesystem, so all of them would silently delete it.
-Elastic Beanstalk is the worst trap: it rebuilds the instance during routine
-platform updates, wiping the database with no error message.
+Elastic Beanstalk is the specific trap: it rebuilds the instance during routine
+platform updates, wiping anything on local disk with no error message.
 
-**This is why the port is a storage rewrite, not a lift-and-shift.** Whatever the
-destination, SQLite and `artifacts/` have to become DynamoDB first.
+### Why not a VM was the original answer
 
-## What has to happen before it is public
+The first version of this file recommended Lightsail, then withdrew it in favour
+of serverless. The arguments against it were: $87/year forever whether anyone
+opens the app or not, plus SSH, systemd, OS patching, Caddy, backup scripts,
+restore drills and uptime monitoring — pure overhead at this scale.
 
-Most of the security list survives the re-platform, because it is about the
-application, not the host. Re-check each against the Next.js implementation:
+Those arguments are still true. They are simply no longer decisive, because the
+thing they were being compared against turned out to cost weeks rather than
+nothing. The ops overhead is accepted deliberately, and the plan keeps it as
+small as it can be: a container the instance pulls, so a redeploy is one command
+and a rebuild is not done on the box.
 
-1. **No hard-coded secret fallback.** The Flask app falls back to a literal
-   published in this public repo; do not reproduce that pattern.
-2. **Registration is fully open and the first user silently becomes admin.**
-3. **No login rate limiting.**
-4. **No CSRF protection**, and `GET /logout` changes state on a GET.
-5. **Session cookie flags** — `Secure`, `HttpOnly`, `SameSite`.
-6. **Structured error responses**, so nothing leaks a stack trace.
-7. **Leaderboard exposes every user's name, XP and streak** with no opt-out —
-   a product decision, not just a security one.
+## Before it is public
 
-Items that disappear with the port: SQLite WAL/locking, `save_user_paths`
-truncating the only copy of a user's data, the cwd-relative `artifacts/` paths,
-the exports/ directory growing unbounded, and `ProxyFix`/reverse-proxy concerns.
+The security list is done — all seven items, plus the leaderboard opt-out.
+[SECURITY.md](SECURITY.md) is the full write-up; the summary:
+
+| | Status |
+|---|---|
+| No hard-coded secret fallback | Done — production refuses to boot without `SECRET_KEY` |
+| Registration closed by default | Done — `REGISTRATION_MODE` defaults to invite in production |
+| Admin assigned, not raced for | Done — `ADMIN_USERNAME` |
+| Login rate limiting | Done — 10/username, 30/IP, 15-minute window |
+| CSRF protection | Done — `SameSite=Lax` plus a double-submit token |
+| `GET /logout` changed state | Done — POST signs out, GET confirms |
+| Session cookie flags | Done — `Secure`, `HttpOnly`, `SameSite` |
+| Structured error responses | Done — JSON, no tracebacks |
+| Leaderboard opt-out | Done — Settings → Privacy |
+
+Still to do, and specific to the host rather than the app:
+
+- `NEURAL_LOG_ENV=production`, a generated `SECRET_KEY`, and an invite code, set
+  as environment variables on the instance and not in the repository.
+- `DATABASE` pointed at a path outside the application directory, so a redeploy
+  cannot overwrite it.
+- `FLASK_DEBUG` unset. The Werkzeug debugger is remote code execution.
+- Caddy terminating TLS and proxying to gunicorn on localhost.
+- A restore drill: prove the S3 backup restores before relying on it. An untested
+  backup is a belief, not a backup.
 
 ## Related
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how the app is built today
-- [DATA-MODEL.md](DATA-MODEL.md) — the entity map, and what DynamoDB has to absorb
-- [ROADMAP.md](ROADMAP.md) — where the port sits in the phase order
+- [SECURITY.md](SECURITY.md) — what had to be true before the app was reachable
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the app is built
+- [DATA-MODEL.md](DATA-MODEL.md) — the entity map
+- [ROADMAP.md](ROADMAP.md) — where the deploy sits in the phase order

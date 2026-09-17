@@ -8,6 +8,43 @@ import shutil
 import sys
 
 import pytest
+from flask.testing import FlaskClient
+from werkzeug.datastructures import Headers
+
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+class CsrfClient(FlaskClient):
+    """A test client that behaves like a browser the server has met before.
+
+    CSRF protection is on in every environment, including this one - the point of
+    which is that four hundred tests exercise it rather than production finding
+    the gaps. That only works if the client acts like a browser: holds the
+    `csrf_token` cookie the server set, and echoes it back in a header on every
+    write.
+
+    Doing it here rather than in each test is what keeps the suite readable. A
+    test about recipe servings should be about recipe servings; the day it also
+    has to thread a security token through is the day the token starts getting
+    disabled in tests.
+
+    The guard itself is tested through `raw_client`, which deliberately does none
+    of this.
+    """
+
+    def open(self, *args, **kwargs):
+        if str(kwargs.get("method", "GET")).upper() not in SAFE_METHODS:
+            cookie = self.get_cookie("csrf_token")
+            if cookie is None:
+                # No cookie yet because this test's first request is a write.
+                # Any safe request issues one, same as loading a page would.
+                self.get("/login")
+                cookie = self.get_cookie("csrf_token")
+            if cookie is not None:
+                headers = Headers(kwargs.get("headers") or {})
+                headers.setdefault("X-CSRF-Token", cookie.value)
+                kwargs["headers"] = headers
+        return super().open(*args, **kwargs)
 
 
 @pytest.fixture(scope="session")
@@ -63,6 +100,9 @@ def app_module(tmp_path, monkeypatch, database_template):
     import app as imported_app
 
     imported_app.app.config.update(TESTING=True)
+    # Set on the app rather than in the client fixture, so a test that builds its
+    # own client the ordinary way still gets one that works.
+    imported_app.app.test_client_class = CsrfClient
     yield imported_app
     sys.modules.pop("app", None)
 
@@ -70,6 +110,17 @@ def app_module(tmp_path, monkeypatch, database_template):
 @pytest.fixture()
 def client(app_module):
     return app_module.app.test_client()
+
+
+@pytest.fixture()
+def raw_client(app_module):
+    """A client that sends no CSRF token - for testing that the guard bites."""
+    app = app_module.app
+    app.test_client_class = FlaskClient
+    try:
+        return app.test_client()
+    finally:
+        app.test_client_class = CsrfClient
 
 
 def register(client, username="alice", password="password123", **extra):

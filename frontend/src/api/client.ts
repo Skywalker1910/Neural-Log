@@ -69,7 +69,29 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return body
 }
 
+/**
+ * The CSRF token the server handed us, read back out of its cookie.
+ *
+ * Double-submit: the server sets `csrf_token`, we echo it in a header, and it
+ * checks the two match. That proves the request came from a page on this origin,
+ * because a page on another origin can make your browser *send* cookies but
+ * cannot *read* them to copy one into a header.
+ *
+ * Read fresh on every request rather than cached at module load. The cookie is
+ * rotated when the server decides to, and a stale copy fails every write until
+ * the tab is reloaded - which is exactly the bug that looks like "the app
+ * randomly stopped saving".
+ */
+function csrfToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+const UNSAFE = /^(POST|PUT|PATCH|DELETE)$/i
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? 'GET'
+
   let res: Response
   try {
     res = await fetch(path, {
@@ -77,6 +99,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(UNSAFE.test(method) ? { 'X-CSRF-Token': csrfToken() } : {}),
         ...init?.headers,
       },
     })

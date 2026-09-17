@@ -46,7 +46,7 @@ def test_a_custom_food_belongs_only_to_its_owner(client_with_foods, client):
     }).get_json()
     assert created['is_custom'] is True
 
-    client_with_foods.get('/logout')
+    client_with_foods.post('/logout')
     register(client, username='someone-else')
     names = [f['name'] for f in client.get('/api/foods').get_json()['foods']]
     assert 'Nan Protein Blend' not in names
@@ -111,7 +111,7 @@ def test_you_cannot_log_someone_elses_custom_food(client_with_foods, client):
     custom = client_with_foods.post('/api/foods', json={
         'name': 'Private Shake', 'kcal_per_100g': 200,
     }).get_json()
-    client_with_foods.get('/logout')
+    client_with_foods.post('/logout')
 
     register(client, username='intruder')
     response = client.post(f'/api/nutrition/{_iso()}/entries',

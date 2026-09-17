@@ -2,6 +2,7 @@ import { NavLink } from 'react-router'
 import { Activity, LogOut, PanelLeft, PanelLeftClose } from 'lucide-react'
 import { m } from 'motion/react'
 
+import { api } from '../../api/client'
 import { cn } from '../../lib/cn'
 import { accentText, NAV_SECTIONS, SETTINGS_SECTION, type NavSection } from '../../navigation'
 
@@ -92,18 +93,35 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <div className="space-y-0.5 border-t border-line px-3 py-3">
         <SidebarLink section={SETTINGS_SECTION} collapsed={collapsed} />
-        <a
-          href="/logout"
+        {/*
+          A button, not a link. Signing out changes state, and a GET that changes
+          state is a link any other site can follow on your behalf - so /logout
+          only acts on POST now. Going through the api client is what attaches
+          the CSRF header.
+        */}
+        <button
+          type="button"
+          onClick={() => {
+            void api
+              .post('/logout')
+              // Whatever the server said, the session is either gone or was
+              // never valid; either way the right place to be is the sign-in
+              // page. A full navigation rather than a route change, so every
+              // cached query dies with the page.
+              .finally(() => {
+                window.location.href = '/login'
+              })
+          }}
           title={collapsed ? 'Sign out' : undefined}
           className={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 text-label text-ink-muted',
+            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-label text-ink-muted',
             'transition-colors duration-200 ease-apple hover:bg-surface-card hover:text-ink',
             collapsed && 'justify-center px-0',
           )}
         >
           <LogOut size={18} strokeWidth={1.9} className="shrink-0" aria-hidden />
           {!collapsed && <span>Sign out</span>}
-        </a>
+        </button>
         <button
           type="button"
           onClick={onToggle}

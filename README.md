@@ -117,7 +117,8 @@ Neural-Log/
     ├── HABITS.md           # the Paths-to-Habits migration, schedules, goals
     ├── XP.md               # the XP ledger, caps, and achievements
     ├── CI.md               # what runs on a PR, and what main enforces
-    ├── DEPLOYMENT.md       # AWS plan and cost model
+    ├── SECURITY.md         # what had to be true before the app was public
+    ├── DEPLOYMENT.md       # where it runs, what it costs, and why
     ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first
 ```

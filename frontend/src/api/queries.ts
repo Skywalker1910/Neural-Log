@@ -93,6 +93,28 @@ export const queryKeys = {
   onboarding: ['onboarding'] as const,
 }
 
+/**
+ * Whether this account appears on the leaderboard.
+ *
+ * Its own mutation rather than part of `useSaveProfile`, mirroring the endpoint:
+ * saving the profile renames the account, and a privacy toggle should not be
+ * able to fail because a username is taken.
+ */
+export function useSetLeaderboardVisibility() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (optOut: boolean) =>
+      api.put<{ success: boolean; leaderboard_opt_out: boolean }>(
+        '/api/user/privacy',
+        { leaderboard_opt_out: optOut },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.currentUser })
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+    },
+  })
+}
+
 export function useCurrentUser() {
   return useQuery({
     queryKey: queryKeys.currentUser,

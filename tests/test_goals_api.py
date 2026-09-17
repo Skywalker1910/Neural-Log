@@ -156,7 +156,7 @@ def test_goals_require_a_title(planner):
 
 def test_goals_are_scoped_to_their_owner(planner, client):
     goal = _goal(planner)
-    planner.get("/logout")
+    planner.post("/logout")
 
     register(client, username="someone-else")
     assert client.get("/api/goals").get_json()["goals"] == []
@@ -168,7 +168,7 @@ def test_you_cannot_link_someone_elses_personal_question(planner, client):
     """Core questions are shared and linkable by anyone - that is the point of
     them. A question somebody added for themselves is not."""
     private_id = _habit_id(planner, _own_question(planner, "Did you call Mum?")["id"])
-    planner.get("/logout")
+    planner.post("/logout")
 
     register(client, username="intruder")
     goal = client.post("/api/goals", json={
@@ -231,7 +231,7 @@ def test_open_tasks_sort_before_completed_ones(planner):
 
 def test_you_cannot_attach_a_task_to_someone_elses_goal(planner, client):
     goal = _goal(planner)
-    planner.get("/logout")
+    planner.post("/logout")
 
     register(client, username="intruder")
     response = client.post("/api/tasks", json={"title": "Sneak", "goal_id": goal["id"]})
