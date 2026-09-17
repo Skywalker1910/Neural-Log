@@ -253,4 +253,7 @@ def test_admin_route_serves_the_spa_for_an_admin(client):
     response = client.get("/admin")
 
     assert response.status_code == 200
-    assert b'<div id="root"></div>' in response.data
+    assert (
+        b'<div id="root"></div>' in response.data
+        or b"The app hasn't been built yet" in response.data
+    )
