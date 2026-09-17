@@ -16,7 +16,7 @@ The scoring system follows that goal. Logged sets, study time, sleep, and comple
 - **Learning and goals** - study areas, timed sessions, milestones, tasks, and linked habits.
 - **Progression** - eight attributes, XP transactions, levels, achievements, and privacy-aware leaderboards.
 - **Analytics** - comparisons, calendar heatmaps, and honest handling of unobserved days.
-- **Classic tools** - administration and Excel export remain available at `/classic`.
+- **Classic tools** - Excel export and milestone insights remain available at `/classic`.
 
 ## Architecture
 

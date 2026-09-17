@@ -3,8 +3,9 @@ import { Activity, LogOut, PanelLeft, PanelLeftClose } from 'lucide-react'
 import { m } from 'motion/react'
 
 import { api } from '../../api/client'
+import { useCurrentUser } from '../../api/queries'
 import { cn } from '../../lib/cn'
-import { accentText, NAV_SECTIONS, SETTINGS_SECTION, type NavSection } from '../../navigation'
+import { ADMIN_SECTION, accentText, NAV_SECTIONS, SETTINGS_SECTION, type NavSection } from '../../navigation'
 
 interface SidebarProps {
   collapsed: boolean
@@ -61,6 +62,8 @@ function SidebarLink({ section, collapsed }: { section: NavSection; collapsed: b
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const user = useCurrentUser()
+
   return (
     <aside
       className={cn(
@@ -93,6 +96,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <div className="space-y-0.5 border-t border-line px-3 py-3">
         <SidebarLink section={SETTINGS_SECTION} collapsed={collapsed} />
+        {user.data?.is_admin && <SidebarLink section={ADMIN_SECTION} collapsed={collapsed} />}
         {/*
           A button, not a link. Signing out changes state, and a GET that changes
           state is a link any other site can follow on your behalf - so /logout

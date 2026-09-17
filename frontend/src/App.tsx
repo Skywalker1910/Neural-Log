@@ -41,6 +41,7 @@ const Profile = page(() => import('./pages/Profile'), 'Profile')
 const Settings = page(() => import('./pages/Settings'), 'Settings')
 const Welcome = page(() => import('./pages/Welcome'), 'Welcome')
 const DesignSystem = page(() => import('./pages/DesignSystem'), 'DesignSystem')
+const Admin = page(() => import('./pages/Admin'), 'Admin')
 
 /**
  * One Suspense boundary around the whole outlet rather than one per route.
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="/profile" element={<Lazy><Profile /></Lazy>} />
         <Route path={SETTINGS_SECTION.path} element={<Lazy><Settings /></Lazy>} />
         <Route path={DESIGN_SECTION.path} element={<Lazy><DesignSystem /></Lazy>} />
+        <Route path="/admin" element={<Lazy><Admin /></Lazy>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

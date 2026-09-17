@@ -17,6 +17,42 @@ export interface CurrentUser {
   leaderboard_opt_out: boolean
 }
 
+export interface AdminUser {
+  id: number
+  username: string
+  email: string | null
+  is_admin: boolean
+  is_active: boolean
+  leaderboard_opt_out: boolean
+  created_at: string
+  activity_count: number
+  logged_days: number
+  last_logged_on: string | null
+  total_xp: number
+}
+
+export interface AdminOverview {
+  accounts: {
+    total: number
+    active: number
+    admins: number
+    active_this_week: number
+  }
+  logging: {
+    activities: number
+    days: number
+  }
+  features: {
+    workouts: number
+    meals: number
+    learning_sessions: number
+    goals: number
+    habits: number
+  }
+  registration_mode: 'open' | 'invite' | 'closed'
+  database_integrity: string
+}
+
 export interface ActivityByDate {
   date: string
   count: number

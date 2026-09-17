@@ -3,7 +3,8 @@ import { NavLink } from 'react-router'
 import { Menu } from 'lucide-react'
 
 import { cn } from '../../lib/cn'
-import { accentText, OVERFLOW_SECTIONS, PRIMARY_SECTIONS, SETTINGS_SECTION } from '../../navigation'
+import { useCurrentUser } from '../../api/queries'
+import { ADMIN_SECTION, accentText, OVERFLOW_SECTIONS, PRIMARY_SECTIONS, SETTINGS_SECTION } from '../../navigation'
 import { Modal } from '../ui/Modal'
 
 const TAB_CLASSES =
@@ -15,6 +16,7 @@ const TAB_CLASSES =
  */
 export function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
+  const user = useCurrentUser()
 
   return (
     <>
@@ -62,7 +64,7 @@ export function BottomNav() {
 
       <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="All sections" size="sm">
         <ul className="grid grid-cols-2 gap-2">
-          {[...OVERFLOW_SECTIONS, SETTINGS_SECTION].map((section) => {
+          {[...OVERFLOW_SECTIONS, SETTINGS_SECTION, ...(user.data?.is_admin ? [ADMIN_SECTION] : [])].map((section) => {
             const Icon = section.icon
             return (
               <li key={section.path}>

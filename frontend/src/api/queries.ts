@@ -45,6 +45,8 @@ import type {
   UserProfile,
   Workout,
   CurrentUser,
+  AdminOverview,
+  AdminUser,
   DayDetail,
   GamificationSummary,
   HomeSummary,
@@ -91,6 +93,8 @@ export const queryKeys = {
   xpLedger: ['xp-ledger'] as const,
   analytics: (period: string) => ['analytics', period] as const,
   onboarding: ['onboarding'] as const,
+  adminOverview: ['admin', 'overview'] as const,
+  adminUsers: ['admin', 'users'] as const,
 }
 
 /**
@@ -120,6 +124,20 @@ export function useCurrentUser() {
     queryKey: queryKeys.currentUser,
     queryFn: () => api.get<CurrentUser>('/api/current-user'),
     staleTime: 5 * 60_000,
+  })
+}
+
+export function useAdminOverview() {
+  return useQuery({
+    queryKey: queryKeys.adminOverview,
+    queryFn: () => api.get<AdminOverview>('/api/admin/stats'),
+  })
+}
+
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: queryKeys.adminUsers,
+    queryFn: () => api.get<AdminUser[]>('/api/admin/users'),
   })
 }
 

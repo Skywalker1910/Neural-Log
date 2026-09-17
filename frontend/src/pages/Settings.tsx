@@ -307,7 +307,7 @@ export function Settings() {
                 <a href="/classic" className="text-brand underline underline-offset-2">
                   Open the classic dashboard
                 </a>
-                <span className="text-ink-subtle"> — milestone insights and admin</span>
+                  <span className="text-ink-subtle"> — milestone insights</span>
               </li>
               {onboarding.data && !onboarding.data.completed && (
                 <li>

@@ -606,6 +606,19 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             return redirect(url_for('login'))
+
+        conn = get_db_connection()
+        user = conn.execute(
+            'SELECT is_admin, is_active FROM users WHERE id = ?',
+            (session['user_id'],),
+        ).fetchone()
+        conn.close()
+
+        if not user or not user['is_active']:
+            session.clear()
+            return redirect(url_for('login'))
+
+        session['is_admin'] = bool(user['is_admin'])
         return f(*args, **kwargs)
     return decorated_function
 
@@ -617,10 +630,18 @@ def admin_required(f):
             return redirect(url_for('login'))
         
         conn = get_db_connection()
-        user = conn.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        user = conn.execute(
+            'SELECT is_admin, is_active FROM users WHERE id = ?',
+            (session['user_id'],),
+        ).fetchone()
         conn.close()
-        
-        if not user or not user['is_admin']:
+
+        if not user or not user['is_active']:
+            session.clear()
+            return redirect(url_for('login'))
+
+        session['is_admin'] = bool(user['is_admin'])
+        if not user['is_admin']:
             return jsonify({'error': 'Admin access required'}), 403
         
         return f(*args, **kwargs)
@@ -660,7 +681,7 @@ def login():
 
         user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
 
-        if user and check_password_hash(user['password_hash'], password):
+        if user and user['is_active'] and check_password_hash(user['password_hash'], password):
             security.clear_login_failures(conn, username, ip)
             conn.close()
 
@@ -1029,7 +1050,7 @@ def reset_current_user_password():
 # person it was built for.
 #
 # So / is the SPA, and the classic dashboard keeps its own address at /classic
-# until the last few features that only exist there (Excel export, admin) are
+# until the last few features that only exist there (notably Excel export) are
 # ported. /app still resolves, because it is in the browser history of everyone
 # who has been testing.
 # ---------------------------------------------------------------------------
@@ -1083,6 +1104,12 @@ def spa_assets(filename):
     return send_from_directory(FRONTEND_DIST / 'assets', filename)
 
 
+def serve_spa_shell():
+    if not (FRONTEND_DIST / 'index.html').exists():
+        return SPA_NOT_BUILT_HTML, 200
+    return send_from_directory(FRONTEND_DIST, 'index.html')
+
+
 @app.route('/', strict_slashes=False)
 @app.route('/<path:_subpath>')
 def index(_subpath=''):
@@ -1097,9 +1124,7 @@ def index(_subpath=''):
         abort(404)
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    if not (FRONTEND_DIST / 'index.html').exists():
-        return SPA_NOT_BUILT_HTML, 200
-    return send_from_directory(FRONTEND_DIST, 'index.html')
+    return serve_spa_shell()
 
 
 @app.route('/app', strict_slashes=False)
@@ -1112,8 +1137,7 @@ def spa_legacy_redirect(subpath=''):
 @app.route('/classic')
 @login_required
 def classic():
-    """The original Jinja dashboard. Still the only home of the Excel export and
-    a few admin screens, so it stays reachable rather than being deleted."""
+    """The original Jinja dashboard, kept for Excel export and legacy insights."""
     return render_template('index.html')
 
 
@@ -1754,8 +1778,8 @@ def export_excel():
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
-    """Admin dashboard page"""
-    return render_template('admin.html')
+    """Serve the admin route inside the main React application."""
+    return serve_spa_shell()
 
 @app.route('/api/admin/users')
 @admin_required
@@ -1763,14 +1787,26 @@ def get_all_users():
     """Get all users (admin only)"""
     conn = get_db_connection()
     users = conn.execute('''
-        SELECT id, username, email, is_admin, created_at,
-               (SELECT COUNT(*) FROM activities WHERE user_id = users.id) as activity_count
+        SELECT users.id, users.username, users.email, users.is_admin, users.is_active,
+               users.leaderboard_opt_out, users.created_at,
+               (SELECT COUNT(*) FROM activities WHERE user_id = users.id) AS activity_count,
+               (SELECT COUNT(*) FROM daily_log WHERE user_id = users.id) AS logged_days,
+               (SELECT MAX(date) FROM daily_log WHERE user_id = users.id) AS last_logged_on,
+               COALESCE((SELECT SUM(total_xp) FROM daily_xp WHERE user_id = users.id), 0) AS total_xp
         FROM users
-        ORDER BY created_at DESC
+        ORDER BY users.is_active DESC, users.created_at DESC
     ''').fetchall()
     conn.close()
-    
-    return jsonify([dict(row) for row in users])
+
+    payload = []
+    for row in users:
+        user = dict(row)
+        user['is_admin'] = bool(user['is_admin'])
+        user['is_active'] = bool(user['is_active'])
+        user['leaderboard_opt_out'] = bool(user['leaderboard_opt_out'])
+        payload.append(user)
+
+    return jsonify(payload)
 
 @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
 @admin_required
@@ -1782,19 +1818,51 @@ def delete_user(user_id):
     
     conn = get_db_connection()
 
-    username_row = conn.execute(
-        'SELECT username FROM users WHERE id = ?', (user_id,)
+    user_row = conn.execute(
+        'SELECT username, is_admin, is_active FROM users WHERE id = ?', (user_id,)
     ).fetchone()
-    if not username_row:
+    if not user_row:
         conn.close()
         return jsonify({'success': False, 'message': 'User not found'}), 404
 
-    # Every per-user table. SQLite foreign keys are not enforced here (PRAGMA
-    # foreign_keys is never enabled), so nothing cascades - each new per-user
-    # table added by a later phase must be listed here, or deleting an account
-    # silently leaves that person's data behind.
-    for table in ('activities', 'milestones', 'daily_xp', 'user_badges',
-                  'daily_log', 'attribute_scores', 'daily_scores'):
+    if user_row['is_admin'] and user_row['is_active']:
+        active_admins = conn.execute(
+            'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_active = 1'
+        ).fetchone()['count']
+        if active_admins <= 1:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot remove the last active admin'}), 400
+
+    conn.execute(
+        'DELETE FROM exercise_sets WHERE session_id IN '
+        '(SELECT id FROM workout_sessions WHERE user_id = ?)',
+        (user_id,),
+    )
+    conn.execute(
+        'DELETE FROM routine_exercises WHERE routine_id IN '
+        '(SELECT id FROM routines WHERE user_id = ?)',
+        (user_id,),
+    )
+    conn.execute(
+        'DELETE FROM recipe_ingredients WHERE recipe_id IN '
+        '(SELECT id FROM recipes WHERE user_id = ?)',
+        (user_id,),
+    )
+    conn.execute(
+        'DELETE FROM goal_habits WHERE goal_id IN '
+        '(SELECT id FROM goals WHERE user_id = ?) OR habit_id IN '
+        '(SELECT id FROM habits WHERE user_id = ?)',
+        (user_id, user_id),
+    )
+
+    for table in (
+        'activities', 'milestones', 'daily_xp', 'user_badges', 'daily_log',
+        'attribute_scores', 'daily_scores', 'xp_transactions', 'body_measurements',
+        'workout_sessions', 'routines', 'food_entries', 'sleep_entries',
+        'lifestyle_days', 'user_profile', 'learning_sessions', 'learning_topics',
+        'learning_areas', 'goal_milestones', 'tasks', 'goals', 'habit_completions',
+        'habit_imports', 'habits', 'habit_groups', 'recipes', 'foods',
+    ):
         conn.execute(f'DELETE FROM {table} WHERE user_id = ?', (user_id,))
 
     conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
@@ -1804,8 +1872,8 @@ def delete_user(user_id):
     # Their Path templates and daily submissions live on disk, not in SQL.
     # Deleting an account has to remove those too, or "delete this user" leaves
     # their personal log content sitting in artifacts/.
-    for artifact in (get_user_paths_file_path(username_row['username']),
-                     get_checklist_file_path(username_row['username'])):
+    for artifact in (get_user_paths_file_path(user_row['username']),
+                     get_checklist_file_path(user_row['username'])):
         try:
             artifact.unlink(missing_ok=True)
         except OSError:
@@ -1822,18 +1890,58 @@ def toggle_admin(user_id):
         return jsonify({'success': False, 'message': 'Cannot modify your own admin status'}), 400
     
     conn = get_db_connection()
-    user = conn.execute('SELECT is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+    user = conn.execute(
+        'SELECT is_admin, is_active FROM users WHERE id = ?', (user_id,)
+    ).fetchone()
     
     if not user:
         conn.close()
         return jsonify({'success': False, 'message': 'User not found'}), 404
     
     new_admin_status = 0 if user['is_admin'] else 1
+    if user['is_admin'] and user['is_active']:
+        active_admins = conn.execute(
+            'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_active = 1'
+        ).fetchone()['count']
+        if active_admins <= 1:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot remove the last active admin'}), 400
+
     conn.execute('UPDATE users SET is_admin = ? WHERE id = ?', (new_admin_status, user_id))
     conn.commit()
     conn.close()
     
     return jsonify({'success': True, 'is_admin': bool(new_admin_status)})
+
+@app.route('/api/admin/users/<int:user_id>/toggle-active', methods=['POST'])
+@admin_required
+def toggle_user_active(user_id):
+    """Suspend or resume an account without deleting its history."""
+    if user_id == session.get('user_id'):
+        return jsonify({'success': False, 'message': 'Cannot suspend your own account'}), 400
+
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT is_admin, is_active FROM users WHERE id = ?', (user_id,)
+    ).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    new_active_status = 0 if user['is_active'] else 1
+    if user['is_admin'] and user['is_active']:
+        active_admins = conn.execute(
+            'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_active = 1'
+        ).fetchone()['count']
+        if active_admins <= 1:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Cannot suspend the last active admin'}), 400
+
+    conn.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_active_status, user_id))
+    conn.commit()
+    conn.close()
+
+    return jsonify({'success': True, 'is_active': bool(new_active_status)})
 
 @app.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
 @admin_required
@@ -1876,28 +1984,47 @@ def get_user_activities(user_id):
 def admin_stats():
     """Get overall system statistics (admin only)"""
     conn = get_db_connection()
-    
-    total_users = conn.execute('SELECT COUNT(*) as count FROM users').fetchone()['count']
-    total_activities = conn.execute('SELECT COUNT(*) as count FROM activities').fetchone()['count']
-    total_admins = conn.execute('SELECT COUNT(*) as count FROM users WHERE is_admin = 1').fetchone()['count']
-    
-    # Most active users
-    active_users = conn.execute('''
-        SELECT users.username, COUNT(activities.id) as activity_count
-        FROM users
-        LEFT JOIN activities ON users.id = activities.user_id
-        GROUP BY users.id
-        ORDER BY activity_count DESC
-        LIMIT 10
-    ''').fetchall()
-    
+    total_users = conn.execute('SELECT COUNT(*) AS count FROM users').fetchone()['count']
+    active_accounts = conn.execute(
+        'SELECT COUNT(*) AS count FROM users WHERE is_active = 1'
+    ).fetchone()['count']
+    total_admins = conn.execute(
+        'SELECT COUNT(*) AS count FROM users WHERE is_admin = 1 AND is_active = 1'
+    ).fetchone()['count']
+    active_this_week = conn.execute('''
+        SELECT COUNT(*) AS count FROM users
+        WHERE EXISTS (
+            SELECT 1 FROM daily_log
+            WHERE daily_log.user_id = users.id
+              AND daily_log.date >= date('now', '-6 days')
+        )
+    ''').fetchone()['count']
+    total_activities = conn.execute('SELECT COUNT(*) AS count FROM activities').fetchone()['count']
+    total_logged_days = conn.execute('SELECT COUNT(*) AS count FROM daily_log').fetchone()['count']
+    feature_counts = {
+        'workouts': conn.execute('SELECT COUNT(*) AS count FROM workout_sessions').fetchone()['count'],
+        'meals': conn.execute('SELECT COUNT(*) AS count FROM food_entries').fetchone()['count'],
+        'learning_sessions': conn.execute('SELECT COUNT(*) AS count FROM learning_sessions').fetchone()['count'],
+        'goals': conn.execute('SELECT COUNT(*) AS count FROM goals').fetchone()['count'],
+        'habits': conn.execute('SELECT COUNT(*) AS count FROM habits WHERE is_core = 0').fetchone()['count'],
+    }
+    integrity = conn.execute('PRAGMA integrity_check').fetchone()[0]
     conn.close()
-    
+
     return jsonify({
-        'total_users': total_users,
-        'total_activities': total_activities,
-        'total_admins': total_admins,
-        'active_users': [dict(row) for row in active_users]
+        'accounts': {
+            'total': total_users,
+            'active': active_accounts,
+            'admins': total_admins,
+            'active_this_week': active_this_week,
+        },
+        'logging': {
+            'activities': total_activities,
+            'days': total_logged_days,
+        },
+        'features': feature_counts,
+        'registration_mode': security.registration_mode(),
+        'database_integrity': integrity,
     })
 
 # Training endpoints live in their own module - app.py is already long enough,

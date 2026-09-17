@@ -201,3 +201,56 @@ def test_deleting_a_user_removes_all_their_data(client, app_module):
     conn.close()
 
     assert not paths_file.exists(), "the deleted user's Path file is still on disk"
+
+
+def test_admin_can_suspend_and_resume_an_account(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    login(client, username="alice")
+
+    users = client.get("/api/admin/users").get_json()
+    bob = next(user for user in users if user["username"] == "bob")
+    assert bob["is_active"] is True
+
+    suspended = client.post(f"/api/admin/users/{bob['id']}/toggle-active")
+    assert suspended.status_code == 200
+    assert suspended.get_json()["is_active"] is False
+
+    client.post("/logout")
+    assert login(client, username="bob").status_code == 401
+
+    login(client, username="alice")
+    resumed = client.post(f"/api/admin/users/{bob['id']}/toggle-active")
+    assert resumed.status_code == 200
+    assert resumed.get_json()["is_active"] is True
+
+    client.post("/logout")
+    assert login(client, username="bob").status_code == 200
+
+
+def test_admin_overview_reports_account_and_workspace_state(client):
+    register(client)
+
+    overview = client.get("/api/admin/stats")
+
+    assert overview.status_code == 200
+    payload = overview.get_json()
+    assert payload["accounts"] == {
+        "total": 1,
+        "active": 1,
+        "admins": 1,
+        "active_this_week": 0,
+    }
+    assert payload["database_integrity"] == "ok"
+    assert set(payload["features"]) == {"workouts", "meals", "learning_sessions", "goals", "habits"}
+
+
+def test_admin_route_serves_the_spa_for_an_admin(client):
+    register(client)
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert b'<div id="root"></div>' in response.data

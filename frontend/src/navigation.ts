@@ -7,6 +7,7 @@ import {
   House,
   HeartPulse,
   Settings,
+  ShieldCheck,
   Target,
   Trophy,
   User,
@@ -134,6 +135,13 @@ export const SETTINGS_SECTION: NavSection = {
   label: 'Settings',
   path: '/settings',
   icon: Settings,
+  accent: 'brand',
+}
+
+export const ADMIN_SECTION: NavSection = {
+  label: 'Admin',
+  path: '/admin',
+  icon: ShieldCheck,
   accent: 'brand',
 }
 
