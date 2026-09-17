@@ -280,6 +280,11 @@
         </div>
 
         <div id="register-form" class="form-container" role="tabpanel" aria-labelledby="tab-register">
+            {% if registration_mode == 'closed' %}
+            <p class="foot" style="text-align:left">
+                Registration is closed on this instance. Ask the owner to create you an account.
+            </p>
+            {% else %}
             <form onsubmit="handleRegister(event)">
                 <div class="field">
                     <label for="register-username">Username</label>
@@ -301,23 +306,23 @@
                     <input type="password" id="register-confirm-password" autocomplete="new-password" required minlength="6">
                 </div>
 
+                {% if registration_mode == 'invite' %}
                 <div class="field">
-                    <label for="register-path">Your path</label>
-                    <select id="register-path" required>
-                        <option value="Batman Path">Batman Path</option>
-                        <option value="Thor Path">Thor Path</option>
-                        <option value="Captain America Path">Captain America Path</option>
-                        <option value="Ironman Path">Ironman Path</option>
-                    </select>
+                    <label for="register-invite">Invite code</label>
+                    <input type="text" id="register-invite" autocomplete="off" required
+                           placeholder="The phrase you were sent">
                 </div>
+                {% endif %}
 
                 <button type="submit" class="btn">Create account</button>
             </form>
+            {% endif %}
         </div>
 
         <p class="foot">Looking for the old dashboard? <a href="/classic">Open the classic view</a></p>
     </main>
 
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
     <script>
         function switchTab(tab) {
             const segmented = document.getElementById('segmented');
@@ -384,7 +389,9 @@
             const email = document.getElementById('register-email').value;
             const password = document.getElementById('register-password').value;
             const confirmPassword = document.getElementById('register-confirm-password').value;
-            const selectedPath = document.getElementById('register-path').value;
+            // Absent unless this instance asks for one; the server is the one
+            // that decides whether that is allowed.
+            const inviteField = document.getElementById('register-invite');
 
             if (password !== confirmPassword) {
                 showError('Passwords do not match');
@@ -395,7 +402,12 @@
                 const response = await fetch('/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password, selected_path: selectedPath })
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        invite_code: inviteField ? inviteField.value : ''
+                    })
                 });
 
                 const data = await response.json();

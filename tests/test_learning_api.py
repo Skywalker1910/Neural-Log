@@ -77,7 +77,7 @@ def test_archiving_an_area_keeps_the_sessions_studied_under_it(student):
 def test_areas_and_topics_are_scoped_to_their_owner(student, client):
     area = _area(student)
     topic = _topic(student, 'Consensus', area['id'])
-    student.get('/logout')
+    student.post('/logout')
 
     register(client, username='someone-else')
     assert client.get('/api/learning/areas').get_json()['areas'] == []
@@ -89,7 +89,7 @@ def test_areas_and_topics_are_scoped_to_their_owner(student, client):
 
 def test_you_cannot_file_a_topic_under_someone_elses_area(student, client):
     area = _area(student)
-    student.get('/logout')
+    student.post('/logout')
 
     register(client, username='intruder')
     response = client.post('/api/learning/topics',
@@ -99,7 +99,7 @@ def test_you_cannot_file_a_topic_under_someone_elses_area(student, client):
 
 def test_you_cannot_log_against_someone_elses_topic(student, client):
     topic = _topic(student)
-    student.get('/logout')
+    student.post('/logout')
 
     register(client, username='intruder')
     response = client.post('/api/learning/sessions', json={
@@ -233,7 +233,7 @@ def test_fragmented_study_scores_lower_depth_than_one_long_block(student, client
     for offset in range(3):
         _log(student, offset=offset, minutes=120, start='09:00', end='11:00')
     deep = student.get('/api/learning').get_json()['totals']['depth_pct']
-    student.get('/logout')
+    student.post('/logout')
 
     register(client, username='fragmented')
     for offset in range(3):

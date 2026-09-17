@@ -13,6 +13,8 @@ export interface CurrentUser {
   is_admin: boolean
   selected_path: string
   selected_path_id: string | null
+  /** Hidden from the leaderboard at this account's own request. */
+  leaderboard_opt_out: boolean
 }
 
 export interface ActivityByDate {
@@ -74,6 +76,13 @@ export interface LeaderboardEntry {
 export interface Leaderboard {
   scope: 'overall' | 'monthly'
   entries: LeaderboardEntry[]
+  /**
+   * You opted out, so you are not in `entries`.
+   *
+   * Without this the page cannot tell "nobody has any XP yet" apart from "you
+   * asked to be hidden", and the second one looks exactly like a bug.
+   */
+  viewer_hidden: boolean
 }
 
 export interface ChecklistItem {

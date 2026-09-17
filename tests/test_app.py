@@ -17,7 +17,7 @@ def test_register_creates_first_user_as_admin(client):
 
 def test_login_accepts_correct_and_rejects_wrong_password(client):
     register(client)
-    client.get("/logout")
+    client.post("/logout")
 
     good = login(client)
     assert good.status_code == 200

@@ -25,23 +25,27 @@ This tracks where that's headed, in order.
 | R8 | Analytics - long-range trends, calendar, comparisons | Done |
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Done |
 | R10 | Polish - responsive, animation, a11y, performance | Done |
-| Ship | **Re-platform to Next.js + DynamoDB, then deploy to AWS** | Not started |
+| Ship | **Harden, then deploy to AWS** — security prerequisites | Done |
+| Ship | **Harden, then deploy to AWS** — package and deploy | In progress |
 
-Shipping is last, and the re-platform goes with it. An earlier plan put both after
-R2, reasoning that the data model needed to stop moving before the DynamoDB key
-design could be done. That reasoning does not survive inspection: the data model
-keeps moving all the way through R6 - R3 adds workouts, exercises and sets, R4 adds
-nutrition and sleep, R5 adds learning sessions, R6 adds goals and habits. Porting
-after R2 would mean revisiting the key design in every one of those phases.
+Shipping is last. It used to carry a re-platform with it - Next.js 16 on Amplify
+SSR with DynamoDB - and as of 2026-09-17 it does not. The app deploys as it is,
+Flask and SQLite included. [DEPLOYMENT.md](DEPLOYMENT.md) has the full reasoning;
+the short version is that the argument which made the storage rewrite *mandatory*
+expired when migration 011 moved Paths out of `artifacts/` and into SQL, and what
+was left was a choice between $0/month and an app that was live.
 
-So the app stays on Flask + SQLite for the whole build. That keeps feature velocity
-high (no toolchain switch mid-stream, the Python test suite and scoring engine keep
-working) and defers the port to the point where the schema is actually final. The
-cost is rewriting the Flask endpoints in TypeScript at the end - mechanical work,
-and far less of it than redesigning DynamoDB keys eight times.
+The decision to keep the app on Flask + SQLite for the whole build was right for
+its own reasons and those still hold: the data model kept moving all the way
+through R6, so porting after R2 would have meant redesigning DynamoDB keys in
+every phase. It just turns out the port at the end was not the small mechanical
+job it was billed as - 71 endpoints, 35 tables, a scoring engine and 441 tests,
+with analytics date-ranges and a leaderboard being the shapes DynamoDB handles
+worst.
 
-The React components are unaffected either way: they carry over to Next.js close to
-unchanged, so everything built in R2-R10 keeps its value.
+The re-platform is not cancelled, it is unblocked from the deploy. It becomes a
+migration to make later if the bill justifies it, with a working app in hand
+rather than a rewrite standing between the app and its users.
 
 ## Done before the redesign
 
@@ -121,7 +125,7 @@ Parity is reached phase by phase, not in one step:
 | Badges, leaderboard | R7 - Gamification depth |
 | Milestone insights, Excel export | R8 - Analytics (export surfaced; insights still `/classic`) |
 | Profile, password, settings | R9 - Onboarding (done) |
-| Admin dashboard | Ship |
+| Admin dashboard | Not yet - still `/classic` |
 
 **This plan was wrong, and the interface pass corrected it.** Waiting for parity
 assumed the two apps were equally discoverable. They were not: `/login` redirects
@@ -133,8 +137,12 @@ workspaces as missing.
 Discoverability beat parity. `/` is now the SPA; the classic dashboard keeps its
 own address at `/classic` for the handful of features that still only exist there,
 and `/app` redirects so existing bookmarks keep working. Both still share one
-database, so anything logged in either shows in both. The Ship phase removes the
-Jinja templates entirely.
+database, so anything logged in either shows in both.
+
+Retiring the Jinja templates was going to fall out of the Ship re-platform for
+free, because a rewrite would have deleted them anyway. Now that Ship deploys the
+Flask app as it is, that is a separate job nobody has done - so `/classic` stays,
+and the admin panel and milestone insights stay with it.
 
 ## R3 - Training
 
@@ -337,24 +345,31 @@ section already renders through `QueryBoundary`; the pages without an
 `EmptyState` are ones that cannot be empty - Settings, Today's checklist, the
 23-item achievement catalogue).
 
-## Ship - Re-platform and deploy
+## Ship - Harden and deploy
 
-The last phase. Port to the stack already running Tech-Portfolio in production -
-**Next.js 16 App Router on AWS Amplify SSR, with DynamoDB and S3** - then deploy to
-`neurallog.adityamore.dev`. See [DEPLOYMENT.md](DEPLOYMENT.md).
+The last phase, in two parts. See [DEPLOYMENT.md](DEPLOYMENT.md) for the host and
+[SECURITY.md](SECURITY.md) for what had to change first.
 
-- Frontend: React 19 + Vite + TypeScript + Tailwind v4 -> Next.js App Router. The
-  components, tokens and motion system carry over; routing and data fetching change.
-- Backend: Flask route handlers -> Next.js route handlers. `scoring/engine.py` is pure
-  functions over plain dicts with no database or framework imports, so it translates
-  mechanically; the SQL layer and migrations are rewritten for DynamoDB.
-- Storage: SQLite **and** the per-user `artifacts/` JSON files -> DynamoDB. Both have
-  to go: every serverless platform has an ephemeral filesystem.
-- Retires the legacy Jinja app, the `/app` mount point, and the unversioned Flask routes.
-- The security prerequisites in [DEPLOYMENT.md](DEPLOYMENT.md) land here, before the
-  app is reachable: no hard-coded secret fallback, closed registration, login rate
-  limiting, CSRF, session cookie flags.
-- Cost after this lands: ~$0/month within AWS's perpetual Always Free allowances.
+**Harden (done).** Everything that was fine on localhost and is not fine on a
+domain. No hard-coded secret fallback - production refuses to boot without a real
+`SECRET_KEY`. Registration defaults to invite-only in production, and the admin
+bit is assigned by name rather than won by whoever registers first. Login rate
+limiting, 10 per username and 30 per address in a 15-minute window, counted in a
+table so it survives multiple gunicorn workers. CSRF as `SameSite=Lax` plus a
+double-submit token, enforced in every environment so the whole suite exercises
+it. `GET /logout` no longer signs you out. Structured JSON errors with the
+traceback going to the log. And a leaderboard opt-out, because listing everyone's
+name, XP and streak to everyone else was never something anybody agreed to.
+
+**Deploy (next).** A Lightsail instance at `neurallog.adityamore.dev`, SQLite on
+the instance disk, Caddy terminating TLS, the frontend built in CI, and a nightly
+backup to S3 with a restore drill to prove it works. ~$5/month, which $94 of AWS
+credits covers for about fifteen months.
+
+Not in this phase any more: retiring the legacy Jinja app and the `/app` mount
+point. Both were bundled with the re-platform because the re-platform would have
+deleted them anyway. They are now separate small jobs, and `/classic` still holds
+the admin panel and the milestone insights.
 
 ## Beyond
 

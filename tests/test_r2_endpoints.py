@@ -151,7 +151,7 @@ def test_day_detail_is_per_user(client, app_module):
     """One user must not be able to read another's day."""
     register(client, username='alice')
     _seed(client, 1)
-    client.get('/logout')
+    client.post('/logout')
 
     register(client, username='bob')
     data = client.get(f'/api/days/{TODAY.isoformat()}').get_json()
@@ -304,7 +304,7 @@ def test_put_day_scores_the_same_as_the_legacy_wizard(client, app_module):
     client.put(f'/api/days/{TODAY.isoformat()}',
                json={'responses': _answers_for(items), 'path_id': 'batman-path'})
     via_put = client.get('/api/gamification/summary').get_json()['total_xp']
-    client.get('/logout')
+    client.post('/logout')
 
     register(client, username='viapost')
     _submit(client, TODAY.isoformat(), _items(client))

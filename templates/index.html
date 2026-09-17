@@ -338,6 +338,8 @@
         </div>
     </div>
 
+    <!-- Before app.js: it wraps window.fetch, so it has to win the race. -->
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

@@ -154,7 +154,7 @@ def test_workouts_are_per_user(client, app_module):
     bench = _exercise(client)
     workout_id = _log(client, TODAY.isoformat(), bench['id'],
                       [{'exercise_id': bench['id'], 'weight': 80, 'reps': 8}])
-    client.get('/logout')
+    client.post('/logout')
 
     register(client, username='bob')
     assert client.get(f'/api/workouts/{workout_id}').status_code == 404
@@ -349,7 +349,7 @@ def test_session_started_from_a_routine_inherits_its_name(client_with_library):
 
 def test_routines_are_scoped_to_their_owner(client_with_library, client):
     routine = _routine(client_with_library)
-    client_with_library.get('/logout')
+    client_with_library.post('/logout')
 
     register(client, username='someone-else')
     assert client.get('/api/routines').get_json()['routines'] == []

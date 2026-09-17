@@ -331,7 +331,7 @@ def test_a_personal_question_is_yours_alone(user, client, app_module):
     mine = [q["name"] for q in user.get("/api/survey").get_json()["questions"]]
     assert "Did you practise guitar?" in mine
 
-    user.get("/logout")
+    user.post("/logout")
     register(client, username="someone-else")
     theirs = client.get("/api/survey").get_json()["questions"]
 
@@ -350,7 +350,7 @@ def test_two_people_answering_a_shared_question_do_not_collide(user, client, app
             if q["is_core"] and q["type"] == "yes-no"][0]
 
     _submit(user, day, {core["name"]: "Yes"})
-    user.get("/logout")
+    user.post("/logout")
 
     register(client, username="someone-else")
     _submit(client, day, {core["name"]: "No"})
