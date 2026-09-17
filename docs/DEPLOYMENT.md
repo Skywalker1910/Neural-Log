@@ -6,25 +6,30 @@ the useful part, and a plan whose history is erased looks more certain than it
 earned.
 
 **Status:** the security prerequisites are done (see [SECURITY.md](SECURITY.md)).
-The host is chosen and not yet built.
+The Lightsail host is configured with the application, HTTPS certificate, and
+nightly local backups. See [AWS-LIGHTSAIL.md](AWS-LIGHTSAIL.md) for the current
+deployment, remaining setup, and production configuration.
 
 ## The decision, as it stands
 
 **Deploy the Flask app as it is**, to a small always-on AWS host, with SQLite on
-a real disk and a nightly backup to S3. No re-platform, no storage rewrite, no
+a real disk and nightly verified backups. No re-platform, no storage rewrite, no
 language change.
 
 | Layer | Choice |
 |---|---|
-| Compute | Amazon Lightsail instance, 1 GB plan (~$5/month) |
+| Compute | Amazon Lightsail instance, 1 GB Linux plan with public IPv4 ($7/month) |
 | Data | SQLite on the instance's disk — the current file, unchanged |
 | Backup | Nightly snapshot to S3, and Lightsail's own disk snapshots |
 | Delivery, TLS | Caddy on the instance, automatic Let's Encrypt |
 | DNS | `neurallog.adityamore.dev`, domain already owned |
 | Build | Frontend built in CI; the instance pulls a built image |
 
-At ~$5/month, $94 of credits is roughly fifteen months. That is the trade being
-made: real money, later, in exchange for the app being live now.
+At $7/month, $94 of eligible, unexpired credits would cover roughly thirteen
+months of compute, before backup charges. Confirm credit eligibility and expiry
+in the AWS billing console. This estimate uses the current
+[Lightsail bundle prices](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-bundles.html);
+the historical comparisons below reflect the earlier estimate.
 
 ## Why this, and not the re-platform
 
@@ -67,8 +72,8 @@ the app down — and all three are decisions made with a working app in hand.
 
 | | Monthly | Year 1 | After credits |
 |---|---|---|---|
-| Lightsail 1 GB instance | ~$5.00 | covered by credits | ~$60/year |
-| S3 backups (a few MB) | ~$0.00 | — | ~$0 |
+| Lightsail 1 GB instance with IPv4 | $7.00 | $84 before credits | $84/year |
+| S3 backups and Lightsail snapshots | usage-based | additional | additional |
 | Data transfer | included (2 TB) | — | included |
 | Domain | already owned | $0 | $0 |
 

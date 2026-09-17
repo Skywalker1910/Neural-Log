@@ -5,17 +5,15 @@ it's headed.
 
 ## Overview
 
-Flask serves the API and, currently, two frontends: the original server-rendered
-Jinja app at `/`, and the redesigned React SPA at `/app`. That overlap is
-deliberate and temporary - the SPA is being built workspace by workspace, and the
-Jinja app keeps working until it's fully replaced (see the redesign phases in
-[ROADMAP.md](ROADMAP.md)).
+Flask serves the React SPA at `/`, the JSON API, and the original server-rendered
+Jinja dashboard at `/classic`. The classic dashboard remains for administration
+and Excel export while the SPA owns the daily product experience.
 
 ```
 Browser
   |
-  |-- /            --> Jinja templates + static/js/app.js   (classic, being retired)
-  |-- /app         --> React SPA from frontend/dist         (the redesign)
+  |-- /            --> React SPA from frontend/dist
+  |-- /classic     --> Jinja templates + static/js/app.js
   |-- /api/*       --> JSON, session-cookie authenticated
   v
 Flask app (app.py)
@@ -118,15 +116,8 @@ hand-made PNG artwork for achievements and attributes.
 `static/images/icons/` holds the circular-badge-ready PNGs generated from the source
 art in `artifacts/` by `scripts/build_icons.py` (Pillow, dev-time only - not a
 runtime dependency). Every default-Path checklist item carries an `icon` key
-(`ICON_KEYS` in `app.py`, validated in `normalize_checklist_items`). Re-run the
-script after adding or replacing anything in `artifacts/`.
-
-## Screenshots
-
-`scripts/shoot.mjs` drives headless Edge over the DevTools Protocol to capture the
-SPA *while signed in* - it injects a session cookie, which a plain
-`--screenshot` run can't do. Useful for reviewing a workspace without clicking
-through it by hand. No dependencies (Node 24's built-in WebSocket).
+(`ICON_KEYS` in `app.py`). Re-run the script after adding or replacing anything in
+`artifacts/`.
 
 ## Known rough edges (tracked, not yet fixed)
 
@@ -142,6 +133,4 @@ through it by hand. No dependencies (Node 24's built-in WebSocket).
   deleted since it's real (if stale) user data; worth a manual cleanup pass.
 - Three `.venv*` folders exist locally from earlier experimentation - harmless
   (gitignored) but worth pruning to just one when convenient.
-- No CSRF protection and no login rate limiting yet - acceptable for a trusted
-  ~10-person group behind no public listing, but must land before the app is
-  reachable by a wider audience.
+- Account recovery, MFA, and an administrative audit log are not built yet.

@@ -1,9 +1,7 @@
 # Roadmap
 
-Neural Log began as a daily checklist with XP attached. It's becoming a personal
-operating system: track the things that actually move your life - training, food,
-sleep, study, goals - and watch a character sheet built from your own behaviour
-grow or shrink accordingly.
+Neural Log began as a daily checklist with XP attached. It now covers training,
+food, sleep, study, goals, and the analytics that connect them.
 
 This tracks where that's headed, in order.
 
@@ -26,7 +24,7 @@ This tracks where that's headed, in order.
 | R9 | Onboarding - profile, baselines, BMR/TDEE, goal setup | Done |
 | R10 | Polish - responsive, animation, a11y, performance | Done |
 | Ship | **Harden, then deploy to AWS** — security prerequisites | Done |
-| Ship | **Harden, then deploy to AWS** — package and deploy | In progress |
+| Ship | **Harden, then deploy to AWS** — package and deploy | Done |
 
 Shipping is last. It used to carry a re-platform with it - Next.js 16 on Amplify
 SSR with DynamoDB - and as of 2026-09-17 it does not. The app deploys as it is,
@@ -69,8 +67,9 @@ Ten workspaces built that way is how you get the dead-code bugs the foundation p
 had to clean up. R1 replaced the *frontend* stack without touching the backend's
 working endpoints:
 
-- **React + Vite + TypeScript** SPA in `frontend/`, served by Flask at `/app`. Flask
-  becomes a JSON API - 22 of its 26 routes already were.
+- **React + Vite + TypeScript** SPA in `frontend/`, served by Flask at `/`. Flask
+  serves the JSON API alongside the frontend; legacy Jinja surfaces remain at
+  `/classic`.
 - **Design system** - dark charcoal tokens, Inter, a type scale, category accents.
   See [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md).
 - **App shell** - sidebar on desktop, bottom tab bar on mobile, ten routed sections.
@@ -81,7 +80,7 @@ working endpoints:
 - **Migrations** - numbered SQL files and a ledger table, replacing ad-hoc
   `CREATE TABLE IF NOT EXISTS`. See [DATA-MODEL.md](DATA-MODEL.md).
 
-The classic Jinja app still serves `/`. R2 flips the default over.
+The SPA now serves `/`; the classic Jinja app remains available at `/classic`.
 
 ## R2 - Home and Today
 
@@ -361,15 +360,13 @@ it. `GET /logout` no longer signs you out. Structured JSON errors with the
 traceback going to the log. And a leaderboard opt-out, because listing everyone's
 name, XP and streak to everyone else was never something anybody agreed to.
 
-**Deploy (next).** A Lightsail instance at `neurallog.adityamore.dev`, SQLite on
-the instance disk, Caddy terminating TLS, the frontend built in CI, and a nightly
-backup to S3 with a restore drill to prove it works. ~$5/month, which $94 of AWS
-credits covers for about fifteen months.
+**Deploy (done).** A Lightsail instance at `neurallog.adityamore.dev` runs the
+Dockerized Flask/Gunicorn app with SQLite on the instance disk and Caddy
+terminating TLS. Verified nightly local backups and restore tooling are installed;
+off-instance backup storage and deployment automation remain follow-up work.
 
-Not in this phase any more: retiring the legacy Jinja app and the `/app` mount
-point. Both were bundled with the re-platform because the re-platform would have
-deleted them anyway. They are now separate small jobs, and `/classic` still holds
-the admin panel and the milestone insights.
+The remaining follow-up is retiring the legacy Jinja app and moving its admin and
+milestone-insight surfaces into the SPA. Until then, `/classic` remains supported.
 
 ## Beyond
 

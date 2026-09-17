@@ -1,46 +1,26 @@
-# Neural-Log
+# Neural Log
 
-A daily-discipline tracker for a small group of friends, built around a simple bet:
-if you make consistency visible - and eventually, game-like - you'll keep showing up.
+A personal activity tracker for training, nutrition, learning, habits, and long-term progress. Neural Log combines structured daily logs with an RPG-style attribute system, an auditable XP ledger, and analytics across each workspace.
 
 ## Motivation
 
-I wanted a way to actually see whether I'm becoming more disciplined, not just feel
-like I am. Wake time, workouts, meals, sleep, the one important task I said I'd do -
-logged daily, cheaply (one wizard, a minute a day), so patterns show up over weeks
-instead of staying a vague impression. The long-term intent is to make that logging
-itself rewarding: XP, levels, streaks, badges, a small leaderboard among the friends
-using it - see [docs/ROADMAP.md](docs/ROADMAP.md). This README covers what exists
-today; the roadmap covers what's next.
+I built Neural Log to keep workouts, meals, study sessions, and daily habits in one place. The goal is to see whether I am becoming more consistent over time, with enough detail to understand what is changing.
+
+The scoring system follows that goal. Logged sets, study time, sleep, and completed habits provide evidence for progress. Mood and self-ratings remain useful context without becoming points to optimize.
 
 ## What it does today
 
-- **Daily checklist wizard** - a themed set of daily questions ("Paths": Batman /
-  Thor / Captain America / Ironman, or your own custom one), answered one at a time,
-  keyboard-navigable.
-- **Custom Paths** - create, rename, reorder, and delete your own checklist items and
-  templates per user, each item weighted for XP.
-- **Gamification** - XP and levels for completing your checklist, a streak
-  multiplier, 8 badges, and overall + monthly leaderboards across the group. Full
-  scoring spec: [docs/GAMIFICATION.md](docs/GAMIFICATION.md).
-- **Accounts & admin** - session-based login; the first registered user becomes an
-  admin who can view/manage every other user's account and activity.
-- **Stats & streaks** - days logged, total activities, current streak, average
-  progress score, a Chart.js progress chart.
-- **Milestone insights** - a summary snapshot at 10/25/45/70/100 days logged.
-- **Excel export** - all of your activity history, formatted, one click.
-- **Custom icon set** - each checklist item shows a small circular badge icon,
-  generated from the artwork in `artifacts/` (see `scripts/build_icons.py`).
+- **Daily tracking** - shared survey, personal questions, schedules, completion history, and streaks.
+- **Training** - exercise library, routines, set logging, records, and volume trends.
+- **Nutrition and lifestyle** - foods, recipes, flexible measures, meals, sleep, hydration, steps, mood, and energy.
+- **Learning and goals** - study areas, timed sessions, milestones, tasks, and linked habits.
+- **Progression** - eight attributes, XP transactions, levels, achievements, and privacy-aware leaderboards.
+- **Analytics** - comparisons, calendar heatmaps, and honest handling of unobserved days.
+- **Classic tools** - administration and Excel export remain available at `/classic`.
 
 ## Architecture
 
-Flask serves a JSON API plus two frontends: the React + TypeScript SPA at `/`,
-which is the app, and the original server-rendered Jinja dashboard at `/classic`,
-kept only for the few features not yet ported (Excel export, admin). SQLite holds
-users/activities/XP; per-user checklist templates and daily submissions are
-JSON/JSONL files under `artifacts/`. Full
-write-up, including *why* it's split that way:
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Flask serves the React frontend and JSON API from one origin. SQLite is the authoritative store. Docker Compose runs Flask/Gunicorn and Caddy on AWS Lightsail; the database is mounted outside the application container. Full details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Setup
 
@@ -68,7 +48,7 @@ write-up, including *why* it's split that way:
    npm --prefix frontend run build
    python app.py
    ```
-   `http://localhost:5000` - the first account you register becomes admin.
+   `http://localhost:5000` - configure `ADMIN_USERNAME` for a deliberate admin.
 
    While working on the frontend, run Vite instead for hot reload, with Flask
    still running in another terminal:
@@ -97,13 +77,15 @@ Neural-Log/
 ├── .env.example            # copy to .env - see Setup
 ├── frontend/               # React + Vite + TS SPA (the app, served at /)
 ├── migrations/             # numbered SQL migrations + schema_migrations ledger
-├── templates/              # Jinja templates (classic app, being retired)
+├── templates/              # Jinja templates for the /classic surfaces
 ├── static/{css,js,images}/ # classic frontend + generated icon set (images/icons/)
 ├── artifacts/              # per-user Paths + checklist submissions (JSON/JSONL),
 │                           # plus the source art scripts/build_icons.py reads from
 ├── scripts/
-│   ├── build_icons.py      # (re)generates static/images/icons/ from artifacts/
-│   └── shoot.mjs           # authenticated SPA screenshots via DevTools Protocol
+│   ├── build_icons.py      # dev-time icon generation
+│   ├── check_migrations.py # fresh-database migration verification
+│   ├── backup.sh           # verified SQLite backups
+│   └── restore.sh          # database restore tool
 ├── tests/                  # pytest smoke tests
 └── docs/
     ├── ARCHITECTURE.md     # how it's built, and why
@@ -125,13 +107,7 @@ Neural-Log/
 
 ## Roadmap
 
-Mid-redesign: turning the checklist app into a full personal-development platform -
-ten workspaces, an RPG-style attribute system driven by real behaviour, and analytics
-over it all. Foundation (R1), Home and Today (R2), Training (R3), Nutrition +
-Lifestyle (R4), Learning (R5), Goals + Habits (R6) and Gamification depth (R7)
-are done; Analytics (R8) is next. Deployment comes last, once the product is
-complete - see [docs/ROADMAP.md](docs/ROADMAP.md).
-See [docs/ROADMAP.md](docs/ROADMAP.md).
+The core workspaces are built and the application is running on AWS Lightsail. The next work is release automation, off-instance backups, operational monitoring, and retiring the remaining classic administration surfaces. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

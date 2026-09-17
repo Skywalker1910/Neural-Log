@@ -134,14 +134,9 @@ flip `enforce_admins` to `true` and the strict reading applies to everyone.
 
 ## What is NOT set up, and why
 
-**There is no deployment pipeline yet.** Deployment is the Ship phase, after R10,
-and it comes with a re-platform from Flask + SQLite to Next.js + DynamoDB. A CD
-workflow written today would target infrastructure that does not exist, against
-an application architecture that is going to change - and a half-configured
-deploy workflow sitting broken for five phases is worse than none, because it
-looks like deployment is ready when it is not.
-
-When the Ship phase arrives, CD gets added here.
+Image publishing is prepared in this checkout, but deployment to Lightsail is a
+separate manual operation. The instance does not watch GitHub and no deployment
+webhook is configured.
 
 ## Dependency updates - currently off
 

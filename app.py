@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import sqlite3
 import json
 from pathlib import Path
-from uuid import uuid4
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import os
@@ -59,56 +58,6 @@ def get_user_paths_file_path(username):
     path_dir = Path('artifacts') / 'paths'
     path_dir.mkdir(parents=True, exist_ok=True)
     return path_dir / f'{safe_username}.json'
-
-def normalize_checklist_items(items):
-    """Normalize path checklist items for safe persistence"""
-    normalized_items = []
-    for item in items or []:
-        if not isinstance(item, dict):
-            continue
-
-        name = str(item.get('name', '')).strip()
-        if not name:
-            continue
-
-        item_type = str(item.get('type', 'yes-no')).strip() or 'yes-no'
-
-        try:
-            weight = int(item.get('weight', 1))
-        except (TypeError, ValueError):
-            weight = 1
-        weight = max(0, min(5, weight))
-
-        icon = str(item.get('icon', '')).strip()
-        if icon not in ICON_KEYS:
-            icon = 'default'
-
-        normalized_item = {
-            'id': str(item.get('id') or uuid4()),
-            'name': name,
-            'type': item_type,
-            'icon': icon,
-            'weight': weight
-        }
-
-        options = item.get('options')
-        if isinstance(options, list):
-            normalized_item['options'] = [str(option).strip() for option in options if str(option).strip()]
-
-        sub_response = item.get('subResponse')
-        if isinstance(sub_response, dict):
-            sub_options = sub_response.get('options', [])
-            if not isinstance(sub_options, list):
-                sub_options = []
-            normalized_item['subResponse'] = {
-                'prompt': str(sub_response.get('prompt', '')).strip(),
-                'type': str(sub_response.get('type', 'radio')).strip() or 'radio',
-                'options': [str(option).strip() for option in sub_options if str(option).strip()]
-            }
-
-        normalized_items.append(normalized_item)
-
-    return normalized_items
 
 def _resolve_user_id(conn, username):
     row = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
@@ -177,9 +126,26 @@ def save_checklist_to_file(user_id, username, activity_id, payload):
         file.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 def get_db_connection():
-    """Create a database connection"""
+    """Create a database connection.
+
+    Two pragmas, both of which only start mattering once more than one process
+    is serving requests - which is exactly what gunicorn does and the Werkzeug
+    dev server never did.
+
+    **WAL** lets readers and writers work at the same time. In the default
+    journal mode a single write locks the whole database, so one person saving a
+    workout blocks everyone else's dashboard for the duration. It is a property
+    of the database file rather than the connection, so setting it here is
+    idempotent - the first connection switches it and the rest confirm it.
+
+    **busy_timeout** decides what happens when a lock is hit anyway: wait five
+    seconds, or fail instantly with "database is locked". Without it, two
+    concurrent writes are a 500 rather than a short pause.
+    """
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=5000')
     return conn
 
 def run_migrations(conn):
@@ -1087,7 +1053,27 @@ border-radius:6px}a{color:#2997ff}</style></head><body>
 # GET /api/typo would hand back the SPA shell with a 200, and a fetch() would
 # fail somewhere far away trying to parse HTML as JSON.
 SERVER_PREFIXES = ('api/', 'static/', 'assets/', 'login', 'logout', 'register',
-                   'admin', 'classic')
+                   'admin', 'classic', 'healthz')
+
+
+@app.route('/healthz')
+def healthz():
+    """Is this container actually serving, or merely running?
+
+    Deliberately touches the database. A process that has booted but cannot read
+    its own data is not healthy, and a health check that only proves Python
+    started would let Docker keep routing traffic to it. Unauthenticated,
+    because a check that needs a session is a check that cannot run.
+    """
+    try:
+        conn = get_db_connection()
+        conn.execute('SELECT 1 FROM schema_migrations LIMIT 1').fetchone()
+        conn.close()
+    except Exception:
+        app.logger.exception('Health check could not reach the database')
+        return jsonify({'status': 'unhealthy'}), 503
+
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/assets/<path:filename>')

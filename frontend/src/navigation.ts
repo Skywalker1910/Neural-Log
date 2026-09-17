@@ -61,9 +61,6 @@ export interface NavSection {
   accent: Accent
   /** Shown in the mobile bottom bar rather than the overflow sheet. */
   primary?: boolean
-  /** One-liner used by the placeholder pages until the phase that builds it lands. */
-  blurb: string
-  phase: number
 }
 
 export const NAV_SECTIONS: NavSection[] = [
@@ -73,8 +70,6 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: House,
     accent: 'brand',
     primary: true,
-    blurb: 'Your command centre: level, discipline score, streaks and today at a glance.',
-    phase: 2,
   },
   {
     label: 'Today',
@@ -82,8 +77,6 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: CalendarCheck,
     accent: 'discipline',
     primary: true,
-    blurb: 'Everything planned for today - routines, training, learning, meals - in one timeline.',
-    phase: 2,
   },
   {
     label: 'Training',
@@ -91,8 +84,6 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: Dumbbell,
     accent: 'fitness',
     primary: true,
-    blurb: 'Routines, the exercise library, set-by-set logging and strength progression.',
-    phase: 3,
   },
   {
     label: 'Nutrition',
@@ -100,56 +91,42 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: UtensilsCrossed,
     accent: 'lifestyle',
     primary: true,
-    blurb: 'Calories, macros, hydration and energy balance against your estimated TDEE.',
-    phase: 4,
   },
   {
     label: 'Lifestyle',
     path: '/lifestyle',
     icon: HeartPulse,
     accent: 'recovery',
-    blurb: 'Sleep, steps, hydration, mood and the habits that quietly drive everything else.',
-    phase: 4,
   },
   {
     label: 'Learning',
     path: '/learning',
     icon: GraduationCap,
     accent: 'learning',
-    blurb: 'Subjects, skills, tracked study sessions and knowledge progression.',
-    phase: 5,
   },
   {
     label: 'Goals',
     path: '/goals',
     icon: Target,
     accent: 'goals',
-    blurb: 'Long and short term goals, milestones and the habits that feed them.',
-    phase: 6,
   },
   {
     label: 'Achievements',
     path: '/achievements',
     icon: Trophy,
     accent: 'discipline',
-    blurb: 'Badges earned and still locked, across discipline, fitness and learning.',
-    phase: 7,
   },
   {
     label: 'Analytics',
     path: '/analytics',
     icon: ChartLine,
     accent: 'learning',
-    blurb: 'Long-range trends: discipline, training volume, study hours, sleep, body metrics.',
-    phase: 8,
   },
   {
     label: 'Profile',
     path: '/profile',
     icon: User,
     accent: 'brand',
-    blurb: 'Your attributes, body metrics, baseline estimates and personal details.',
-    phase: 9,
   },
 ]
 
@@ -158,8 +135,6 @@ export const SETTINGS_SECTION: NavSection = {
   path: '/settings',
   icon: Settings,
   accent: 'brand',
-  blurb: 'Units, targets, reminders and account preferences.',
-  phase: 9,
 }
 
 /** Dev-only gallery proving every primitive renders against the tokens. */
@@ -168,8 +143,6 @@ export const DESIGN_SECTION: NavSection = {
   path: '/_design',
   icon: Activity,
   accent: 'brand',
-  blurb: 'Component gallery for the design system.',
-  phase: 1,
 }
 
 export const PRIMARY_SECTIONS = NAV_SECTIONS.filter((section) => section.primary)

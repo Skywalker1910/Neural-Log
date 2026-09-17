@@ -1,0 +1,64 @@
+# TLS, and the two headers gunicorn needs to know who it is talking to.
+#
+# Caddy gets a Let's Encrypt certificate on first start and renews it forever,
+# with no cron job and no certbot. That is most of why it is here rather than
+# nginx: the certificate is the part of a small deployment most likely to expire
+# unnoticed on a Sunday.
+#
+# The domain is read from the environment so this file is the same in every
+# deployment. Set NEURAL_LOG_DOMAIN and NEURAL_LOG_ACME_EMAIL in .env.
+
+{
+	# Where Let's Encrypt sends expiry warnings if renewal ever does fail.
+	email {$NEURAL_LOG_ACME_EMAIL}
+}
+
+{$NEURAL_LOG_DOMAIN} {
+	encode zstd gzip
+
+	# `app` is the compose service name; Docker's embedded DNS resolves it.
+	# Plain HTTP over the compose network, which never leaves the instance.
+	reverse_proxy app:8000 {
+		# X-Forwarded-For and X-Forwarded-Proto, which ProxyFix in security.py
+		# reads. Without them every request looks like it came from Caddy's own
+		# container address over HTTP - so the rate limiter treats the whole
+		# internet as one client, and Flask builds http:// URLs that a Secure
+		# cookie is never sent to.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+	}
+
+	# Browser-side hardening. None of this replaces anything in security.py; it
+	# closes the gaps a server cannot close from inside a response body.
+	header {
+		# Only speak HTTPS to this host, for a year, and remember it even if the
+		# first visit was typed as http://. Long enough to be meaningful, and a
+		# commitment - a domain with HSTS set cannot serve plain HTTP again
+		# until it expires in every visitor's browser.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+		# Do not let another site frame this one. The clickjacking defence that
+		# costs nothing.
+		X-Frame-Options "DENY"
+
+		# Do not guess at content types. Stops a file that happens to contain
+		# markup being rendered as HTML because the browser thought it knew
+		# better.
+		X-Content-Type-Options "nosniff"
+
+		# Send the origin, not the full path, to other sites. Where you were in
+		# the app is nobody else's business.
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# The app asks for none of these, so refuse them all up front.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

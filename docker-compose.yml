@@ -1,0 +1,76 @@
+# The whole deployment, on one instance.
+#
+# Two containers. The app never touches the internet directly and Caddy never
+# touches the database, which is most of what a reverse proxy is for.
+#
+# Copy this to the instance along with Caddyfile and a .env, then:
+#   docker compose pull && docker compose up -d
+#
+# Nothing is built here. The image comes from the registry, built by CI from a
+# commit that passed its tests - so what runs in production is the artefact that
+# was tested, not a rebuild of the same source that might differ.
+
+services:
+  app:
+    image: ${NEURAL_LOG_IMAGE:-ghcr.io/skywalker1910/neural-log:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Not in .env, because these are properties of the deployment rather than
+      # secrets, and a .env that mixes the two gets edited nervously.
+      NEURAL_LOG_ENV: production
+      DATABASE: /data/neural_log.db
+      PORT: "8000"
+      FLASK_DEBUG: "0"
+    volumes:
+      # The only stateful thing in the stack. Everything else can be destroyed
+      # and recreated from the registry; this directory is the app.
+      - ./data:/data
+    # No `ports:`. The app is reachable from Caddy over the compose network and
+    # from nowhere else - so a misconfigured firewall cannot expose gunicorn on
+    # :8000 with no TLS in front of it.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        # Without this a container's log grows until the 40 GB disk is full,
+        # which presents as the app dying for no visible reason.
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      NEURAL_LOG_DOMAIN: ${NEURAL_LOG_DOMAIN:?set NEURAL_LOG_DOMAIN in .env}
+      NEURAL_LOG_ACME_EMAIL: ${NEURAL_LOG_ACME_EMAIL:?set NEURAL_LOG_ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Losing this directory means re-issuing on the
+      # next start, and Let's Encrypt rate-limits that - five per week per
+      # domain, which a redeploy loop can exhaust in an afternoon.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

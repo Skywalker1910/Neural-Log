@@ -78,12 +78,6 @@ def habit_payload(row):
     return item
 
 
-def has_imported(conn, user_id):
-    row = conn.execute('SELECT 1 FROM habit_imports WHERE user_id = ?',
-                       (user_id,)).fetchone()
-    return row is not None
-
-
 # The single survey replaced four Paths, but three clients still speak the
 # paths payload, so it survives as a compatibility view with exactly one entry.
 SURVEY_ID = 'daily-survey'
@@ -242,36 +236,6 @@ def _save_habits(conn, user_id, group_id, items):
     for slug, row in existing.items():
         if slug not in live_slugs and not row['archived']:
             conn.execute('UPDATE habits SET archived = 1 WHERE id = ?', (row['id'],))
-
-
-def import_paths(conn, user_id, payload, source='artifacts/paths'):
-    """One-time import of a user's JSON paths into SQL.
-
-    Recorded in habit_imports so it runs exactly once per user. Without that
-    marker a later edit that removed a path would be undone on the next load by
-    re-importing the original file.
-    """
-    if has_imported(conn, user_id):
-        return {'groups': 0, 'habits': 0, 'completions': 0}
-
-    save_paths(conn, user_id, payload)
-
-    groups = conn.execute('SELECT COUNT(*) AS n FROM habit_groups WHERE user_id = ?',
-                          (user_id,)).fetchone()['n']
-    habits = conn.execute('SELECT COUNT(*) AS n FROM habits WHERE user_id = ?',
-                          (user_id,)).fetchone()['n']
-
-    conn.execute(
-        'INSERT INTO habit_imports (user_id, source, groups_imported, habits_imported) '
-        'VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO NOTHING',
-        (user_id, source, groups, habits),
-    )
-
-    completions = backfill_completions(conn, user_id)
-    conn.execute('UPDATE habit_imports SET completions_backfilled = ? WHERE user_id = ?',
-                 (completions, user_id))
-
-    return {'groups': groups, 'habits': habits, 'completions': completions}
 
 
 def backfill_completions(conn, user_id):

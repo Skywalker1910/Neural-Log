@@ -6,12 +6,7 @@ import { SkeletonGrid } from './components/ui/Skeleton'
 import { Home } from './pages/Home'
 import { NotFound } from './pages/NotFound'
 import { Today } from './pages/Today'
-import { PlaceholderPage } from './pages/PlaceholderPage'
-import { DESIGN_SECTION, NAV_SECTIONS, SETTINGS_SECTION } from './navigation'
-
-/** Sections that have a real page now. Anything else still gets a placeholder. */
-const BUILT = new Set(['/today', '/training', '/nutrition', '/lifestyle', '/learning',
-  '/goals', '/achievements', '/analytics', '/profile'])
+import { DESIGN_SECTION, SETTINGS_SECTION } from './navigation'
 
 /*
   Route-level code splitting (R10).
@@ -59,13 +54,7 @@ function Lazy({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<SkeletonGrid />}>{children}</Suspense>
 }
 
-/**
- * Phase 1 routed every section to an honest placeholder. Each later phase swapped
- * one of these for the real workspace; the shell around them never changed.
- */
 export default function App() {
-  const [, ...rest] = NAV_SECTIONS
-
   return (
     <Routes>
       {/* Outside AppShell on purpose: the first-run flow is a full-screen task,
@@ -89,15 +78,6 @@ export default function App() {
         <Route path="/achievements" element={<Lazy><Achievements /></Lazy>} />
         <Route path="/analytics" element={<Lazy><Analytics /></Lazy>} />
         <Route path="/profile" element={<Lazy><Profile /></Lazy>} />
-        {rest
-          .filter((section) => !BUILT.has(section.path))
-          .map((section) => (
-            <Route
-              key={section.path}
-              path={section.path}
-              element={<PlaceholderPage section={section} />}
-            />
-          ))}
         <Route path={SETTINGS_SECTION.path} element={<Lazy><Settings /></Lazy>} />
         <Route path={DESIGN_SECTION.path} element={<Lazy><DesignSystem /></Lazy>} />
         <Route path="*" element={<NotFound />} />

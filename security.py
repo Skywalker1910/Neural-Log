@@ -41,6 +41,7 @@ import secrets
 
 from flask import g, jsonify, make_response, request, session
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # --- environment -------------------------------------------------------------
 
@@ -415,6 +416,19 @@ def init_security(app):
     """Apply every control above. Called once, from app.py, at import time."""
     app.config['SECRET_KEY'] = resolve_secret_key()
     app.config.update(session_config())
+
+    if IS_PRODUCTION:
+        # In production a reverse proxy terminates TLS and forwards to gunicorn
+        # over plain HTTP on localhost. Without this, Flask believes every
+        # request arrived unencrypted from the proxy's own address - so
+        # `url_for(_external=True)` builds http:// links that a Secure cookie
+        # will not be sent to, and the rate limiter counts the whole internet as
+        # one client.
+        #
+        # Exactly one hop is trusted, because exactly one is deployed. These
+        # headers are client-supplied; trusting two proxies when one exists lets
+        # a caller forge the entry the app then reads as the real address.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Touched at startup so a missing REGISTRATION_CODE in production fails the
     # boot rather than the first friend who tries to sign up.

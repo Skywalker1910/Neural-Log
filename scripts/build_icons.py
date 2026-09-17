@@ -44,7 +44,7 @@ ICON_SOURCES = {
 
 # These already carry real transparency around a roughly-square subject -
 # use the alpha channel's own bbox instead of edge-detecting the backdrop.
-ALPHA_CROPPED_SOURCES = {"Chess.png", "breakfast-1.png", "breakfast-2.png"}
+ALPHA_CROPPED_SOURCES = {"Chess.png", "breakfast-1.png"}
 
 
 def square_bbox_from(bbox, canvas_size, margin=BBOX_MARGIN):

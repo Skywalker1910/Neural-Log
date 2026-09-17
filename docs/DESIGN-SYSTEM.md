@@ -334,5 +334,5 @@ Any *other* row that is a grid item and holds fixed-width controls needs the sam
 floor; the Training routine rows are the current example.
 
 **Probing for it.** Compare `document.documentElement.scrollWidth` against
-`clientWidth` at 390px. Equal means no horizontal scroll. `scripts/shoot.mjs`
-takes a `SHOOT_EVAL` env var for exactly this.
+`clientWidth` at 390px. Equal means no horizontal scroll. The same check can be
+run with browser developer tools when reviewing a workspace.
