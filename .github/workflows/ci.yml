@@ -173,10 +173,10 @@ jobs:
         env:
           LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
           LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
-          IMAGE_TAG: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
         run: |
+          image_tag="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
           ssh -i ~/.ssh/lightsail_key -o IdentitiesOnly=yes "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
-            "cd /srv/neurallog && sudo env NEURAL_LOG_IMAGE='$IMAGE_TAG' docker compose pull app && sudo env NEURAL_LOG_IMAGE='$IMAGE_TAG' docker compose up -d --wait --wait-timeout 120"
+            "cd /srv/neurallog && sudo env NEURAL_LOG_IMAGE='$image_tag' docker compose pull app && sudo env NEURAL_LOG_IMAGE='$image_tag' docker compose up -d --wait --wait-timeout 120"
 
       - name: Verify the public health endpoint
         run: curl --fail --silent --show-error --retry 5 --retry-delay 5 https://neurallog.adityamore.dev/healthz
