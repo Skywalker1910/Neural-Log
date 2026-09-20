@@ -72,7 +72,8 @@ unique, so something like `neurallog-backups-<4 random digits>`.
 | Bucket Versioning | **Enable** | An overwrite keeps the old version, so a corrupted upload cannot replace a good backup |
 | Default encryption | SSE-S3 | Free, and one less thing to answer for |
 
-Then **Management → Create lifecycle rule**, applied to the whole bucket:
+Then **Management → Create lifecycle rule**, named `backup-retention-365d`,
+applied to the whole bucket:
 
 - Expire current versions after **365 days**
 - Permanently delete noncurrent versions after **30 days**
@@ -80,6 +81,9 @@ Then **Management → Create lifecycle rule**, applied to the whole bucket:
 
 At roughly 90 KB a night this is pennies a year either way; the rule exists so
 the bucket does not accumulate forever without anyone deciding that it should.
+The name carries the retention because the question you will actually be asking
+when you read it is "why is my two-year-old backup gone", and a name can answer
+that without opening the rule.
 
 ### 2. Write-only credentials
 
@@ -117,20 +121,54 @@ Attach the policy directly. Then **Security credentials → Create access key �
 Application running outside AWS**, and keep the secret somewhere safe — the
 console shows it once.
 
-### 3. Point the instance at it
+### 3. Update the scripts on the instance
+
+**Continuous deployment does not do this.** The pipeline pulls the container
+image and restarts Compose; it never touches `/srv/neurallog/scripts` or the
+systemd unit. Merging a change to `backup.sh` therefore deploys the *app* and
+leaves the *instance* running whatever script it already had — which is a
+good way to spend an evening debugging a fix that was never installed.
+
+The repository is public, so the instance can fetch its own files. No SSH key
+needed, and GitHub serves LF, so the line-ending trap does not arise either:
+
+```bash
+cd /srv/neurallog
+BASE=https://raw.githubusercontent.com/Skywalker1910/Neural-Log/main
+
+curl -fsSL "$BASE/scripts/backup.sh"  -o scripts/backup.sh
+curl -fsSL "$BASE/scripts/restore.sh" -o scripts/restore.sh
+curl -fsSL "$BASE/scripts/drill.sh"   -o scripts/drill.sh
+chmod +x scripts/*.sh
+
+sudo curl -fsSL "$BASE/deploy/neurallog-backup.service" -o /etc/systemd/system/neurallog-backup.service
+```
+
+Check you got what you meant to before going on:
+
+```bash
+grep -q write_status scripts/backup.sh && echo "NEW" || echo "still the old one"
+file scripts/backup.sh          # must not say CRLF
+```
+
+### 4. Point the instance at it
 
 SSH in, then:
 
 ```bash
 sudo install -m 600 /dev/null /etc/neurallog-backup.env
 sudo tee /etc/neurallog-backup.env >/dev/null <<'EOF'
-NEURAL_LOG_BACKUP_BUCKET=your-bucket-name
+NEURAL_LOG_BACKUP_BUCKET=PUT-YOUR-REAL-BUCKET-NAME-HERE
 NEURAL_LOG_BACKUP_LOCAL_ONLY=0
 AWS_DEFAULT_REGION=us-east-1
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 EOF
 ```
+
+Every one of those five values has to be replaced. The bucket name is the one
+that gets missed, because a wrong bucket fails as `AccessDenied` — which reads
+like a credentials problem and is not.
 
 Mode 0600 and owned by root: the systemd unit reads it as root, and nothing else
 needs to.
@@ -143,9 +181,9 @@ curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/aw
 unzip -q /tmp/awscli.zip -d /tmp && sudo /tmp/aws/install && rm -rf /tmp/aws /tmp/awscli.zip
 ```
 
-The unit already carries `EnvironmentFile=-/etc/neurallog-backup.env`, so the
-only change is removing the local-only default it currently overrides. Copy the
-updated `deploy/neurallog-backup.service`, then:
+The unit copied in step 3 carries `EnvironmentFile=-/etc/neurallog-backup.env`
+and no local-only default of its own, so the file above is the only thing
+deciding where backups go. Then:
 
 ```bash
 sudo systemctl daemon-reload
@@ -153,10 +191,30 @@ sudo systemctl start neurallog-backup.service
 sudo journalctl -u neurallog-backup.service --no-pager -n 20
 ```
 
-You are looking for `uploaded; cannot confirm size (write-only credentials)`.
-That message is success — the upload went through and the `HEAD` that would
-confirm its size was denied, which is exactly what write-only credentials should
-do. Confirm the object exists from the console or your own machine.
+You are looking for two lines:
+
+```
+uploading 88439 bytes to s3://your-bucket-name/db/2026/09/neural_log-...db.gz
+uploaded; cannot confirm size (write-only credentials)
+```
+
+**Bytes rather than `88K`** means the new script is the one running — the old one
+logged `du -h` output, so that number is the quickest way to tell whether the
+step above actually landed.
+The second line is success, not a warning: the upload went through and the
+`HEAD` that would confirm its size was denied, which is exactly what write-only
+credentials should do.
+
+**Confirm the object exists from the console**, once. "Upload accepted" and
+"the object is there" are different claims, and the point of these credentials is
+that the instance can only ever make the first one.
+
+A placeholder left in `NEURAL_LOG_BACKUP_BUCKET` fails as `AccessDenied` rather
+than `NoSuchBucket`, because the IAM policy is scoped to one bucket ARN and
+refuses the call before S3 is ever asked whether the other bucket exists. Worth
+knowing, because the error names the wrong problem — and because it is the
+least-privilege policy doing exactly its job. Bucket names are global, and
+something plausible like `your-bucket-name` may well belong to a stranger.
 
 Admin → System status should now read `Backup: just now` in green.
 
