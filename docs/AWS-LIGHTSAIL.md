@@ -36,6 +36,11 @@ of the last backup and whether it left the instance. Amber ("on this instance
 only") means the S3 setup in BACKUPS.md has not been done, and losing the
 instance would lose both the database and every snapshot of it.
 
+Changes to `scripts/` or the systemd units do **not** reach the instance through
+CI. The deploy job pulls the container image and restarts Compose, and nothing
+else; see step 3 of [BACKUPS.md](BACKUPS.md) for pulling those files down onto
+the box, which the public repository makes a `curl` rather than an `scp`.
+
 Operational commands on the instance:
 
 ```bash
