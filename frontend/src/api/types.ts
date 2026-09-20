@@ -85,6 +85,33 @@ export interface BackupStatus {
   local_copies?: number | null
 }
 
+/**
+ * What the assistant has cost, for the admin page.
+ *
+ * `estimated` is always true and the UI must say so. These dollars are computed
+ * from configurable rates so a spend cap can be enforced before a request is
+ * made - something the provider's own billing, which lags and reports the whole
+ * organisation, cannot do. The invoice remains the authority.
+ */
+export interface AiUsageReport {
+  days: number
+  estimated: boolean
+  configured: boolean
+  chat_model: string
+  extraction_model: string
+  monthly_budget_usd: number
+  totals: {
+    calls: number
+    failures: number
+    input_tokens: number
+    output_tokens: number
+    cached_input_tokens: number
+    estimated_cost_usd: number
+  }
+  by_feature: { feature: string; calls: number; estimated_cost_usd: number }[]
+  by_day: { day: string; calls: number; estimated_cost_usd: number }[]
+}
+
 export interface ActivityByDate {
   date: string
   count: number

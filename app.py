@@ -2104,6 +2104,7 @@ from goals_api import init_goals  # noqa: E402
 from analytics_api import init_analytics  # noqa: E402
 from onboarding_api import init_onboarding  # noqa: E402
 from survey_api import init_survey  # noqa: E402
+from assistant_api import init_assistant  # noqa: E402
 
 init_training(app, get_db_connection, login_required, recompute_after_change)
 
@@ -2124,6 +2125,12 @@ init_goals(app, get_db_connection, login_required)
 init_analytics(app, get_db_connection, login_required)
 init_onboarding(app, get_db_connection, login_required, recompute_after_change)
 init_survey(app, get_db_connection, login_required, recompute_after_change)
+
+# The assistant is the one blueprint that also needs admin_required: its spend is
+# reported on /admin rather than to the person spending it. It takes recompute
+# because a confirmed proposal writes meals and sleep, which move scores exactly
+# as they would if the person had typed them in.
+init_assistant(app, get_db_connection, login_required, admin_required, recompute_after_change)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.
