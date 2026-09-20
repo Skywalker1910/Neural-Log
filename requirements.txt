@@ -5,3 +5,6 @@ gunicorn==22.0.0
 
 # dev / test only
 pytest==8.2.0
+
+# The assistant (OpenAI Responses API). Optional - the app runs fully without it.
+openai==3.16.2
