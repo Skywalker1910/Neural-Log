@@ -1,10 +1,27 @@
+# Nightly verified backup. Paired with neurallog-backup.timer.
+#
+# There is deliberately no `Environment=NEURAL_LOG_BACKUP_LOCAL_ONLY=` default
+# here. scripts/backup.sh refuses to run unless it is told either a bucket or an
+# explicit local-only, and that refusal is the feature: a unit that quietly
+# falls back to writing snapshots onto the same disk as the database would keep
+# reporting success while protecting against nothing.
+#
+# So the choice lives in /etc/neurallog-backup.env, root-owned and mode 0600,
+# and losing that file fails the backup loudly instead of downgrading it
+# silently. See docs/BACKUPS.md.
+#
+#   NEURAL_LOG_BACKUP_BUCKET=neurallog-backups-1234
+#   NEURAL_LOG_BACKUP_LOCAL_ONLY=0
+#   AWS_DEFAULT_REGION=us-east-1
+#   AWS_ACCESS_KEY_ID=...
+#   AWS_SECRET_ACCESS_KEY=...
+
 [Unit]
 Description=Verified Neural Log SQLite backup
 
 [Service]
 Type=oneshot
 WorkingDirectory=/srv/neurallog
-Environment=NEURAL_LOG_BACKUP_LOCAL_ONLY=1
 Environment=NEURAL_LOG_KEEP_LOCAL=14
 EnvironmentFile=-/etc/neurallog-backup.env
 ExecStart=/bin/bash /srv/neurallog/scripts/backup.sh

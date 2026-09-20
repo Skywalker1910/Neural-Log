@@ -23,17 +23,18 @@ The image was built on the instance for the initial deployment, with 2 GB of
 swap configured. Existing accounts and history were imported using SQLite's
 backup API. The health and login endpoints work over HTTPS from the instance,
 and a backup was decompressed and checked in a separate temporary directory.
-Public HTTPS health verification returns HTTP 200. The Lightsail TCP 80 rule
-needs to be restored after it was replaced with the TCP 443 rule; keep both
-enabled for HTTP redirects and certificate validation.
+Public HTTPS health verification returns HTTP 200, and TCP 80 redirects to it
+with a 308. Both 80 and 443 must stay open: 80 for the redirect and for
+Let's Encrypt's HTTP-01 challenge at renewal, 443 for everything else.
 
-Nightly backups currently stay on the instance. S3 replication is **not yet
-configured**. A verified initial backup was also downloaded to the workstation's
-ignored `backups/` directory. To enable S3 for the scheduled job, install the AWS
-CLI, configure restricted credentials for root, and create
-`/etc/neurallog-backup.env` with `NEURAL_LOG_BACKUP_BUCKET=<bucket-name>` and
-`NEURAL_LOG_BACKUP_LOCAL_ONLY=0`. Keep that file readable only by root. Then run
-`sudo systemctl start neurallog-backup.service` and confirm the uploaded object.
+Backups have their own write-up: **[BACKUPS.md](BACKUPS.md)** covers what runs,
+how to send snapshots off the instance to S3 with write-only credentials, and the
+restore drill. Read that rather than improvising from here.
+
+The short version of the state to check: **Admin -> System status** shows the age
+of the last backup and whether it left the instance. Amber ("on this instance
+only") means the S3 setup in BACKUPS.md has not been done, and losing the
+instance would lose both the database and every snapshot of it.
 
 Operational commands on the instance:
 
@@ -43,6 +44,7 @@ sudo docker compose ps
 sudo docker compose logs --tail 50 app caddy
 sudo systemctl list-timers neurallog-backup.timer
 sudo journalctl -u neurallog-backup.service --no-pager -n 30
+sudo ./scripts/drill.sh          # rehearse a restore; touches nothing live
 ```
 
 For a restore, stop the app and preserve its current database before replacing
@@ -121,14 +123,23 @@ scp -i <ssh-key-path> -r scripts ubuntu@<static-ip>:/srv/neurallog/
 ```
 
 Copy the example `.env` only for the initial setup. Future releases must preserve
-the instance's secrets and database. If files came from a Windows checkout,
-normalize shell script line endings on the host:
+the instance's secrets and database.
 
 ```bash
 cd /srv/neurallog
-sed -i 's/\r$//' scripts/backup.sh scripts/restore.sh
 chmod 600 .env
+chmod +x scripts/*.sh
 ```
+
+Line endings used to need fixing by hand at this point: a Windows checkout
+produces CRLF, and a script whose shebang reads `#!/usr/bin/env bash` followed by
+a carriage return fails with "bad interpreter", naming a file that is plainly
+right there. `.gitattributes` now pins LF on the scripts, the Dockerfile, the
+Caddyfile and the unit files, so a fresh checkout copies correctly.
+
+An **existing** checkout keeps whatever it already had. Re-normalize one with
+`git rm --cached -r . && git reset --hard`, and confirm with
+`file scripts/backup.sh`.
 
 ## 4. Configure production
 

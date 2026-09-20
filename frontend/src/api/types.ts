@@ -51,6 +51,38 @@ export interface AdminOverview {
   }
   registration_mode: 'open' | 'invite' | 'closed'
   database_integrity: string
+  backup: BackupStatus
+}
+
+/**
+ * What the nightly backup script said about itself.
+ *
+ * Every field is a claim made by something the app does not run, so `known`
+ * gates the rest: a fresh instance has no status file, and that is not the same
+ * as a failure. Reporting "FAILED" at somebody on their first afternoon teaches
+ * them to ignore the indicator, which costs more than saying nothing would.
+ */
+export interface BackupStatus {
+  known: boolean
+  /** Why nothing is known, when `known` is false. */
+  reason?: string
+  ok?: boolean
+  /**
+   * Whether the snapshot left the instance.
+   *
+   * Separate from `ok` on purpose. A backup written successfully to the same
+   * disk as the database defends against deleting the wrong thing, and not at
+   * all against losing the instance.
+   */
+  offsite?: boolean
+  finished_at?: string | null
+  age_hours?: number | null
+  /** Older than a missed run's worth of grace. */
+  stale?: boolean
+  message?: string
+  users?: number | null
+  logged_days?: number | null
+  local_copies?: number | null
 }
 
 export interface ActivityByDate {
