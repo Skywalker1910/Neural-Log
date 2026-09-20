@@ -8,6 +8,10 @@ all look exactly like a working app.
 They stop looking like one under gunicorn behind a reverse proxy, which is the
 configuration nothing else in this suite exercises.
 """
+import json
+import pathlib
+from datetime import datetime, timedelta, timezone
+
 import security
 from conftest import register
 
@@ -141,3 +145,144 @@ def test_the_proxy_is_only_trusted_in_production(app_module, monkeypatch):
 
     monkeypatch.setattr(security, 'IS_PRODUCTION', False)
     assert not isinstance(app_module.app.wsgi_app, ProxyFix)
+
+
+# --- knowing whether the backups are happening --------------------------------
+#
+# The nightly timer is only reassuring if somebody would notice it stopping, and
+# nobody runs `systemctl status` on a Tuesday. scripts/backup.sh writes its
+# outcome beside the database and the admin page reads it back, which is the
+# whole mechanism - so what matters here is that the app is careful about a file
+# it does not write and cannot trust.
+
+def write_status(app_module, **fields):
+    payload = {
+        'finished_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'ok': True,
+        'message': 'backed up 2 users and 4 logged days',
+        'offsite': True,
+        'destination': 's3://bucket/db/2026/09/neural_log.db.gz',
+        'bytes': 87400,
+        'users': 2,
+        'logged_days': 4,
+        'local_copies': 14,
+    }
+    payload.update(fields)
+
+    path = pathlib.Path(app_module.DATABASE).resolve().parent / 'backup-status.json'
+    path.write_text(json.dumps(payload), encoding='utf-8')
+    return path
+
+
+def test_no_status_file_is_unknown_rather_than_broken(app_module):
+    """A fresh instance has never run a backup, and that is not a failure.
+
+    Reporting "FAILED" at somebody on their first afternoon teaches them to
+    ignore the indicator, which costs more than saying nothing would.
+    """
+    status = app_module.read_backup_status()
+
+    assert status['known'] is False
+    assert 'reason' in status
+
+
+def test_a_recent_successful_backup_reads_as_healthy(app_module):
+    write_status(app_module)
+
+    status = app_module.read_backup_status()
+
+    assert status['known'] is True
+    assert status['ok'] is True
+    assert status['offsite'] is True
+    assert status['stale'] is False
+    assert status['age_hours'] < 1
+
+
+def test_a_failed_run_is_reported_as_failed(app_module):
+    """The script writes a status on failure too, which is the point of it.
+
+    A script that only reports success is a script whose silence means nothing -
+    you cannot tell "it worked" from "it never ran".
+    """
+    write_status(app_module, ok=False, message='no database at ./data/neural_log.db')
+
+    status = app_module.read_backup_status()
+
+    assert status['known'] is True
+    assert status['ok'] is False
+    assert 'no database' in status['message']
+
+
+def test_an_old_backup_is_stale_even_though_it_succeeded(app_module):
+    """The dangerous failure is the timer that quietly stopped firing.
+
+    Nothing reports an error, the last run says `ok`, and it is three weeks old.
+    """
+    long_ago = datetime.now(timezone.utc) - timedelta(hours=72)
+    write_status(app_module, finished_at=long_ago.strftime('%Y-%m-%dT%H:%M:%SZ'))
+
+    status = app_module.read_backup_status()
+
+    assert status['ok'] is True
+    assert status['stale'] is True
+    assert status['age_hours'] > 70
+
+
+def test_local_only_backups_are_reported_as_not_offsite(app_module):
+    """Succeeded and safe are different claims.
+
+    A snapshot written next to the database protects against deleting the wrong
+    thing and not at all against losing the instance, so `ok` alone would be a
+    misleading green light.
+    """
+    write_status(app_module, offsite=False, destination='local-only')
+
+    status = app_module.read_backup_status()
+
+    assert status['ok'] is True
+    assert status['offsite'] is False
+
+
+def test_an_unreadable_status_file_does_not_take_the_page_down(app_module):
+    """Written by a shell script this app does not run, so it may be anything.
+
+    A half-written file caught mid-rename, a disk that filled at the wrong
+    moment - none of that should turn the admin page into a 500.
+    """
+    path = pathlib.Path(app_module.DATABASE).resolve().parent / 'backup-status.json'
+    path.write_text('{"finished_at": "2026-09-2', encoding='utf-8')
+
+    status = app_module.read_backup_status()
+
+    assert status['known'] is False
+
+
+def test_a_status_file_with_a_nonsense_timestamp_still_reads(app_module):
+    """Age becomes unknown; everything else is still worth showing."""
+    write_status(app_module, finished_at='last Tuesday')
+
+    status = app_module.read_backup_status()
+
+    assert status['known'] is True
+    assert status['age_hours'] is None
+    assert status['stale'] is False
+
+
+def test_the_admin_overview_carries_the_backup_status(client, app_module):
+    """Folded into the existing call rather than a new one - the admin page
+    already fetches this, and a second round trip buys nothing."""
+    register(client)
+    write_status(app_module)
+
+    payload = client.get('/api/admin/stats').get_json()
+
+    assert payload['backup']['ok'] is True
+    assert payload['backup']['offsite'] is True
+
+
+def test_a_non_admin_cannot_read_the_backup_status(client):
+    register(client, username='owner')
+    client.post('/logout')
+    register(client, username='friend')
+
+    assert client.get('/api/admin/stats').status_code == 403

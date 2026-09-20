@@ -4,6 +4,7 @@ import {
   Activity,
   Ban,
   Database,
+  HardDriveDownload,
   KeyRound,
   RefreshCw,
   ShieldCheck,
@@ -16,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { ApiError, api } from '../api/client'
 import { queryKeys, useAdminOverview, useAdminUsers, useCurrentUser } from '../api/queries'
-import type { AdminUser } from '../api/types'
+import type { AdminUser, BackupStatus } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -305,6 +306,63 @@ function UserManagement() {
   )
 }
 
+/**
+ * Whether the backups are actually happening.
+ *
+ * This is here rather than in a log because of how backups fail: silently. The
+ * timer stops firing, credentials expire, a bucket policy changes - and nothing
+ * anywhere says so until the day somebody needs a restore. Putting the age on
+ * the page an administrator already opens turns a silent failure into a visible
+ * one, which is the whole of the fix.
+ *
+ * Three states, deliberately distinguished:
+ *
+ * - **unknown** - no status file. A fresh instance, not a fault. Saying "FAILED"
+ *   at somebody on their first afternoon teaches them to ignore the indicator.
+ * - **on the instance only** - backups run and succeed, on the same disk as the
+ *   database. Real protection against deleting the wrong thing; none at all
+ *   against losing the instance. A warning, not a pass.
+ * - **off-instance** - the only one that is actually a backup.
+ */
+function BackupHealth({ backup }: { backup: BackupStatus }) {
+  if (!backup.known) {
+    return (
+      <Badge tone="neutral">
+        Backups: {backup.reason ?? 'unknown'}
+      </Badge>
+    )
+  }
+
+  const age =
+    backup.age_hours === null || backup.age_hours === undefined
+      ? 'unknown age'
+      : backup.age_hours < 1
+        ? 'just now'
+        : backup.age_hours < 48
+          ? `${Math.round(backup.age_hours)}h ago`
+          : `${Math.round(backup.age_hours / 24)}d ago`
+
+  if (!backup.ok) {
+    return <Badge tone="danger">Last backup FAILED — {age}</Badge>
+  }
+
+  if (backup.stale) {
+    return <Badge tone="danger">Backup overdue — last succeeded {age}</Badge>
+  }
+
+  return (
+    <>
+      <Badge tone={backup.offsite ? 'success' : 'warning'}>
+        Backup: {age}
+        {backup.offsite ? '' : ', on this instance only'}
+      </Badge>
+      {backup.local_copies ? (
+        <Badge tone="neutral">{backup.local_copies} local snapshots</Badge>
+      ) : null}
+    </>
+  )
+}
+
 export function Admin() {
   const currentUser = useCurrentUser()
   const overview = useAdminOverview()
@@ -358,7 +416,18 @@ export function Admin() {
                     </Badge>
                     <Badge tone="info">Registration: {data.registration_mode}</Badge>
                     <Badge tone="neutral">{data.accounts.active} accounts enabled</Badge>
+                    <BackupHealth backup={data.backup} />
                   </div>
+
+                  {data.backup.known && !data.backup.offsite && (
+                    <p className="mt-3 flex items-start gap-2 text-meta text-ink-subtle">
+                      <HardDriveDownload size={14} className="mt-0.5 shrink-0" aria-hidden />
+                      <span>
+                        Snapshots are being written next to the database, so losing the instance
+                        loses both. See <code>docs/BACKUPS.md</code> to send them to S3.
+                      </span>
+                    </p>
+                  )}
                 </Card>
               </div>
             </Reveal>

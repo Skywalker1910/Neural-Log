@@ -132,19 +132,30 @@ The security list is done — all seven items, plus the leaderboard opt-out.
 | Structured error responses | Done — JSON, no tracebacks |
 | Leaderboard opt-out | Done — Settings → Privacy |
 
-Still to do, and specific to the host rather than the app:
+Done on the host, and verified against the running instance:
 
-- `NEURAL_LOG_ENV=production`, a generated `SECRET_KEY`, and an invite code, set
-  as environment variables on the instance and not in the repository.
-- `DATABASE` pointed at a path outside the application directory, so a redeploy
-  cannot overwrite it.
+- `NEURAL_LOG_ENV=production`, a generated `SECRET_KEY` and an invite code, in
+  `/srv/neurallog/.env` at mode 0600 rather than in the repository.
+- `DATABASE` at `/srv/neurallog/data/neural_log.db`, outside the application
+  directory, so a redeploy cannot overwrite it.
 - `FLASK_DEBUG` unset. The Werkzeug debugger is remote code execution.
-- Caddy terminating TLS and proxying to gunicorn on localhost.
-- A restore drill: prove the S3 backup restores before relying on it. An untested
-  backup is a belief, not a backup.
+- Caddy terminating TLS and proxying to gunicorn over the compose network, with
+  HSTS and the rest of the browser-side headers.
+
+Still open, and both about backups rather than the app — see
+[BACKUPS.md](BACKUPS.md):
+
+- **Snapshots leave the instance.** Until the S3 setup is done they are written
+  beside the database, which protects against deleting the wrong thing and not
+  at all against losing the instance. Admin -> System status says which of the
+  two is currently true, so this cannot stay forgotten quietly.
+- **A restore drill on the live instance.** `scripts/drill.sh` unpacks the
+  newest backup, boots a real container against it and tears it down, touching
+  nothing live. An untested backup is a belief, not a backup.
 
 ## Related
 
+- [BACKUPS.md](BACKUPS.md) — what stands behind one disk on one instance
 - [SECURITY.md](SECURITY.md) — what had to be true before the app was reachable
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the app is built
 - [DATA-MODEL.md](DATA-MODEL.md) — the entity map

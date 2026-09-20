@@ -100,6 +100,7 @@ Neural-Log/
     ├── XP.md               # the XP ledger, caps, and achievements
     ├── CI.md               # what runs on a PR, and what main enforces
     ├── SECURITY.md         # what had to be true before the app was public
+    ├── BACKUPS.md          # what stands behind one disk on one instance
     ├── DEPLOYMENT.md       # where it runs, what it costs, and why
     ├── ROADMAP.md          # the ten redesign phases, in order
     └── CHANGELOG.md        # what changed, newest first

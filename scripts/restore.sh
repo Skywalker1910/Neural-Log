@@ -46,7 +46,10 @@ ARCHIVE="$WORK/restore.db.gz"
 if [[ -f "$SOURCE" ]]; then
     cp "$SOURCE" "$ARCHIVE"
 else
-    aws s3 cp "s3://$BUCKET/${SOURCE#"$BUCKET"/}" "$ARCHIVE" --only-show-errors
+    # The instance's own credentials are PutObject-only by design - see
+    # docs/BACKUPS.md. Downloading is a deliberate, human-driven act, so it uses
+    # your credentials rather than the ones sitting on a public-facing box.
+    aws s3 cp "s3://$BUCKET/$SOURCE" "$ARCHIVE" --only-show-errors         || { log "FATAL: could not download - run this with your own AWS profile, not the instance's write-only one"; exit 1; }
 fi
 
 gunzip -c "$ARCHIVE" > "$WORK/restore.db"
@@ -67,7 +70,10 @@ read -rp "Replace $DB with this? [y/N] " CONFIRM
 
 # Stopped first. Swapping a database out from under a running process leaves it
 # holding a file handle to something that is no longer there.
-if docker compose ps --quiet app >/dev/null 2>&1; then
+#
+# `compose ps --quiet` exits 0 with empty output when nothing is running, so the
+# test has to be on the output rather than the status.
+if [[ -n "$(docker compose ps --quiet app 2>/dev/null)" ]]; then
     log "stopping the app"
     docker compose stop app
     RESTART=1
@@ -85,7 +91,16 @@ fi
 
 mkdir -p "$(dirname "$DB")"
 cp "$WORK/restore.db" "$DB"
-log "restored"
+
+# The container runs as UID 10001. A database restored by root is one the app
+# can read and cannot write, which does not fail here - it fails the first time
+# somebody logs a meal, hours later, with "attempt to write a readonly database".
+#
+# Matched to whoever owns the data directory rather than hard-coded, so this is
+# also correct when running the script somewhere that is not the instance.
+OWNER="$(stat -c '%u:%g' "$(dirname "$DB")")"
+chown "$OWNER" "$DB"
+log "restored, owned by $OWNER"
 
 if [[ "${RESTART:-0}" == "1" ]]; then
     log "starting the app"

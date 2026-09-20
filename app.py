@@ -2,7 +2,7 @@ from flask import (
     Flask, abort, render_template, request, jsonify, send_file, send_from_directory,
     session, redirect, url_for
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sqlite3
 import json
 from pathlib import Path
@@ -1979,6 +1979,70 @@ def get_user_activities(user_id):
     
     return jsonify([dict(row) for row in activities])
 
+# A daily timer is only reassuring if somebody would notice it stopping, and
+# nobody runs `systemctl status` on a Tuesday. scripts/backup.sh drops its
+# outcome beside the database - the one directory the container can already see
+# - and the admin page reads it back. Silent failure becomes visible failure.
+BACKUP_STALE_AFTER_HOURS = 36
+
+
+def read_backup_status():
+    """What the last backup run had to say for itself.
+
+    Everything here is a claim made by a script the app does not run and cannot
+    see, so every field is optional and a missing or unreadable file is reported
+    as "unknown" rather than as a failure. Those are different: a fresh instance
+    has no status yet, and saying "FAILED" at somebody on their first afternoon
+    would teach them to ignore the indicator.
+    """
+    path = Path(DATABASE).resolve().parent / 'backup-status.json'
+
+    try:
+        with path.open('r', encoding='utf-8') as handle:
+            payload = json.load(handle)
+    except FileNotFoundError:
+        return {'known': False, 'reason': 'No backup has run yet.'}
+    except (OSError, ValueError) as error:
+        # A truncated or unparseable file is worth surfacing rather than hiding:
+        # something writes here nightly, and if what it writes is unreadable then
+        # the reporting is broken even if the backups are not.
+        app.logger.warning('Could not read %s: %s', path, error)
+        return {'known': False, 'reason': 'The backup status file could not be read.'}
+
+    age_hours = None
+    finished_at = payload.get('finished_at')
+    if finished_at:
+        try:
+            # The script writes UTC with a trailing Z, which strptime parses as
+            # naive - so the tzinfo has to be put back before this can be
+            # subtracted from an aware `now`. (datetime.utcnow() would avoid
+            # that and is deprecated in 3.12+, which is what the app runs on.)
+            finished = datetime.strptime(finished_at, '%Y-%m-%dT%H:%M:%SZ').replace(
+                tzinfo=timezone.utc
+            )
+            age_hours = round(
+                (datetime.now(timezone.utc) - finished).total_seconds() / 3600, 1
+            )
+        except ValueError:
+            pass
+
+    return {
+        'known': True,
+        'ok': bool(payload.get('ok')),
+        # Reported separately from `ok`, because a backup that succeeded onto the
+        # same disk as the database is a real backup against fat fingers and no
+        # backup at all against losing the instance.
+        'offsite': bool(payload.get('offsite')),
+        'finished_at': finished_at,
+        'age_hours': age_hours,
+        'stale': age_hours is not None and age_hours > BACKUP_STALE_AFTER_HOURS,
+        'message': payload.get('message') or '',
+        'users': payload.get('users'),
+        'logged_days': payload.get('logged_days'),
+        'local_copies': payload.get('local_copies'),
+    }
+
+
 @app.route('/api/admin/stats')
 @admin_required
 def admin_stats():
@@ -2025,6 +2089,7 @@ def admin_stats():
         'features': feature_counts,
         'registration_mode': security.registration_mode(),
         'database_integrity': integrity,
+        'backup': read_backup_status(),
     })
 
 # Training endpoints live in their own module - app.py is already long enough,

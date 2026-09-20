@@ -1,0 +1,24 @@
+# Keep the files that Linux executes in Linux line endings, even in a Windows
+# checkout.
+#
+# Development happens on Windows and the app runs on Ubuntu. Git's autocrlf
+# turns LF into CRLF on checkout, which is right for most things and fatal for
+# these: a shell script whose shebang reads `#!/usr/bin/env bash\r` fails with
+# "bad interpreter: no such file or directory", naming a file that is plainly
+# right there. The deployment runbook used to carry a `sed -i 's/\r$//'` step to
+# undo this by hand after every copy, which worked until somebody forgot.
+#
+# `eol=lf` means the working copy is LF too, so scp sends what the instance
+# needs and the manual step goes away.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf
+*.service   text eol=lf
+*.timer     text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Binary, so Git never tries to "helpfully" rewrite bytes inside them.
+*.png       binary
+*.db        binary
+*.xlsx      binary
