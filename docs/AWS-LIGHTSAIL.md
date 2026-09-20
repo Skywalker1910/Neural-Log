@@ -123,14 +123,23 @@ scp -i <ssh-key-path> -r scripts ubuntu@<static-ip>:/srv/neurallog/
 ```
 
 Copy the example `.env` only for the initial setup. Future releases must preserve
-the instance's secrets and database. If files came from a Windows checkout,
-normalize shell script line endings on the host:
+the instance's secrets and database.
 
 ```bash
 cd /srv/neurallog
-sed -i 's/\r$//' scripts/backup.sh scripts/restore.sh
 chmod 600 .env
+chmod +x scripts/*.sh
 ```
+
+Line endings used to need fixing by hand at this point: a Windows checkout
+produces CRLF, and a script whose shebang reads `#!/usr/bin/env bash` followed by
+a carriage return fails with "bad interpreter", naming a file that is plainly
+right there. `.gitattributes` now pins LF on the scripts, the Dockerfile, the
+Caddyfile and the unit files, so a fresh checkout copies correctly.
+
+An **existing** checkout keeps whatever it already had. Re-normalize one with
+`git rm --cached -r . && git reset --hard`, and confirm with
+`file scripts/backup.sh`.
 
 ## 4. Configure production
 
