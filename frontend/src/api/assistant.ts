@@ -120,3 +120,58 @@ export async function* streamChat(
     }
   }
 }
+
+/**
+ * What a scanned nutrition panel came back as.
+ *
+ * `conversion_note` and `unreadable` exist so the confirmation card can show its
+ * working rather than a confident number - a per-serving panel scaled to per-100g
+ * has been multiplied by something, and the person should be able to see what.
+ */
+export interface ScannedFood {
+  name: string
+  category: string
+  unit: 'g' | 'ml'
+  kcal_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+  fibre_per_100g: number
+  serving_name: string | null
+  serving_grams: number | null
+  conversion_note: string
+  unreadable: string[]
+  basis: string
+}
+
+/**
+ * Send a photo of a nutrition panel and get back a food to confirm.
+ *
+ * Deliberately not through `api.post`: that sets `Content-Type: application/json`,
+ * and a multipart body needs the browser to set it *with the boundary it
+ * generated*. Setting it by hand produces a request the server cannot parse.
+ */
+export async function scanLabel(image: Blob): Promise<ScannedFood> {
+  const body = new FormData()
+  body.append('image', image, 'label.jpg')
+
+  let response: Response
+  try {
+    response = await fetch('/api/assistant/label', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-Token': csrfToken() },
+      body,
+    })
+  } catch {
+    throw new ApiError(0, 'Could not reach the server.')
+  }
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    // 422 carries a refusal the person can act on - "retake with the column
+    // headings visible" - rather than a generic failure.
+    throw new ApiError(response.status, payload?.error ?? 'That scan did not work.')
+  }
+  return payload as ScannedFood
+}

@@ -179,6 +179,18 @@ def session_config():
         # logged out between visits; 30 days is the balance against a forgotten
         # session on a shared machine.
         'PERMANENT_SESSION_LIFETIME': 60 * 60 * 24 * 30,
+        # A ceiling on request bodies, which until now there was not one of.
+        #
+        # Every other endpoint here posts a small JSON object, so this was
+        # theoretical: an unbounded body is a way to make a 1 GB instance run out
+        # of memory, but nobody had a reason to send one. Label scanning gives
+        # them a reason - it posts a photograph - so the limit goes in alongside
+        # it rather than after the first time somebody uploads a video.
+        #
+        # 8 MB is generous for a resized photo (the client sends about 300 KB)
+        # and small enough that a handful of concurrent uploads cannot exhaust
+        # the box. Werkzeug rejects anything larger before reading the body.
+        'MAX_CONTENT_LENGTH': 8 * 1024 * 1024,
     }
 
 

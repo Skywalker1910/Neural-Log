@@ -30,7 +30,7 @@ from datetime import date as _date
 
 from flask import Blueprint, Response, jsonify, request, session, stream_with_context
 
-from assistant import agent, config, store, usage
+from assistant import agent, config, label, store, usage
 
 assistant_bp = Blueprint('assistant', __name__)
 
@@ -223,6 +223,73 @@ def discard_proposal(proposal_id):
     finally:
         conn.close()
     return jsonify({'success': True})
+
+
+# --- reading a label -----------------------------------------------------------
+
+#: What a browser will actually produce from a camera, and nothing else.
+#:
+#: Checked against the file's own first bytes rather than the declared
+#: content-type, because the content-type is whatever the client said it was.
+IMAGE_SIGNATURES = (
+    (b'\xff\xd8\xff', 'image/jpeg'),
+    (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    (b'RIFF', 'image/webp'),
+)
+
+
+def _sniff_image(data):
+    """The media type these bytes really are, or None.
+
+    A photograph is the one thing this app accepts that it did not generate, so
+    it is the one place worth looking at the bytes. `RIFF` also fronts .wav, so
+    webp gets a second check at offset 8.
+    """
+    for signature, media_type in IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            if media_type == 'image/webp' and data[8:12] != b'WEBP':
+                continue
+            return media_type
+    return None
+
+
+@assistant_bp.route('/api/assistant/label', methods=['POST'])
+@_auth
+def read_label():
+    """Turn a photo of a nutrition panel into a food the person can confirm.
+
+    Returns the payload, and writes nothing. Saving goes through `POST /api/foods`
+    like any other custom food - the scanner is an input method, not a second way
+    into the catalogue, and a person edits the numbers in between.
+
+    The image is held in memory for this request and never written to disk. It is
+    a picture of a packet; once the numbers are out there is nothing left to want.
+    """
+    upload = request.files.get('image')
+    if upload is None:
+        return jsonify({'error': 'No image was sent.'}), 400
+
+    data = upload.read()
+    if not data:
+        return jsonify({'error': 'That image was empty.'}), 400
+
+    media_type = _sniff_image(data)
+    if media_type is None:
+        return jsonify({
+            'error': 'That file is not a JPEG, PNG or WebP image.',
+        }), 400
+
+    conn = _get_db()
+    try:
+        food = label.read_label(conn, session.get('user_id'), data, media_type)
+    except label.LabelError as error:
+        # A refusal the person can act on - "retake with the headings visible" -
+        # rather than a 500. Every branch in label.py says what to do next.
+        return jsonify({'error': str(error)}), 422
+    finally:
+        conn.close()
+
+    return jsonify(food)
 
 
 # --- what it costs -------------------------------------------------------------
