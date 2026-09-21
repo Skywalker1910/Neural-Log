@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bot, Send, Sparkles, X } from 'lucide-react'
+import { Bot, CheckCircle2, Pencil, Send, Sparkles, X } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
 
 import { api } from '../../api/client'
@@ -68,6 +68,7 @@ export function AssistantPanel({
   const [error, setError] = useState<string | null>(null)
   const [proposal, setProposal] = useState<{ id: number; actions: ProposedAction[] } | null>(null)
   const [inputCard, setInputCard] = useState<AssistantInputCard | null>(null)
+  const [applied, setApplied] = useState<{ actions: ProposedAction[]; result: string[]; failed: string | null } | null>(null)
   const [savingProposal, setSavingProposal] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -107,13 +108,14 @@ export function AssistantPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, status, proposal, inputCard])
 
-  async function send(override?: string) {
+  async function send(override?: string, autoApply = false) {
     const message = (override ?? input).trim()
     if (!message || busy) return
 
     if (!override) setInput('')
     setError(null)
     setInputCard(null)
+    setApplied(null)
     setTurns((current) => [...current, { role: 'user', text: message }])
     setBusy(true)
     setStatus('thinking')
@@ -122,15 +124,20 @@ export function AssistantPanel({
       for await (const event of streamChat(message, {
         kind: request.kind,
         date: request.date,
+        autoApply,
       })) {
         if (event.type === 'status') {
           setStatus(TOOL_LABELS[event.tool ?? ''] ?? 'working')
         } else if (event.type === 'done') {
+          if (autoApply && event.queued.length > 0) continue
           setTurns((current) => [...current, { role: 'assistant', text: event.reply }])
         } else if (event.type === 'proposal') {
           setProposal({ id: event.id, actions: event.actions })
         } else if (event.type === 'input_card') {
           setInputCard(event.card)
+        } else if (event.type === 'applied') {
+          setApplied({ actions: event.actions, result: event.applied, failed: event.failed })
+          void queryClient.invalidateQueries()
         } else if (event.type === 'error') {
           setError(event.message)
         }
@@ -253,8 +260,28 @@ export function AssistantPanel({
           />
         )}
 
+        {applied && (
+          <section className="mr-auto max-w-[94%] rounded-xl border border-success/35 bg-success/10 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-label font-semibold text-ink">
+                <CheckCircle2 size={16} className="text-success" aria-hidden /> Changes added
+              </span>
+              <Button size="sm" variant="secondary" icon={Pencil} onClick={() => {
+                setInput(`I need to correct: ${applied.actions.map((action) => action.summary).join('; ')}`)
+                inputRef.current?.focus()
+              }}>
+                Edit
+              </Button>
+            </div>
+            <ul className="mt-2 space-y-1 text-meta text-ink-muted">
+              {applied.actions.map((action, index) => <li key={index}>{action.summary}</li>)}
+            </ul>
+            {applied.failed && <p className="mt-2 text-meta text-danger">Partly added: {applied.failed}</p>}
+          </section>
+        )}
+
         {inputCard && !proposal && (
-          <InputCard card={inputCard} disabled={busy} onSend={(message) => void send(message)} />
+          <InputCard card={inputCard} disabled={busy} onSend={(message, autoApply) => void send(message, autoApply)} />
         )}
 
         {error && !proposal && <p className="text-label text-danger">{error}</p>}

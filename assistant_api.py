@@ -30,7 +30,7 @@ from datetime import date as _date
 
 from flask import Blueprint, Response, jsonify, request, session, stream_with_context
 
-from assistant import agent, cards, checkin, config, label, store, usage
+from assistant import agent, cards, config, label, store, usage
 
 assistant_bp = Blueprint('assistant', __name__)
 
@@ -112,6 +112,7 @@ def chat():
     message = (data.get('message') or '').strip()
     kind = 'today' if data.get('kind') == 'today' else 'general'
     subject_date = (data.get('date') or '').strip() or _today()
+    auto_apply = data.get('auto_apply') is True
 
     if not message:
         return jsonify({'error': 'Say something.'}), 400
@@ -154,22 +155,30 @@ def chat():
                 # The merged set, not just this turn's. A check-in accumulates
                 # across turns, and the card has to show all of it.
                 merged = store.get_proposal(conn, user_id, proposal_id)
-                yield 'data: ' + json.dumps({
-                    'type': 'proposal', 'id': proposal_id,
-                    'actions': json.loads(merged['actions']),
-                }) + '\n\n'
+                actions = json.loads(merged['actions'])
+                if auto_apply:
+                    result = store.apply(
+                        conn, user_id, proposal_id, recompute=_recompute, today=_today(),
+                        username=session.get('username'), record_checklist=_record_checklist,
+                    )
+                    yield 'data: ' + json.dumps({
+                        'type': 'applied', 'id': proposal_id, 'actions': actions, **result,
+                    }) + '\n\n'
+                else:
+                    yield 'data: ' + json.dumps({
+                        'type': 'proposal', 'id': proposal_id, 'actions': actions,
+                    }) + '\n\n'
 
             # A card is a faster answer to the next routine check-in question,
             # not a second saving path. The client turns it into a normal chat
             # message and the assistant still queues a proposal for review.
-            if kind == 'today':
-                input_card = cards.next_input_card(
-                    checkin.plan(conn, user_id, subject_date), queued
-                )
-                if input_card:
-                    yield 'data: ' + json.dumps({
-                        'type': 'input_card', 'card': input_card,
-                    }) + '\n\n'
+            input_card = cards.input_card(
+                conn, user_id, kind, subject_date, message, prior, queued
+            )
+            if input_card:
+                yield 'data: ' + json.dumps({
+                    'type': 'input_card', 'card': input_card,
+                }) + '\n\n'
 
             yield 'data: ' + json.dumps({'type': 'end'}) + '\n\n'
         except Exception:  # noqa: BLE001 - a stream cannot raise a 500 at the client
