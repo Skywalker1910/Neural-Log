@@ -213,8 +213,8 @@ def test_the_budget_stops_the_turn_before_the_provider_is_called(app_module, cli
 def test_the_model_is_told_it_cannot_save(app_module, client):
     """The one instruction that, if lost, makes the whole design fail quietly:
     the model says 'logged it', the person believes it, nobody presses Save."""
-    assert 'Never say you have logged' in agent.SYSTEM_PROMPT
-    assert 'cannot write to the app' in agent.SYSTEM_PROMPT
+    assert 'Do not claim a change is saved before the turn' in agent.SYSTEM_PROMPT
+    assert 'cannot write to the app directly' in agent.SYSTEM_PROMPT
 
 
 # --- the endpoints -------------------------------------------------------------

@@ -108,7 +108,7 @@ export function AssistantPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, status, proposal, inputCard])
 
-  async function send(override?: string, autoApply = false) {
+  async function send(override?: string, autoApply = true) {
     const message = (override ?? input).trim()
     if (!message || busy) return
 

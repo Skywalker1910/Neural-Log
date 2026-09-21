@@ -47,7 +47,7 @@ export function InputCard({
   function choose(message: string) {
     if (disabled || sent) return
     setSent(true)
-    onSend(message, false)
+    onSend(message, true)
   }
 
   return (
