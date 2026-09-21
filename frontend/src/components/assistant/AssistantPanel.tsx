@@ -5,11 +5,14 @@ import { AnimatePresence, m } from 'motion/react'
 
 import { api } from '../../api/client'
 import { onOpenAssistant, type OpenAssistantRequest } from '../../lib/assistantBus'
-import { streamChat, type AssistantState, type ProposedAction } from '../../api/assistant'
+import {
+  streamChat, type AssistantInputCard, type AssistantState, type ProposedAction,
+} from '../../api/assistant'
 import { useAssistantState } from '../../api/queries'
 import { Button } from '../ui/Button'
 import { cn } from '../../lib/cn'
 import { ProposalCard } from './ProposalCard'
+import { InputCard } from './InputCard'
 
 /**
  * The assistant, as a panel over whatever page you are on.
@@ -64,6 +67,7 @@ export function AssistantPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [proposal, setProposal] = useState<{ id: number; actions: ProposedAction[] } | null>(null)
+  const [inputCard, setInputCard] = useState<AssistantInputCard | null>(null)
   const [savingProposal, setSavingProposal] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -101,7 +105,7 @@ export function AssistantPanel({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [turns, status, proposal])
+  }, [turns, status, proposal, inputCard])
 
   async function send(override?: string) {
     const message = (override ?? input).trim()
@@ -109,6 +113,7 @@ export function AssistantPanel({
 
     if (!override) setInput('')
     setError(null)
+    setInputCard(null)
     setTurns((current) => [...current, { role: 'user', text: message }])
     setBusy(true)
     setStatus('thinking')
@@ -124,6 +129,8 @@ export function AssistantPanel({
           setTurns((current) => [...current, { role: 'assistant', text: event.reply }])
         } else if (event.type === 'proposal') {
           setProposal({ id: event.id, actions: event.actions })
+        } else if (event.type === 'input_card') {
+          setInputCard(event.card)
         } else if (event.type === 'error') {
           setError(event.message)
         }
@@ -244,6 +251,10 @@ export function AssistantPanel({
             onSave={(actions) => void resolveProposal(true, actions)}
             onDiscard={() => void resolveProposal(false)}
           />
+        )}
+
+        {inputCard && !proposal && (
+          <InputCard card={inputCard} disabled={busy} onSend={(message) => void send(message)} />
         )}
 
         {error && !proposal && <p className="text-label text-danger">{error}</p>}

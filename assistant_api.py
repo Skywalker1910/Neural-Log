@@ -30,7 +30,7 @@ from datetime import date as _date
 
 from flask import Blueprint, Response, jsonify, request, session, stream_with_context
 
-from assistant import agent, config, label, store, usage
+from assistant import agent, cards, checkin, config, label, store, usage
 
 assistant_bp = Blueprint('assistant', __name__)
 
@@ -158,6 +158,18 @@ def chat():
                     'type': 'proposal', 'id': proposal_id,
                     'actions': json.loads(merged['actions']),
                 }) + '\n\n'
+
+            # A card is a faster answer to the next routine check-in question,
+            # not a second saving path. The client turns it into a normal chat
+            # message and the assistant still queues a proposal for review.
+            if kind == 'today':
+                input_card = cards.next_input_card(
+                    checkin.plan(conn, user_id, subject_date), queued
+                )
+                if input_card:
+                    yield 'data: ' + json.dumps({
+                        'type': 'input_card', 'card': input_card,
+                    }) + '\n\n'
 
             yield 'data: ' + json.dumps({'type': 'end'}) + '\n\n'
         except Exception:  # noqa: BLE001 - a stream cannot raise a 500 at the client

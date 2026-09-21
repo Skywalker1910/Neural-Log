@@ -68,6 +68,9 @@ paths that collapse into a single "what happened on this day" call.
 | `propose_lifestyle` | queues water, steps, mood |
 | `propose_study` | queues a study session |
 | `propose_checkin` | queues answers to the daily check-in |
+| `get_open_work` | active goals and outstanding tasks |
+| `propose_tasks_done` | queues tasks as finished |
+| `propose_goal_progress` | queues a new total on a measured goal |
 
 They talk to the database directly rather than to the app's own HTTP endpoints.
 Self-calling would mean carrying a session cookie and working around the CSRF
@@ -140,6 +143,23 @@ Log a workout and your steps, then ask again:
 The model is given the reasons, not just the order, so it can explain itself
 truthfully when asked why it wants to know about sleep. They are also true: the
 50% in that sentence is the number the engine actually enforces.
+
+### Goals and tasks close it, and rank nowhere
+
+A check-in ends by asking about anything outstanding - open tasks, goals with a
+number to move.
+
+They are deliberately **not** in the weighted order above. `init_goals` is
+registered with no recompute function, because a goal is an intention rather than
+evidence, and neither goals nor tasks feed any attribute. Ranking them beside
+sleep and training would mean inventing an analytical weight the scoring engine
+does not give them, which is the kind of quiet dishonesty the rest of this app is
+built to avoid.
+
+So the plan carries them in a separate `follow_up` block that says
+`affects_scores: false`, and the prompt asks for one question at the end, dropped
+entirely if the person is done talking. Nothing to follow up on means no closing
+question rather than a limp "anything else?".
 
 ### The card accumulates
 
