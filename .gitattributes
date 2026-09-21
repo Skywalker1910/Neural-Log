@@ -10,6 +10,7 @@
 #
 # `eol=lf` means the working copy is LF too, so scp sends what the instance
 # needs and the manual step goes away.
+VERSION     text eol=lf
 *.sh        text eol=lf
 Dockerfile  text eol=lf
 Caddyfile   text eol=lf

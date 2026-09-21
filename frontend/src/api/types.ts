@@ -51,6 +51,8 @@ export interface AdminOverview {
   }
   registration_mode: 'open' | 'invite' | 'closed'
   database_integrity: string
+  /** The release this instance is running, from the VERSION file. */
+  version: string
   backup: BackupStatus
 }
 

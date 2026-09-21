@@ -2,6 +2,158 @@
 
 Kept from Phase 1 onward. Format is loose - what changed and why, newest first.
 
+Grouped by release from v1.0.0 onward, and by development phase before that -
+which is how the work actually happened.
+
+## v1.1.0 - The assistant
+
+The first release since the app went live, and the first that costs money to
+run. Two things in it: an assistant you can talk to, and backups that leave the
+instance.
+
+Everything here is additive. With no `OPENAI_API_KEY` set, this release behaves
+exactly as v1.0.0 did - no chat button, no panel, no requests, no bill.
+
+### An assistant that proposes and never writes
+
+Say what happened in a sentence; it writes it up; you press Save. Full write-up
+in [ASSISTANT.md](ASSISTANT.md).
+
+**The assistant cannot write to the app.** Its write tools validate, normalise
+and *queue*. Nothing reaches the database until a person confirms it.
+
+That is not caution for its own sake. Logging a meal runs
+`recompute_after_change`: attribute scores move, XP is awarded, a streak extends,
+the leaderboard reorders. A misheard "eighty grams" that becomes eight hundred is
+not a wrong row you notice - it is a bend in the trend the whole app exists to
+show you, and the resulting chart looks completely normal. The model is told it
+cannot save, in as many words, because one that believes its tool call already
+wrote will say "logged your breakfast" and you will believe it.
+
+The confirmation card is editable, because the mistakes are numeric. The edited
+payload is reconciled against what was stored - same count, same types, same
+order, **values only** - so an edit is a correction and never a new instruction.
+Without that check, "log a 300 kcal breakfast" could come back as "delete every
+workout" and the Save button would mean nothing.
+
+### Today, as a conversation
+
+**Today -> Check in by chat** runs the whole day by talking. An alternative route
+through the same data, not a replacement: tapping the list is faster when you
+know what you did, talking is faster when you have to remember it.
+
+The question order is **derived from the scoring engine**, not written down. A
+fixed script works until the third day, when it asks about the workout you logged
+from the gym two hours ago and you stop using it. So `get_checkin_plan` ranks
+topics by two numbers that were already in `scoring/config.py`: `measured_weight`
+3.0 against `self_report_weight` 1.0, and `self_report_ceiling` 0.5. An attribute
+with no measured evidence is capped at half whatever the checklist claims, so
+asking about sleep does not merely add evidence - it lifts a ceiling. Anything
+already recorded is not asked about at all.
+
+The model is given the reasons, not just the order, so it can explain itself when
+asked. The reasons are true: the 50% in the sentence is the number the engine
+enforces.
+
+`save_day()` was extracted into `record_checklist_day()` and injected, so a day
+answered by talking goes through the same activity row, the same audit trail and
+the same scoring as a day answered by tapping. Its docstring says a day logged
+there must be indistinguishable from one logged by the legacy wizard; a second
+implementation behind a chat window is exactly the drift it warns about.
+
+### It is metered before it can spend
+
+The first feature here that costs per use, so the accounting went in first: a
+daily and monthly cap per account, a rate limit, and a usage row per request
+including the failures - a log that counts only successes under-reports precisely
+when something is going wrong. At the ceiling the assistant declines politely and
+says the rest of the app still works, which it does, entirely.
+
+Measured on `gpt-5.6-terra`: **$0.036 an uncached turn, $0.014 cached, about two
+cents for a four-request check-in.** **Admin -> Assistant spend** breaks 30 days
+down by feature.
+
+Those dollars are estimates computed from configurable rates, and every surface
+says so. The provider's billing lags and reports the whole organisation, so it
+cannot answer the one question the cap needs answered: *may this person make a
+request right now?* When the estimate and the invoice disagree, the invoice is
+right and the rates want correcting.
+
+`store=False` on every request: the provider is asked not to retain the
+conversation. Someone's food, sleep and training is the most personal data this
+app holds.
+
+### Backups that leave the instance
+
+Nightly snapshots ran, verified themselves, and landed three feet from the thing
+they were protecting. Real defence against deleting the wrong row; none at all
+against losing the instance. [BACKUPS.md](BACKUPS.md) has the setup.
+
+The part worth arguing with: **the credentials on the instance are
+`s3:PutObject` and nothing else.** No read, no delete, no list. A backup the
+instance can delete is no defence against the instance being compromised, because
+whoever gets in gets the credentials. The cost is that restoring uses your own
+credentials, deliberately, which is the right shape for something a person
+decides to do.
+
+It earned that on day one: a placeholder bucket name left in the config failed
+as `AccessDenied` because the policy is scoped to one bucket ARN - which is the
+least-privilege rule stopping a database being posted to a stranger's bucket,
+since `your-bucket-name` is a globally unique name somebody owns.
+
+Backups also fail silently, so every run now writes its outcome beside the
+database and **Admin -> System status** reads it back: green, amber for "on this
+instance only", red for overdue or failed. A script that only reports success is
+a script whose silence means nothing.
+
+`scripts/drill.sh` rehearses a restore against a **real container** and tears it
+down, touching nothing live. `PRAGMA integrity_check` says the file is a valid
+SQLite database; it does not say the app can run on it, and those are different
+claims.
+
+### The admin panel moved into the app
+
+`templates/admin.html` is gone, replaced by `/admin` in the SPA. Accounts can now
+be **suspended rather than deleted** - deleting removes history permanently, and
+suspending is the safer first response when somebody loses a device. The check
+runs on every authenticated request, so an already-open session stops working
+too.
+
+### Smaller things
+
+- **`.gitattributes` pins LF** on scripts, the Dockerfile, the Caddyfile and the
+  unit files. The runbook carried a manual `sed -i 's/\r$//'` after every copy;
+  that worked until somebody forgot, and a shebang ending in a carriage return
+  fails by naming a file that is plainly right there.
+- **`restore.sh` never chowned the restored file.** The container runs as UID
+  10001, so a database restored by root is one the app can read and not write -
+  which does not fail at restore time, it fails hours later on somebody's first
+  save.
+- **Free chat had no memory.** Every message started a fresh conversation, so the
+  assistant could not answer "make that 120 grams instead" - it had already
+  forgotten what "that" was.
+
+### Three bugs a browser found that the test suite did not
+
+Worth recording, because all three were invisible to fifty passing tests and
+visible within thirty seconds of driving the real UI.
+
+Each turn's proposal **superseded** the last, so a multi-turn check-in ended with
+a card holding only the final topic and everything earlier silently dropped.
+`ProposalCard` seeded its editable draft with `useState(() => ...)`, whose
+initialiser runs once, so it rendered the first card forever while the server
+accumulated behind it. And the conversation resumption above.
+
+## v1.0.0 - First production release
+
+Deployed to AWS Lightsail with Docker Compose, Gunicorn and Caddy-managed HTTPS
+at `neurallog.adityamore.dev`, with every push to `main` running the tests,
+publishing an image and deploying it. The ten-phase redesign (R1-R10) complete,
+plus the security work that had to land before the app was reachable - see
+[SECURITY.md](SECURITY.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Entries below this point are the development phases that built it, newest first.
+
 ## R10 - Polish
 
 ### Polish
