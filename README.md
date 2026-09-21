@@ -99,6 +99,7 @@ Neural-Log/
     ├── HABITS.md           # the Paths-to-Habits migration, schedules, goals
     ├── XP.md               # the XP ledger, caps, and achievements
     ├── CI.md               # what runs on a PR, and what main enforces
+    ├── ASSISTANT.md        # the chat assistant: tools, proposals, and what it costs
     ├── SECURITY.md         # what had to be true before the app was public
     ├── BACKUPS.md          # what stands behind one disk on one instance
     ├── DEPLOYMENT.md       # where it runs, what it costs, and why

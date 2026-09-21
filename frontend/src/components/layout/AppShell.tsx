@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
 
+import { AssistantLauncher } from '../assistant/AssistantPanel'
 import { LevelUpCelebration } from '../gamification/LevelUpCelebration'
 import { pageTransition, reducedVariants } from '../../lib/motion'
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
@@ -62,6 +63,11 @@ export function AppShell() {
       {/* In the shell rather than on a page: a level-up is caused by XP, and
           since R7 every workspace awards it. */}
       <LevelUpCelebration />
+
+      {/* Also shell-level, for the opposite reason: the point of the assistant
+          is to log something without leaving the page you were reading. It
+          renders nothing at all when the instance has no API key. */}
+      <AssistantLauncher />
     </div>
   )
 }

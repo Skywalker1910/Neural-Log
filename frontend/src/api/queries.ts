@@ -46,6 +46,7 @@ import type {
   Workout,
   CurrentUser,
   AdminOverview,
+  AiUsageReport,
   AdminUser,
   DayDetail,
   GamificationSummary,
@@ -95,6 +96,7 @@ export const queryKeys = {
   onboarding: ['onboarding'] as const,
   adminOverview: ['admin', 'overview'] as const,
   adminUsers: ['admin', 'users'] as const,
+  adminAiUsage: (days: number) => ['admin', 'ai-usage', days] as const,
 }
 
 /**
@@ -116,6 +118,13 @@ export function useSetLeaderboardVisibility() {
       queryClient.invalidateQueries({ queryKey: queryKeys.currentUser })
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
     },
+  })
+}
+
+export function useAdminAiUsage(days = 30) {
+  return useQuery({
+    queryKey: queryKeys.adminAiUsage(days),
+    queryFn: () => api.get<AiUsageReport>(`/api/admin/ai-usage?days=${days}`),
   })
 }
 

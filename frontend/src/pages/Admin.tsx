@@ -3,6 +3,7 @@ import { Navigate } from 'react-router'
 import {
   Activity,
   Ban,
+  Bot,
   Database,
   HardDriveDownload,
   KeyRound,
@@ -16,7 +17,13 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 
 import { ApiError, api } from '../api/client'
-import { queryKeys, useAdminOverview, useAdminUsers, useCurrentUser } from '../api/queries'
+import {
+  queryKeys,
+  useAdminAiUsage,
+  useAdminOverview,
+  useAdminUsers,
+  useCurrentUser,
+} from '../api/queries'
 import type { AdminUser, BackupStatus } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
@@ -363,6 +370,77 @@ function BackupHealth({ backup }: { backup: BackupStatus }) {
   )
 }
 
+/**
+ * What the assistant costs.
+ *
+ * Its own card rather than a line on the system status, because this is the
+ * first thing in the app that spends money per use and it is the number that
+ * decides whether the feature stays.
+ *
+ * Every figure says "estimated" and means it. The dollars are computed locally
+ * from configurable rates so a spend cap can be enforced *before* a request -
+ * which the provider's billing, lagging and organisation-wide, cannot do. When
+ * the two disagree, the invoice is right and the rates want correcting.
+ */
+function AssistantSpend() {
+  const query = useAdminAiUsage(30)
+  const data = query.data
+
+  if (!data || (!data.configured && data.totals.calls === 0)) return null
+
+  const money = (value: number) =>
+    value < 0.01 && value > 0 ? '<$0.01' : `$${value.toFixed(2)}`
+
+  return (
+    <Card
+      title="Assistant spend"
+      subtitle="Last 30 days, estimated from configured rates"
+      icon={Bot}
+      accent="brand"
+    >
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        {[
+          ['Estimated cost', money(data.totals.estimated_cost_usd)],
+          ['Requests', data.totals.calls.toLocaleString()],
+          ['Input tokens', data.totals.input_tokens.toLocaleString()],
+          ['Output tokens', data.totals.output_tokens.toLocaleString()],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-meta text-ink-subtle">{label}</dt>
+            <dd className="mt-1 tabular text-section text-ink">{value}</dd>
+          </div>
+        ))}
+      </div>
+
+      {data.by_feature.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {data.by_feature.map((row) => (
+            <Badge key={row.feature} tone="neutral">
+              {row.feature}: {money(row.estimated_cost_usd)} over {row.calls}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Badge tone="info">{data.chat_model}</Badge>
+        <Badge tone="neutral">
+          ${data.monthly_budget_usd.toFixed(2)}/month cap per account
+        </Badge>
+        {data.totals.failures > 0 && (
+          <Badge tone="danger">{data.totals.failures} failed</Badge>
+        )}
+        {!data.configured && <Badge tone="warning">No API key set</Badge>}
+      </div>
+
+      <p className="mt-3 text-meta text-ink-subtle">
+        Estimated, not billed. These figures exist so a request can be refused before
+        it is made; your provider invoice is the authority on what was charged.
+      </p>
+    </Card>
+  )
+}
+
 export function Admin() {
   const currentUser = useCurrentUser()
   const overview = useAdminOverview()
@@ -431,6 +509,8 @@ export function Admin() {
                 </Card>
               </div>
             </Reveal>
+
+            <Reveal><AssistantSpend /></Reveal>
 
             <Reveal><UserManagement /></Reveal>
           </RevealGroup>
