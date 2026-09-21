@@ -13,6 +13,7 @@ export type AssistantEvent =
   | { type: 'status'; tool: string | null; writes: boolean; note?: string }
   | { type: 'done'; reply: string; queued: ProposedAction[]; budget: Budget }
   | { type: 'proposal'; id: number; actions: ProposedAction[] }
+  | { type: 'applied'; id: number; actions: ProposedAction[]; applied: string[]; failed: string | null }
   | { type: 'input_card'; card: AssistantInputCard }
   | { type: 'error'; kind: string; message: string }
   | { type: 'end' }
@@ -59,6 +60,7 @@ export interface AssistantInputCard {
   reason: string
   fields: AssistantInputField[]
   choices?: { label: string; message: string }[]
+  options?: { label: string; value: string; detail?: string }[]
   submit_label: string
   message: string
 }
@@ -93,7 +95,7 @@ function csrfToken(): string {
  */
 export async function* streamChat(
   message: string,
-  options: { kind?: 'general' | 'today'; date?: string; signal?: AbortSignal } = {},
+  options: { kind?: 'general' | 'today'; date?: string; autoApply?: boolean; signal?: AbortSignal } = {},
 ): AsyncGenerator<AssistantEvent> {
   let response: Response
   try {
@@ -102,7 +104,10 @@ export async function* streamChat(
       credentials: 'same-origin',
       signal: options.signal,
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
-      body: JSON.stringify({ message, kind: options.kind ?? 'general', date: options.date }),
+      body: JSON.stringify({
+        message, kind: options.kind ?? 'general', date: options.date,
+        auto_apply: options.autoApply === true,
+      }),
     })
   } catch {
     throw new ApiError(0, 'Could not reach the server.')

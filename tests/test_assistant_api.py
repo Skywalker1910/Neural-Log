@@ -12,6 +12,7 @@ import json
 from types import SimpleNamespace
 
 import assistant.agent as agent
+import assistant.cards as cards
 import assistant.config as config
 import assistant.store as store
 import assistant.usage as usage
@@ -212,8 +213,8 @@ def test_the_budget_stops_the_turn_before_the_provider_is_called(app_module, cli
 def test_the_model_is_told_it_cannot_save(app_module, client):
     """The one instruction that, if lost, makes the whole design fail quietly:
     the model says 'logged it', the person believes it, nobody presses Save."""
-    assert 'Never say you have logged' in agent.SYSTEM_PROMPT
-    assert 'cannot write to the app' in agent.SYSTEM_PROMPT
+    assert 'Do not claim a change is saved before the turn' in agent.SYSTEM_PROMPT
+    assert 'cannot write to the app directly' in agent.SYSTEM_PROMPT
 
 
 # --- the endpoints -------------------------------------------------------------
@@ -286,6 +287,43 @@ def test_guided_checkin_streams_a_structured_input_card(client, monkeypatch):
     assert card['topic'] == 'training'
     assert card['fields'][0]['id'] == 'details'
     assert card['message'] == 'I trained: {details}.'
+
+
+def test_general_assistant_offers_exercise_tiles_for_a_muscle_group(client, app_module):
+    register(client)
+    conn = app_module.get_db_connection()
+
+    card = cards.general_input_card(conn, 1, 'show me options to select', [
+        {'role': 'user', 'content': 'I trained back and biceps today.'},
+    ])
+
+    assert card['topic'] == 'training'
+    assert card['options']
+    assert {'sets', 'reps'} <= {field['id'] for field in card['fields']}
+
+
+def test_card_answers_apply_and_report_the_change(client, app_module, monkeypatch):
+    """A structured answer is explicit input, so it does not need a second Save."""
+    register(client)
+    conn = app_module.get_db_connection()
+    oats = food_id(conn)
+    use_fake(
+        monkeypatch,
+        turn(calls=[call('propose_meal', {
+            'date': None, 'meal': 'breakfast',
+            'items': [{'food_id': oats, 'name': 'Oats', 'grams': 80}],
+        })]),
+        turn(text='Added your breakfast.'),
+    )
+
+    events = sse(client.post('/api/assistant/chat', json={
+        'message': 'For breakfast, I had oats.', 'auto_apply': True,
+    }))
+
+    applied = next(event for event in events if event['type'] == 'applied')
+    assert applied['failed'] is None
+    assert applied['actions'][0]['type'] == 'meal'
+    assert conn.execute('SELECT COUNT(*) AS n FROM food_entries').fetchone()['n'] == 1
 
 
 def test_an_empty_message_is_refused_without_calling_anything(client, monkeypatch):

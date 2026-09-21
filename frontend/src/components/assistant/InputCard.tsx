@@ -14,22 +14,40 @@ export function InputCard({
 }: {
   card: AssistantInputCard
   disabled: boolean
-  onSend: (message: string) => void
+  onSend: (message: string, autoApply: boolean) => void
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
+  const [selected, setSelected] = useState<string[]>([])
   const [sent, setSent] = useState(false)
-  const complete = card.fields.every((field) => values[field.id]?.trim())
+  const complete = card.fields.every((field) => {
+    // Lifestyle fields are intentionally optional: somebody may know their
+    // steps but not their water, and the assistant will only log what they say.
+    if (card.id === 'lifestyle-entry') return true
+    if (field.id === 'weight') return true
+    return values[field.id]?.trim()
+  }) && (!card.options || selected.length > 0)
 
   function submit() {
     if (!complete || disabled || sent) return
+    const lifestyleParts = [
+      values.water?.trim() && `${values.water.trim()} ml of water`,
+      values.steps?.trim() && `${values.steps.trim()} steps`,
+      values.mood?.trim() && `a mood of ${values.mood.trim()} out of 5`,
+    ].filter(Boolean)
+    if (card.id === 'lifestyle-entry' && lifestyleParts.length === 0) return
     setSent(true)
-    onSend(card.message.replace(/\{(\w+)\}/g, (_, key: string) => values[key]?.trim() ?? ''))
+    const message = card.id === 'lifestyle-entry'
+      ? `Today I had ${lifestyleParts.join(', ')}.`
+      : card.message.replace(/\{(\w+)\}/g, (_, key: string) =>
+      key === 'selection' ? selected.join(', ') : values[key]?.trim() ?? '',
+      )
+    onSend(message, true)
   }
 
   function choose(message: string) {
     if (disabled || sent) return
     setSent(true)
-    onSend(message)
+    onSend(message, true)
   }
 
   return (
@@ -89,11 +107,40 @@ export function InputCard({
           ))}
         </div>
 
+        {card.options && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {card.options.map((option) => {
+              const active = selected.includes(option.value)
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={disabled || sent}
+                  onClick={() => setSelected((current) => active
+                    ? current.filter((value) => value !== option.value)
+                    : [...current, option.value])}
+                  className={cn(
+                    'rounded-lg border px-3 py-2 text-left transition-colors',
+                    active ? 'border-brand bg-brand/20 text-ink' : 'border-line-strong bg-surface-base/70 text-ink-muted hover:border-brand/60',
+                  )}
+                >
+                  <span className="block text-label">{option.label}</span>
+                  {option.detail && <span className="mt-0.5 block text-caption text-ink-subtle">{option.detail}</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="primary" icon={ArrowUpRight} disabled={!complete || disabled || sent}
-                  onClick={submit}>
-            {sent ? 'Added to chat' : card.submit_label}
-          </Button>
+          {card.message && (
+            <Button size="sm" variant="primary" icon={ArrowUpRight} disabled={
+              !complete || disabled || sent || (card.id === 'lifestyle-entry' && !Object.values(values).some(Boolean))
+            }
+                    onClick={submit}>
+              {sent ? 'Added to chat' : card.submit_label}
+            </Button>
+          )}
           {card.choices?.map((choice) => (
             <Button key={choice.label} size="sm" variant="secondary" disabled={disabled || sent}
                     onClick={() => choose(choice.message)}>
