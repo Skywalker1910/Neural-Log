@@ -159,12 +159,17 @@ def create_food():
     cursor.execute(
         "INSERT INTO foods (user_id, slug, source, name, category, kcal_per_100g, "
         'protein_per_100g, carbs_per_100g, fat_per_100g, fibre_per_100g, '
-        "serving_name, serving_grams) VALUES (?, ?, 'custom', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        'serving_name, serving_grams, unit, is_countable) '
+        "VALUES (?, ?, 'custom', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (user_id, candidate, name, data.get('category', 'prepared'),
          float(data['kcal_per_100g']), float(data.get('protein_per_100g') or 0),
          float(data.get('carbs_per_100g') or 0), float(data.get('fat_per_100g') or 0),
          float(data.get('fibre_per_100g') or 0), data.get('serving_name'),
-         data.get('serving_grams')),
+         data.get('serving_grams'),
+         # A scanned drink has to read in millilitres or every portion the person
+         # enters is off by whatever they mentally converted.
+         'ml' if data.get('unit') == 'ml' else 'g',
+         1 if data.get('is_countable') else 0),
     )
     conn.commit()
     row = conn.execute('SELECT * FROM foods WHERE id = ?', (cursor.lastrowid,)).fetchone()

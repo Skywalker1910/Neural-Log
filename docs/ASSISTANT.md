@@ -161,6 +161,82 @@ updates the queued one instead of queueing a second. The rule mirrors the
 appliers: `_apply_sleep` deletes and reinserts, so two queued sleeps for one date
 would be a card promising something the save cannot deliver.
 
+## Scanning a nutrition label
+
+**Nutrition —> Scan a label.** Photograph the panel on the back of a pack and
+the product joins your catalogue, usable in the food picker and as a recipe
+ingredient like anything else.
+
+The shipped library has 248 foods and does not have the oat milk you actually
+buy. Typing a packet in by hand means squinting at six numbers and getting the
+units wrong on at least one, which is precisely the job for a camera.
+
+### The model transcribes, the code computes
+
+This is the whole design, and it exists because of one failure mode.
+
+A panel states its values **per 100 g**, **per 100 ml**, or **per serving**. US
+packaging leads with per-serving, EU packaging with per-100, and plenty of packs
+print both in columns. Read the wrong one and every macro is off by the serving
+factor — a 30 g cereal portion read as per-100 g understates the food by 70%.
+
+Nothing about that looks broken. The numbers are plausible, the food saves
+cleanly, and it quietly misreports every meal it is ever used in.
+
+So the model is asked for two things it is good at — the numbers as printed,
+and which column they came from — and explicitly **not** asked to convert. The
+arithmetic happens in `label.to_per_100g`, which is pure, deterministic and
+tested against every basis. Asking a language model to divide by 30 and multiply
+by 100 is inviting an arithmetic error into the one place nothing would catch it.
+
+The only conversion the model does do is kJ to kcal, because that factor is
+exact and unambiguous.
+
+### The review card shows its working
+
+| | |
+|---|---|
+| **Conversion note** | "Scaled from a 30 g serving to 100 g (x3.33)" |
+| **Unreadable list** | fields the model could not see, flagged amber rather than shown as a confident zero |
+
+Both exist so the check is real rather than theatre. `x3.33 from a 30 g serving`
+is checkable in a way that `400 kcal` is not, and *zero fibre* and *unknown
+fibre* are different claims — only one of them belongs in somebody's intake.
+
+A panel it cannot make sense of is refused with what to do about it: *"Could not
+tell whether the panel is per serving or per 100 g — retake the photo with the
+column headings visible."* Refusing beats guessing, because a guessed serving
+factor produces a food that is wrong in a way nobody will notice.
+
+### What it costs, and what leaves the device
+
+Scanning runs on the **extraction model**, not the chat one — this is
+transcription, not judgement. Measured: **$0.00045 a scan**, about a fortieth of
+a check-in.
+
+The photo is resized to 1400px on its long edge before it is sent. That is a
+legibility floor rather than a guess: the interesting part is six numbers in
+six-point type, and compressing past that starts making the model guess. It also
+cuts a 4 MB camera file to about 300 KB.
+
+Re-encoding as JPEG **strips the EXIF**, which on a phone carries GPS
+coordinates. Sending someone's kitchen location to a third party along with a
+picture of their cereal is not a trade anybody agreed to.
+
+The image is held in memory for one request and **never written to disk**. It is
+a picture of a packet; once the numbers are out there is nothing left to want.
+
+### Bytes, not file names
+
+The upload is checked against its own magic bytes rather than the declared
+content type, which is whatever the client said it was. A photograph is the one
+thing this app accepts that it did not generate, so it is the one place worth
+looking. JPEG, PNG and WebP only — a camera produces nothing else, and every
+extra format is another decoder to trust.
+
+Request bodies are now capped at 8 MB, which until this feature there was no
+limit on at all.
+
 ## Editing a proposal, and why that is safe
 
 The card lets you correct numbers, because the mistakes are numeric. The

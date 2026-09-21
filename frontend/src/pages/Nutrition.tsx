@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
 import { m } from 'motion/react'
 import {
-  ChefHat, ChevronLeft, ChevronRight, Flame, Info, Plus, Trash2, UtensilsCrossed,
+  ChefHat, ChevronLeft, ChevronRight, Flame, Info, Plus, ScanLine, Trash2,
+  UtensilsCrossed,
 } from 'lucide-react'
 
 import type { Food, FoodEntry, Meal, NutritionDay, Recipe, Targets } from '../api/types'
 import {
-  useCreateFood, useDeleteFoodEntry, useDeleteRecipe, useLogFood,
-  useNutritionDay, useRecipes,
+  useAssistantState, useCreateFood, useDeleteFoodEntry, useDeleteRecipe,
+  useLogFood, useNutritionDay, useRecipes,
 } from '../api/queries'
 import { FoodPicker } from '../components/nutrition/FoodPicker'
 import { RecipeBuilder } from '../components/nutrition/RecipeBuilder'
+import { LabelScanner } from '../components/nutrition/LabelScanner'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -239,6 +241,8 @@ function EnergyBalance({ totals, targets }: { totals: NutritionDay['totals']; ta
 }
 
 export function Nutrition() {
+  const assistant = useAssistantState()
+  const [scanning, setScanning] = useState(false)
   const [date, setDate] = useState(todayISO)
   const query = useNutritionDay(date)
   const recipes = useRecipes()
@@ -271,7 +275,16 @@ export function Nutrition() {
         icon={UtensilsCrossed}
         accent="lifestyle"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Hidden when the instance has no assistant, like everything else
+                that needs a model. The catalogue and the recipe builder work
+                exactly as before without it. */}
+            {assistant.data?.configured && (
+              <Button size="sm" variant="secondary" icon={ScanLine}
+                      onClick={() => setScanning(true)}>
+                Scan a label
+              </Button>
+            )}
             <Button size="sm" icon={ChefHat} onClick={() => setEditingRecipe(null)}>
               Build a dish
             </Button>
@@ -292,6 +305,8 @@ export function Nutrition() {
                 aria-label="Next day" disabled={isToday}
                 onClick={() => setDate(shiftISO(date, 1))} />
       </div>
+
+      <LabelScanner open={scanning} onClose={() => setScanning(false)} />
 
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(day) => (
