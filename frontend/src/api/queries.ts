@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import type { AssistantState } from './assistant'
 import { api } from './client'
 import type {
   AnalyticsPeriod,
@@ -97,6 +98,7 @@ export const queryKeys = {
   adminOverview: ['admin', 'overview'] as const,
   adminUsers: ['admin', 'users'] as const,
   adminAiUsage: (days: number) => ['admin', 'ai-usage', days] as const,
+  assistantState: ['assistant', 'state'] as const,
 }
 
 /**
@@ -118,6 +120,21 @@ export function useSetLeaderboardVisibility() {
       queryClient.invalidateQueries({ queryKey: queryKeys.currentUser })
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
     },
+  })
+}
+
+/**
+ * Whether the assistant exists on this instance, and what it has cost you.
+ *
+ * Shared between the launcher and the Today page so the answer is fetched once.
+ * `configured` is false when no API key is set, and both callers render nothing
+ * rather than something disabled.
+ */
+export function useAssistantState() {
+  return useQuery({
+    queryKey: queryKeys.assistantState,
+    queryFn: () => api.get<AssistantState>('/api/assistant/state'),
+    staleTime: 5 * 60 * 1000,
   })
 }
 

@@ -1494,23 +1494,54 @@ def save_day(date):
     except (TypeError, ValueError):
         return jsonify({'error': 'date must be YYYY-MM-DD'}), 400
 
+    conn = get_db_connection()
+    try:
+        completion_percent, badges = record_checklist_day(
+            conn, user_id, username, date, responses,
+            notes=data.get('notes', ''),
+            self_rating=data.get('self_rating'),
+            path_id=data.get('path_id'),
+            path_name=data.get('path_name'),
+        )
+    finally:
+        conn.close()
+
+    return jsonify({
+        'date': date,
+        'completion_pct': completion_percent,
+        'newly_earned_badges': badges,
+    })
+
+
+def record_checklist_day(conn, user_id, username, date, responses, *,
+                         notes='', self_rating=None, path_id=None,
+                         path_name=None, source='spa'):
+    """Write one day's checklist and score it. The only path that does this.
+
+    Extracted from save_day() so the assistant can answer the check-in through
+    exactly the same code. That matters more than the deduplication: save_day's
+    own docstring says a day logged there must be indistinguishable from one
+    logged by the legacy wizard, and a second implementation behind a chat
+    window is precisely the drift it warns about - one that writes the
+    daily_log row but forgets the activity row, or scores without the audit
+    trail, and shows up weeks later as a streak that is wrong by a day.
+
+    Returns `(completion_pct, newly_earned_badges)`.
+    """
     checklist_payload = {
         'date': date,
         'checklist': {},
         'custom_responses': responses,
-        'selected_path_id': data.get('path_id'),
-        'selected_path_name': data.get('path_name'),
-        'notes': data.get('notes', ''),
-        'source': 'spa',
+        'selected_path_id': path_id,
+        'selected_path_name': path_name,
+        'notes': notes,
+        'source': source,
     }
-
-    conn = get_db_connection()
 
     answered = sum(1 for value in responses.values() if str(value).strip())
     description = f'{answered} of {len(responses)} answered'
     # Mirrors the legacy client, which sends the 1-5 self-rating doubled. Kept
     # identical so /api/stats keeps meaning one thing across both writers.
-    self_rating = data.get('self_rating')
     progress_score = int(self_rating) * 2 if str(self_rating or '').strip().isdigit() else 0
 
     existing = conn.execute(
@@ -1523,15 +1554,14 @@ def save_day(date):
         activity_id = existing['id']
         conn.execute(
             'UPDATE activities SET description = ?, progress_score = ?, notes = ? WHERE id = ?',
-            (description, progress_score, data.get('notes', ''), activity_id),
+            (description, progress_score, notes, activity_id),
         )
     else:
         cursor = conn.cursor()
         cursor.execute(
             'INSERT INTO activities (user_id, date, activity_name, description, '
             'duration, progress_score, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (user_id, date, 'Daily Checklist', description, 0, progress_score,
-             data.get('notes', '')),
+            (user_id, date, 'Daily Checklist', description, 0, progress_score, notes),
         )
         activity_id = cursor.lastrowid
     conn.commit()
@@ -1543,13 +1573,7 @@ def save_day(date):
     badges, completion_percent = score_checklist_day(
         conn, user_id, date, checklist_payload, activity_id
     )
-    conn.close()
-
-    return jsonify({
-        'date': date,
-        'completion_pct': completion_percent,
-        'newly_earned_badges': badges,
-    })
+    return completion_percent, badges
 
 
 @app.route('/api/home')
@@ -2130,7 +2154,8 @@ init_survey(app, get_db_connection, login_required, recompute_after_change)
 # reported on /admin rather than to the person spending it. It takes recompute
 # because a confirmed proposal writes meals and sleep, which move scores exactly
 # as they would if the person had typed them in.
-init_assistant(app, get_db_connection, login_required, admin_required, recompute_after_change)
+init_assistant(app, get_db_connection, login_required, admin_required,
+               recompute_after_change, record_checklist_day)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.

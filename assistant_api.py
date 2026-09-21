@@ -38,14 +38,19 @@ _get_db = None
 _login_required = None
 _admin_required = None
 _recompute = None
+_record_checklist = None
 
 
-def init_assistant(app, get_db_connection, login_required, admin_required, recompute=None):
-    global _get_db, _login_required, _admin_required, _recompute
+def init_assistant(app, get_db_connection, login_required, admin_required,
+                   recompute=None, record_checklist=None):
+    global _get_db, _login_required, _admin_required, _recompute, _record_checklist
     _get_db = get_db_connection
     _login_required = login_required
     _admin_required = admin_required
     _recompute = recompute
+    # app.record_checklist_day. Answering the check-in has to run the same
+    # code the Today page runs, and the tool layer cannot import app.
+    _record_checklist = record_checklist
     app.register_blueprint(assistant_bp)
 
 
@@ -114,6 +119,7 @@ def chat():
         return jsonify({'error': 'That message is too long.'}), 400
 
     user_id = session.get('user_id')
+    username = session.get('username') or f'user_{user_id}'
 
     def events():
         # The generator outlives the view, so it owns its own connection rather
@@ -130,6 +136,10 @@ def chat():
             for event in agent.run_turn(
                 conn, user_id, prior, message,
                 feature=kind, today=_today(), recompute=_recompute,
+                username=username, record_checklist=_record_checklist,
+                # A guided check-in is a different job from free chat, so it
+                # gets its own instructions rather than a paragraph bolted on.
+                instructions=agent.TODAY_PROMPT if kind == 'today' else None,
             ):
                 if event['type'] == 'done':
                     queued = event['queued']
@@ -141,8 +151,12 @@ def chat():
 
             if queued:
                 proposal_id = store.create_proposal(conn, user_id, conversation_id, queued)
+                # The merged set, not just this turn's. A check-in accumulates
+                # across turns, and the card has to show all of it.
+                merged = store.get_proposal(conn, user_id, proposal_id)
                 yield 'data: ' + json.dumps({
-                    'type': 'proposal', 'id': proposal_id, 'actions': queued,
+                    'type': 'proposal', 'id': proposal_id,
+                    'actions': json.loads(merged['actions']),
                 }) + '\n\n'
 
             yield 'data: ' + json.dumps({'type': 'end'}) + '\n\n'
@@ -184,6 +198,7 @@ def apply_proposal(proposal_id):
             conn, session.get('user_id'), proposal_id,
             submitted_actions=data.get('actions'),
             recompute=_recompute, today=_today(),
+            username=session.get('username'), record_checklist=_record_checklist,
         )
     except store.ProposalRejected as error:
         return jsonify({'success': False, 'message': str(error)}), 400

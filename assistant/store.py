@@ -27,18 +27,41 @@ from . import config, tools
 
 # --- conversations -------------------------------------------------------------
 
+#: How long a free-form chat stays the same conversation.
+#:
+#: Long enough that stepping away mid-thought and coming back is continuous,
+#: short enough that tomorrow morning's "what did I eat" is not answered in the
+#: context of last night's. A check-in ignores this and is bounded by its date
+#: instead, which is the more natural boundary for it.
+CHAT_RESUME_HOURS = 6
+
+
 def open_conversation(conn, user_id, kind='general', subject_date=None):
     """The person's live conversation of this kind, created if there is none.
 
-    A daily check-in is resumed rather than restarted: people close the tab
-    halfway through one, and being asked about breakfast twice is the fastest
-    way to make the feature not worth using.
+    Resumed rather than restarted, and that is the whole of it: without this,
+    every message starts a fresh conversation with no history, so the assistant
+    cannot answer "make that 120 grams instead" because it has already forgotten
+    what "that" was.
+
+    A check-in resumes by date - people close the tab halfway through one, and
+    being asked about breakfast twice is the fastest way to make this not worth
+    using. Free chat resumes by recency.
     """
     if kind == 'today' and subject_date:
         row = conn.execute(
             "SELECT id FROM ai_conversations WHERE user_id = ? AND kind = 'today' "
             "AND subject_date = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
             (user_id, subject_date),
+        ).fetchone()
+        if row:
+            return row['id']
+    elif kind != 'today':
+        row = conn.execute(
+            "SELECT id FROM ai_conversations WHERE user_id = ? AND kind = ? "
+            "AND status = 'open' AND updated_at >= datetime('now', ?) "
+            'ORDER BY id DESC LIMIT 1',
+            (user_id, kind, f'-{CHAT_RESUME_HOURS} hours'),
         ).fetchone()
         if row:
             return row['id']
@@ -92,18 +115,76 @@ def add_message(conn, conversation_id, role, content):
 
 # --- proposals -----------------------------------------------------------------
 
-def create_proposal(conn, user_id, conversation_id, actions):
-    """Store a change-set and retire any older one still waiting.
+#: Action types where a second one replaces the first rather than adding to it.
+#:
+#: The rule mirrors what the appliers actually do. `_apply_sleep` deletes and
+#: reinserts, `_apply_lifestyle` and `_apply_checkin` merge - one row per day
+#: either way - while meals, workouts and study sessions legitimately happen more
+#: than once. So a corrected bedtime overwrites the earlier one in the queue, and
+#: a second meal joins it.
+ONE_PER_DAY = frozenset({'sleep', 'lifestyle', 'checkin'})
 
-    Superseding matters: without it, a conversation that proposes twice leaves
-    two live Save buttons, and pressing the older one logs something the person
-    already talked past.
+
+def _merge(existing, incoming):
+    """Accumulate a turn's actions onto what the conversation already queued."""
+    merged = list(existing)
+
+    for action in incoming:
+        if action.get('type') in ONE_PER_DAY:
+            for index, current in enumerate(merged):
+                if (current.get('type') == action.get('type')
+                        and current.get('date') == action.get('date')):
+                    merged[index] = action
+                    break
+            else:
+                merged.append(action)
+        else:
+            merged.append(action)
+
+    return merged
+
+
+def create_proposal(conn, user_id, conversation_id, actions):
+    """Add a turn's actions to this conversation's pending card.
+
+    ## Why this accumulates rather than replaces
+
+    It used to replace, and that was right when a turn was the whole
+    interaction: "I had oats" in, one card out. A guided check-in is not that. It
+    asks about sleep, then training, then food, queueing as it goes - and
+    replacing meant the card at the end held only the last thing discussed, with
+    everything earlier marked superseded and silently dropped. The person presses
+    Save on a card that looks right and loses two thirds of what they just said.
+
+    So a pending proposal from the *same* conversation is extended. One from a
+    different conversation is still superseded, which keeps the property that
+    mattered: there are never two live Save buttons.
     """
-    conn.execute(
-        "UPDATE ai_proposals SET status = 'superseded', resolved_at = CURRENT_TIMESTAMP "
-        "WHERE user_id = ? AND status = 'pending'",
+    pending = conn.execute(
+        "SELECT id, conversation_id, actions FROM ai_proposals "
+        "WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1",
         (user_id,),
-    )
+    ).fetchone()
+
+    if pending and pending['conversation_id'] == conversation_id:
+        try:
+            existing = json.loads(pending['actions'])
+        except ValueError:
+            existing = []
+        conn.execute(
+            'UPDATE ai_proposals SET actions = ? WHERE id = ?',
+            (json.dumps(_merge(existing, actions)), pending['id']),
+        )
+        conn.commit()
+        return pending['id']
+
+    if pending:
+        conn.execute(
+            "UPDATE ai_proposals SET status = 'superseded', "
+            'resolved_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (pending['id'],),
+        )
+
     cursor = conn.cursor()
     cursor.execute(
         'INSERT INTO ai_proposals (conversation_id, user_id, actions) VALUES (?, ?, ?)',
@@ -154,7 +235,8 @@ def _reconcile(stored, submitted):
     return submitted
 
 
-def apply(conn, user_id, proposal_id, submitted_actions=None, recompute=None, today=None):
+def apply(conn, user_id, proposal_id, submitted_actions=None, recompute=None,
+          today=None, username=None, record_checklist=None):
     """Confirm a proposal and execute it.
 
     Actions run in order and stop at the first failure, with everything done so
@@ -172,7 +254,8 @@ def apply(conn, user_id, proposal_id, submitted_actions=None, recompute=None, to
     stored = json.loads(row['actions'])
     actions = _reconcile(stored, submitted_actions)
 
-    ctx = tools.ToolContext(conn, user_id, today=today)
+    ctx = tools.ToolContext(conn, user_id, today=today, username=username,
+                            record_checklist=record_checklist)
     applied, failed = [], None
 
     for action in actions:

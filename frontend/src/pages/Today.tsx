@@ -6,12 +6,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
   PartyPopper,
   X,
 } from 'lucide-react'
 
 import type { Badge as BadgeType, ChecklistItem } from '../api/types'
-import { useChecklistItems, useDay, useSaveDay } from '../api/queries'
+import { useAssistantState, useChecklistItems, useDay, useSaveDay } from '../api/queries'
 import { PageHeader } from '../components/layout/PageHeader'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { ItemIcon } from '../components/ui/ItemIcon'
@@ -23,6 +24,7 @@ import { ProgressRing } from '../components/ui/ProgressRing'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
+import { openAssistant } from '../lib/assistantBus'
 import { cn } from '../lib/cn'
 import { shiftISO, todayISO } from '../lib/date'
 import { scaleIn, slideIn, spring } from '../lib/motion'
@@ -242,6 +244,7 @@ export function Today() {
   const [editingDate, setEditingDate] = useState(date)
   const [celebrating, setCelebrating] = useState<BadgeType[]>([])
 
+  const assistant = useAssistantState()
   const itemsQuery = useChecklistItems()
   const dayQuery = useDay(date)
   const save = useSaveDay(date)
@@ -315,7 +318,22 @@ export function Today() {
         description={date === today ? 'What did the day actually look like?' : date}
         icon={CalendarCheck}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* An alternative route through the same day, not a replacement.
+                Tapping through the list is faster when you know what you did;
+                talking is faster when you have to remember it. The button hides
+                itself on an instance with no assistant, and hides itself on past
+                dates - a check-in is about the day you are having. */}
+            {assistant.data?.configured && date === today && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={MessageSquare}
+                onClick={() => openAssistant({ kind: 'today', date })}
+              >
+                Check in by chat
+              </Button>
+            )}
             <Button
               size="sm"
               icon={ChevronLeft}

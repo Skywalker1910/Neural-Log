@@ -409,16 +409,104 @@ def test_a_proposal_belongs_to_one_account(client, app_module, monkeypatch):
     assert 'No such proposal' in response.get_json()['message']
 
 
-def test_a_second_proposal_supersedes_the_first(client, app_module, monkeypatch):
-    """Two live Save buttons means pressing the older one logs something the
-    person already talked past."""
+def test_a_conversation_accumulates_onto_one_card(client, app_module, monkeypatch):
+    """The bug a browser caught that the unit tests did not.
+
+    A check-in queues as it goes - sleep on one turn, training on the next. When
+    each turn replaced the last, the card at the end held only the final topic
+    and everything earlier was silently marked superseded. The person presses
+    Save on a card that looks right and loses two thirds of what they just said.
+    """
     conn, first = propose(client, app_module, monkeypatch, grams=80)
     _, second = propose(client, app_module, monkeypatch, grams=200)
 
+    assert first['id'] == second['id'], 'the same conversation should extend one card'
+    assert len(second['actions']) == 2
+
+    assert client.post(f'/api/assistant/proposals/{second["id"]}/apply', json={}).status_code == 200
+    saved = [row['grams'] for row in conn.execute('SELECT grams FROM food_entries ORDER BY grams')]
+    assert saved == [80, 200], 'both turns should be saved, not just the last'
+
+
+def test_a_corrected_one_per_day_answer_replaces_rather_than_doubling(client, app_module, monkeypatch):
+    """Sleep is one row per day, so a corrected bedtime overwrites the queued one.
+
+    The rule mirrors what the applier does: `_apply_sleep` deletes and reinserts,
+    so two queued sleeps for one date would be a card promising something the
+    save cannot deliver.
+    """
+    if client.get('/api/current-user').status_code != 200:
+        register(client)
+    conn = app_module.get_db_connection()
+
+    def queue_sleep(bedtime):
+        use_fake(
+            monkeypatch,
+            turn(calls=[call('propose_sleep', {
+                'date': '2026-09-20', 'bedtime': bedtime, 'wake_time': '07:00',
+                'duration_minutes': None, 'quality': None,
+            })]),
+            turn(text='Ready.'),
+        )
+        events = sse(client.post('/api/assistant/chat', json={'message': f'bed at {bedtime}'}))
+        return next(e for e in events if e['type'] == 'proposal')
+
+    queue_sleep('23:00')
+    corrected = queue_sleep('23:45')
+
+    sleeps = [a for a in corrected['actions'] if a['type'] == 'sleep']
+    assert len(sleeps) == 1, 'a corrected bedtime should replace, not stack'
+    assert sleeps[0]['bedtime'] == '23:45'
+
+    client.post(f'/api/assistant/proposals/{corrected["id"]}/apply', json={})
+    assert conn.execute('SELECT bedtime FROM sleep_entries').fetchone()['bedtime'] == '23:45'
+
+
+def test_a_new_conversation_still_supersedes_the_old_card(client, app_module, monkeypatch):
+    """Accumulating within a conversation must not resurrect the old property.
+
+    Two live Save buttons means pressing the older one logs something the person
+    already talked past - so a check-in starting fresh retires whatever a chat
+    left pending.
+    """
+    conn, first = propose(client, app_module, monkeypatch, grams=80)
+
+    # A check-in is a different conversation from the free chat above.
+    use_fake(
+        monkeypatch,
+        turn(calls=[call('propose_sleep', {
+            'date': '2026-09-20', 'bedtime': '22:30', 'wake_time': '06:30',
+            'duration_minutes': None, 'quality': None,
+        })]),
+        turn(text='Ready.'),
+    )
+    events = sse(client.post('/api/assistant/chat',
+                             json={'message': 'slept 10:30 to 6:30', 'kind': 'today',
+                                   'date': '2026-09-20'}))
+    second = next(e for e in events if e['type'] == 'proposal')
+
     assert first['id'] != second['id']
     assert client.post(f'/api/assistant/proposals/{first["id"]}/apply', json={}).status_code == 400
-    assert client.post(f'/api/assistant/proposals/{second["id"]}/apply', json={}).status_code == 200
-    assert conn.execute('SELECT grams FROM food_entries').fetchone()['grams'] == 200
+    assert conn.execute('SELECT COUNT(*) AS n FROM food_entries').fetchone()['n'] == 0
+
+
+def test_free_chat_remembers_the_previous_turn(client, app_module, monkeypatch):
+    """Without this the assistant cannot answer "make that 120 grams instead",
+    because every message started a conversation with no history."""
+    register(client)
+    fake = use_fake(monkeypatch, turn(text='one'), turn(text='two'))
+
+    client.post('/api/assistant/chat', json={'message': 'I had oats'})
+    client.post('/api/assistant/chat', json={'message': 'make that 120 grams'})
+
+    conn = app_module.get_db_connection()
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM ai_conversations WHERE kind = 'general'"
+    ).fetchone()['n'] == 1
+
+    # The second request carried the first exchange with it.
+    sent = fake.last_request['input']
+    assert any(isinstance(item, dict) and item.get('content') == 'I had oats' for item in sent)
 
 
 def test_a_pending_proposal_survives_a_reload(client, app_module, monkeypatch):

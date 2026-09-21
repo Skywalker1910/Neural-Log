@@ -25,11 +25,12 @@ trade: the duplication is small and visible, and the alternative was a hole.
 
 ## Why so few tools
 
-Seven, against sixty-odd endpoints. A model given sixty tools chooses worse than
-one given seven, and most of those endpoints are read paths that collapse into a
+Eleven, against sixty-odd endpoints. A model given sixty tools chooses worse than
+one given eleven, and most of those endpoints are read paths that collapse into a
 single "what happened on this day" call. Tools are a prompt, not an API surface -
 they should describe the jobs, not the routes.
 """
+import json
 from datetime import date as _date
 
 TOOLS = {}
@@ -53,10 +54,15 @@ class ToolContext:
     and so the whole registry is testable without a request.
     """
 
-    def __init__(self, conn, user_id, today=None):
+    def __init__(self, conn, user_id, today=None, username=None, record_checklist=None):
         self.conn = conn
         self.user_id = user_id
         self.today = today or _date.today().strftime('%Y-%m-%d')
+        self.username = username or f'user_{user_id}'
+        # app.record_checklist_day, injected. Answering the check-in has to run
+        # the same code the Today page runs - see _apply_checkin - and tools.py
+        # cannot import app without a cycle.
+        self.record_checklist = record_checklist
         self.queued = []
 
 
@@ -108,6 +114,34 @@ def _obj(properties, required):
         'properties': properties,
         'required': required,
         'additionalProperties': False,
+    }
+
+
+def _existing_responses(conn, user_id, date):
+    """This day's checklist answers, as `{question name: response}`.
+
+    Two things about the storage are easy to get wrong, so they are decided once
+    here. The answers are not a column - they live inside `daily_log.payload_json`
+    under `items`, which is the snapshot `day_detail` reads. And they are keyed by
+    question *name*, not id, because that is the shape `record_checklist_day`
+    expects and the shape the Today page posts.
+    """
+    row = conn.execute(
+        'SELECT payload_json FROM daily_log WHERE user_id = ? AND date = ?',
+        (user_id, date),
+    ).fetchone()
+    if not row:
+        return {}
+
+    try:
+        payload = json.loads(row['payload_json'] or '{}')
+    except (TypeError, ValueError):
+        return {}
+
+    return {
+        item.get('name'): item.get('response')
+        for item in payload.get('items', [])
+        if item.get('name') and str(item.get('response') or '').strip()
     }
 
 
@@ -563,3 +597,289 @@ _APPLIERS = {
     'lifestyle': _apply_lifestyle,
     'study': _apply_study,
 }
+
+
+# --- the guided check-in -------------------------------------------------------
+
+@tool(
+    name='get_checkin_plan',
+    description=(
+        'What is worth asking about today, in order, with the reason each one '
+        'ranks where it does. The order comes from the scoring engine: a topic '
+        'near the top is one whose attribute is currently capped because nothing '
+        'has evidenced it. Use this to run a check-in. Anything marked recorded '
+        'must not be asked about.'
+    ),
+    parameters=_obj({'date': {'type': ['string', 'null']}}, ['date']),
+)
+def get_checkin_plan(ctx, date=None):
+    import habits
+
+    from . import checkin
+
+    day = _date_or_today(ctx, date)
+    items = habits.load_survey(ctx.conn, ctx.user_id)
+
+    # Answers are stored by name; the plan and the model both work in ids.
+    answered_names = set(_existing_responses(ctx.conn, ctx.user_id, day))
+    answered = {
+        item.get('id') for item in items if item.get('name') in answered_names
+    }
+
+    return checkin.plan(ctx.conn, ctx.user_id, day, survey_items=items, answered=answered)
+
+
+@tool(
+    name='propose_checkin',
+    description=(
+        'Queue answers to the daily check-in. Take the question ids from '
+        'get_checkin_plan. Answer only what the person actually told you - an '
+        'unanswered question is honest, and a guessed one silently becomes part '
+        'of their score.'
+    ),
+    parameters=_obj(
+        {
+            'date': {'type': ['string', 'null']},
+            'answers': {
+                'type': 'array',
+                'items': _obj(
+                    {
+                        'question_id': {'type': 'string'},
+                        'question': {'type': 'string',
+                                     'description': 'The wording, for the card.'},
+                        'value': {'type': 'string',
+                                  'description': 'yes or no for yes-no questions, '
+                                                 'otherwise the answer as text.'},
+                    },
+                    ['question_id', 'question', 'value'],
+                ),
+            },
+        },
+        ['date', 'answers'],
+    ),
+    writes=True,
+)
+def propose_checkin(ctx, date=None, answers=None):
+    import habits
+
+    day = _date_or_today(ctx, date)
+    answers = answers or []
+    if not answers:
+        raise ToolError('No answers given.')
+
+    known = {item.get('id') for item in habits.load_survey(ctx.conn, ctx.user_id)}
+    unknown = [a.get('question_id') for a in answers if a.get('question_id') not in known]
+    if unknown:
+        raise ToolError(
+            f'Not questions this person is asked: {", ".join(map(str, unknown))}. '
+            'Call get_checkin_plan and use the ids from it.'
+        )
+
+    shown = ', '.join(f'{a["question"]}: {a["value"]}' for a in answers[:3])
+    if len(answers) > 3:
+        shown += f' (+{len(answers) - 3} more)'
+
+    return _queue(
+        ctx,
+        {'type': 'checkin', 'date': day, 'answers': answers},
+        f'Check-in for {day} - {shown}',
+    )
+
+
+# --- training ------------------------------------------------------------------
+
+@tool(
+    name='search_exercises',
+    description=(
+        'Find exercises by name or muscle. Returns the id needed to propose a '
+        'workout, and whether the movement is strength, cardio or mobility - '
+        'which decides whether its sets take a weight or a duration.'
+    ),
+    parameters=_obj(
+        {'query': {'type': 'string',
+                   'description': 'Part of an exercise name, or a muscle like "chest".'}},
+        ['query'],
+    ),
+)
+def search_exercises(ctx, query):
+    needle = (query or '').strip()
+    if len(needle) < 2:
+        raise ToolError('Give at least two characters to search for.')
+
+    rows = ctx.conn.execute(
+        'SELECT id, name, primary_muscle, category, equipment FROM exercises '
+        'WHERE (name LIKE ? OR primary_muscle LIKE ?) '
+        '  AND (user_id IS NULL OR user_id = ?) AND COALESCE(archived, 0) = 0 '
+        'ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, LENGTH(name) LIMIT 12',
+        (f'%{needle}%', f'%{needle}%', ctx.user_id, f'{needle}%'),
+    ).fetchall()
+
+    return {
+        'query': needle,
+        'exercises': [
+            {'id': row['id'], 'name': row['name'], 'muscle': row['primary_muscle'],
+             'category': row['category'], 'equipment': row['equipment']}
+            for row in rows
+        ],
+    }
+
+
+@tool(
+    name='propose_workout',
+    description=(
+        'Queue a training session. Look every movement up with search_exercises '
+        'first. Strength sets take reps and a weight in kg; cardio and mobility '
+        'take a duration in minutes instead. "Three sets of ten at sixty" is '
+        'three sets, each with reps 10 and weight_kg 60.'
+    ),
+    parameters=_obj(
+        {
+            'date': {'type': ['string', 'null']},
+            'name': {'type': ['string', 'null'],
+                     'description': 'What to call the session, e.g. "Upper body".'},
+            'exercises': {
+                'type': 'array',
+                'items': _obj(
+                    {
+                        'exercise_id': {'type': 'integer'},
+                        'name': {'type': 'string'},
+                        'sets': {
+                            'type': 'array',
+                            'items': _obj(
+                                {
+                                    'reps': {'type': ['integer', 'null']},
+                                    'weight_kg': {'type': ['number', 'null']},
+                                    'duration_minutes': {'type': ['number', 'null']},
+                                },
+                                ['reps', 'weight_kg', 'duration_minutes'],
+                            ),
+                        },
+                    },
+                    ['exercise_id', 'name', 'sets'],
+                ),
+            },
+        },
+        ['date', 'name', 'exercises'],
+    ),
+    writes=True,
+)
+def propose_workout(ctx, date=None, name=None, exercises=None):
+    day = _date_or_today(ctx, date)
+    exercises = exercises or []
+    if not exercises:
+        raise ToolError('A session needs at least one exercise.')
+
+    clean, total_sets = [], 0
+    for entry in exercises:
+        found = ctx.conn.execute(
+            'SELECT id, name FROM exercises WHERE id = ? AND (user_id IS NULL OR user_id = ?)',
+            (entry.get('exercise_id'), ctx.user_id),
+        ).fetchone()
+        if not found:
+            raise ToolError(
+                f'No exercise with id {entry.get("exercise_id")}. Use search_exercises.'
+            )
+
+        sets = entry.get('sets') or []
+        if not sets:
+            raise ToolError(f'{found["name"]}: no sets given.')
+
+        for one in sets:
+            reps = one.get('reps')
+            if reps is not None and not 0 < int(reps) <= 200:
+                raise ToolError(f'{found["name"]}: {reps} reps is not plausible.')
+            weight = one.get('weight_kg')
+            if weight is not None and not 0 <= float(weight) <= 600:
+                raise ToolError(f'{found["name"]}: {weight} kg is not plausible.')
+
+        total_sets += len(sets)
+        clean.append({'exercise_id': found['id'], 'name': found['name'], 'sets': sets})
+
+    described = ', '.join(f'{entry["name"]} x{len(entry["sets"])}' for entry in clean)
+    return _queue(
+        ctx,
+        {'type': 'workout', 'date': day, 'name': name or 'Session', 'exercises': clean},
+        f'Training on {day} - {described} ({total_sets} sets)',
+    )
+
+
+def _apply_checkin(ctx, action, recompute):
+    """Answers merged into what is already there, then scored by app.py.
+
+    Two things this deliberately does not do.
+
+    It does not replace the response set: sending only what the assistant heard
+    would erase answers typed on the Today page an hour ago.
+
+    And it does not score the day itself. `record_checklist_day` is injected, so
+    a day answered by talking goes through exactly the code a day answered by
+    tapping goes through - the activity row, the audit trail, the scoring, all of
+    it. A second implementation here is the drift that function's docstring warns
+    about, and it would show up weeks later as a streak wrong by a day.
+    """
+    if ctx.record_checklist is None:
+        raise ToolError('The check-in writer is not wired up on this instance.')
+
+    import habits
+
+    day = action['date']
+    responses = _existing_responses(ctx.conn, ctx.user_id, day)
+
+    # The model works in ids because they are unambiguous; storage works in
+    # names because that is what the scoring path takes. Translated here rather
+    # than at either end, so neither has to know about the other's convention.
+    names = {item.get('id'): item.get('name')
+             for item in habits.load_survey(ctx.conn, ctx.user_id)}
+
+    for answer in action['answers']:
+        name = names.get(answer['question_id'])
+        if name:
+            responses[name] = answer['value']
+
+    completion, _badges = ctx.record_checklist(
+        ctx.conn, ctx.user_id, ctx.username, day, responses, source='assistant',
+    )
+    return f'Answered {len(action["answers"])} question(s) for {day} - {completion}% complete.'
+
+
+def _apply_workout(ctx, action, recompute):
+    day = action['date']
+    cursor = ctx.conn.cursor()
+    cursor.execute(
+        'INSERT INTO workout_sessions (user_id, date, name) VALUES (?, ?, ?)',
+        (ctx.user_id, day, action.get('name') or 'Session'),
+    )
+    session_id = cursor.lastrowid
+
+    position = 0
+    for entry in action['exercises']:
+        for one in entry['sets']:
+            position += 1
+            duration = one.get('duration_minutes')
+            ctx.conn.execute(
+                'INSERT INTO exercise_sets (session_id, exercise_id, position, weight, '
+                'weight_unit, reps, duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (session_id, entry['exercise_id'], position, one.get('weight_kg'),
+                 'kg', one.get('reps'),
+                 int(float(duration) * 60) if duration else None),
+            )
+
+    # The same totals the Training workspace keeps, by the same rule: warm-ups
+    # excluded, volume as weight times reps.
+    totals = ctx.conn.execute(
+        'SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(weight, 0) * COALESCE(reps, 0)), 0) '
+        'AS volume FROM exercise_sets WHERE session_id = ? AND is_warmup = 0',
+        (session_id,),
+    ).fetchone()
+    ctx.conn.execute(
+        'UPDATE workout_sessions SET total_sets = ?, total_volume = ? WHERE id = ?',
+        (totals['n'], totals['volume'], session_id),
+    )
+    ctx.conn.commit()
+    if recompute:
+        recompute(ctx.conn, ctx.user_id, day)
+    return f'Logged {totals["n"]} sets on {day}.'
+
+
+_APPLIERS['checkin'] = _apply_checkin
+_APPLIERS['workout'] = _apply_workout

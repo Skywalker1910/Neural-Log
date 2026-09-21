@@ -4,7 +4,9 @@ import { Bot, Send, Sparkles, X } from 'lucide-react'
 import { AnimatePresence, m } from 'motion/react'
 
 import { api } from '../../api/client'
+import { onOpenAssistant, type OpenAssistantRequest } from '../../lib/assistantBus'
 import { streamChat, type AssistantState, type ProposedAction } from '../../api/assistant'
+import { useAssistantState } from '../../api/queries'
 import { Button } from '../ui/Button'
 import { cn } from '../../lib/cn'
 import { ProposalCard } from './ProposalCard'
@@ -38,9 +40,23 @@ const TOOL_LABELS: Record<string, string> = {
   propose_sleep: 'writing up your sleep',
   propose_lifestyle: 'noting that down',
   propose_study: 'writing up the session',
+  get_checkin_plan: 'working out what is worth asking',
+  propose_checkin: 'writing up your check-in',
+  search_exercises: 'looking up exercises',
+  propose_workout: 'writing up the session',
 }
 
-export function AssistantPanel({ onClose }: { onClose: () => void }) {
+/** What opens a guided check-in. The person pressed a button that means this,
+ *  so sending it as their first turn is honest rather than a puppet string. */
+const CHECKIN_OPENER = "Let's run through today."
+
+export function AssistantPanel({
+  onClose,
+  request,
+}: {
+  onClose: () => void
+  request: OpenAssistantRequest
+}) {
   const queryClient = useQueryClient()
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
@@ -70,22 +86,38 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     inputRef.current?.focus()
   }, [])
 
+  // A check-in starts itself. Somebody who pressed "check in by chat" has
+  // already said what they want; making them type "hello" first is friction for
+  // its own sake.
+  const started = useRef(false)
+  useEffect(() => {
+    if (request.kind !== 'today' || started.current) return
+    started.current = true
+    void send(CHECKIN_OPENER)
+    // Once, on mount, for a check-in. `send` is recreated every render and
+    // depending on it would re-fire the opener on each keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request.kind])
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, status, proposal])
 
-  async function send() {
-    const message = input.trim()
+  async function send(override?: string) {
+    const message = (override ?? input).trim()
     if (!message || busy) return
 
-    setInput('')
+    if (!override) setInput('')
     setError(null)
     setTurns((current) => [...current, { role: 'user', text: message }])
     setBusy(true)
     setStatus('thinking')
 
     try {
-      for await (const event of streamChat(message)) {
+      for await (const event of streamChat(message, {
+        kind: request.kind,
+        date: request.date,
+      })) {
         if (event.type === 'status') {
           setStatus(TOOL_LABELS[event.tool ?? ''] ?? 'working')
         } else if (event.type === 'done') {
@@ -148,13 +180,15 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3">
         <span className="flex min-w-0 items-center gap-2">
           <Bot size={18} className="shrink-0 text-brand" aria-hidden />
-          <span className="truncate text-label font-semibold text-ink">Assistant</span>
+          <span className="truncate text-label font-semibold text-ink">
+            {request.kind === 'today' ? 'Daily check-in' : 'Assistant'}
+          </span>
         </span>
         <Button variant="ghost" size="sm" icon={X} onClick={onClose} aria-label="Close assistant" />
       </header>
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {turns.length === 0 && !proposal && (
+        {turns.length === 0 && !proposal && request.kind !== 'today' && (
           <div className="rounded-lg border border-line bg-surface-card p-4">
             <p className="text-label text-ink">Tell me about your day.</p>
             <p className="mt-1 text-meta text-ink-subtle">
@@ -188,6 +222,22 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
         {proposal && (
           <ProposalCard
+            /*
+              Remounted whenever the queued set changes, which resets the
+              editable draft inside.
+
+              ProposalCard seeds that draft with `useState(() => ...)`, and an
+              initialiser runs once - so without this, a check-in that queues
+              sleep on one turn and training on the next kept rendering the
+              first card forever while the server accumulated behind it. The
+              person saves what looks right and loses the rest.
+
+              The cost is that an edit in progress is discarded when a new turn
+              queues something. That is the correct way round: the newest
+              conversation is the better information, and a lost edit is visible
+              where a missing action is not.
+            */
+            key={`${proposal.id}:${proposal.actions.length}`}
             actions={proposal.actions}
             saving={savingProposal}
             error={error}
@@ -231,24 +281,21 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
  * Renders nothing when the instance has no API key - see the file docstring.
  */
 export function AssistantLauncher() {
-  const [open, setOpen] = useState(false)
-  const [available, setAvailable] = useState(false)
+  const [request, setRequest] = useState<OpenAssistantRequest | null>(null)
+  const assistant = useAssistantState()
 
-  useEffect(() => {
-    void api
-      .get<AssistantState>('/api/assistant/state')
-      .then((state) => setAvailable(state.configured))
-      .catch(() => setAvailable(false))
-  }, [])
+  // Today's "check in by chat" button fires this. Subscribed unconditionally:
+  // hooks cannot be called after an early return, and it costs nothing.
+  useEffect(() => onOpenAssistant(setRequest), [])
 
-  if (!available) return null
+  if (!assistant.data?.configured) return null
 
   return (
     <>
-      {!open && (
+      {!request && (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => setRequest({ kind: 'general' })}
           aria-label="Open the assistant"
           className={cn(
             'fixed bottom-20 right-4 z-40 flex size-12 items-center justify-center rounded-full lg:bottom-6',
@@ -260,7 +307,17 @@ export function AssistantLauncher() {
         </button>
       )}
 
-      <AnimatePresence>{open && <AssistantPanel onClose={() => setOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {request && (
+          <AssistantPanel
+            // Keyed by mode: switching from free chat to a check-in should
+            // start a fresh panel, not carry the old transcript into it.
+            key={request.kind}
+            request={request}
+            onClose={() => setRequest(null)}
+          />
+        )}
+      </AnimatePresence>
     </>
   )
 }
