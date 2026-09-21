@@ -28,11 +28,20 @@ RUN npm run build
 # --- stage 2: the app --------------------------------------------------------
 FROM python:3.13-slim AS runtime
 
+# The commit this image was built from, baked in at build time.
+#
+# The VERSION file says which release the code belongs to, which only changes
+# when somebody cuts one. This says exactly which build is running, which is the
+# question you actually have when production is behaving oddly - and it is what
+# lets the deploy assert that the thing it just pushed is the thing now serving.
+ARG GIT_SHA=unknown
+
 # PYTHONUNBUFFERED so logs appear as they happen rather than when a buffer
 # fills - the difference between watching a deploy and guessing at one.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    NEURAL_LOG_ENV=production
+    NEURAL_LOG_ENV=production \
+    NEURAL_LOG_COMMIT=$GIT_SHA
 
 # sqlite3 for the backup script's `.backup` command, which is the only safe way
 # to copy a database that is being written to. curl for the health check.

@@ -50,7 +50,18 @@ sudo docker compose logs --tail 50 app caddy
 sudo systemctl list-timers neurallog-backup.timer
 sudo journalctl -u neurallog-backup.service --no-pager -n 30
 sudo ./scripts/drill.sh          # rehearse a restore; touches nothing live
+curl -s localhost/healthz        # which release and which build is serving
 ```
+
+`docker compose up -d` on the instance is safe: the deploy records the image tag
+it pushed in `.env`, so a bare `up` recreates the container on the same image.
+
+It was not always safe. The tag used to be passed inline for the length of the
+deploy command only, so a later `up` fell back to `:latest` - and `up` does not
+pull, so it used whatever stale `:latest` was cached on the box. Editing `.env`
+and restarting silently rolled production back several weeks, and the health
+check passed throughout because it only asked whether something was answering.
+It now compares the live commit against the one CI built.
 
 For a restore, stop the app and preserve its current database before replacing
 it. The restored database must belong to UID/GID `10001:10001`, with a writable

@@ -59,6 +59,11 @@ def _read_version():
 
 
 __version__ = _read_version()
+
+#: The commit this build came from, baked into the image by CI. 'unknown' for a
+#: checkout being run directly, which is honest - a developer's working tree is
+#: not any particular commit.
+__commit__ = (os.environ.get('NEURAL_LOG_COMMIT') or 'unknown').strip()
 FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
 
 ICON_KEYS = {
@@ -1115,7 +1120,14 @@ def healthz():
         app.logger.exception('Health check could not reach the database')
         return jsonify({'status': 'unhealthy'}), 503
 
-    return jsonify({'status': 'ok', 'version': __version__})
+    return jsonify({
+        'status': 'ok',
+        'version': __version__,
+        # The deploy asserts this matches the commit it just pushed. Without it,
+        # a health check passes on whatever happens to be running - which is how
+        # a silent rollback stays silent.
+        'commit': __commit__,
+    })
 
 
 @app.route('/assets/<path:filename>')
@@ -2135,6 +2147,7 @@ def admin_stats():
         'registration_mode': security.registration_mode(),
         'database_integrity': integrity,
         'version': __version__,
+        'commit': __commit__,
         'backup': read_backup_status(),
     })
 
