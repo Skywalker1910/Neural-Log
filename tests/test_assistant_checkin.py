@@ -367,3 +367,150 @@ def test_logging_training_removes_it_from_the_next_plan(app_module, client):
     })
 
     assert 'training' not in topics(checkin.plan(ctx.conn, 1, '2026-09-20'))
+
+
+# --- goals and tasks -----------------------------------------------------------
+#
+# Deliberately outside the weighted ranking. `init_goals` is registered with no
+# recompute function because a goal is an intention rather than evidence, so
+# giving these a priority beside sleep and training would invent an analytical
+# weight the engine does not give them. They close the check-in instead.
+
+def seed_work(ctx, overdue=False):
+    ctx.conn.execute(
+        "INSERT INTO goals (user_id, title, status, metric_name, target_value, current_value) "
+        "VALUES (1, 'Read 12 books', 'active', 'books', 12, 3)"
+    )
+    goal_id = ctx.conn.execute('SELECT id FROM goals LIMIT 1').fetchone()['id']
+    ctx.conn.execute(
+        'INSERT INTO tasks (user_id, goal_id, title, due_date) VALUES (1, ?, ?, ?)',
+        (goal_id, 'Finish chapter 4', '2026-09-01' if overdue else '2026-12-01'),
+    )
+    ctx.conn.commit()
+    return goal_id
+
+
+def test_open_work_is_not_part_of_the_weighted_order(app_module, client):
+    """The honest bit. Goals feed no attribute, so ranking them next to sleep
+    would claim an analytical weight the scoring engine does not give them."""
+    register(client)
+    ctx = context(app_module)
+    seed_work(ctx)
+
+    plan = checkin.plan(ctx.conn, 1, '2026-09-20')
+
+    assert 'goals' not in topics(plan) and 'tasks' not in topics(plan)
+    assert plan['follow_up']['affects_scores'] is False
+    assert plan['follow_up']['active_goals'] == 1
+    assert plan['follow_up']['open_tasks'] == 1
+
+
+def test_nothing_outstanding_means_nothing_to_ask(app_module, client):
+    """No commitments, no closing question - rather than a limp "anything else?"."""
+    register(client)
+    ctx = context(app_module)
+
+    assert checkin.plan(ctx.conn, 1, '2026-09-20')['follow_up']['ask'] is None
+
+
+def test_an_overdue_task_is_flagged_rather_than_left_as_arithmetic(app_module, client):
+    register(client)
+    ctx = context(app_module)
+    seed_work(ctx, overdue=True)
+
+    work = tools.get_open_work(ctx)
+
+    assert work['tasks'][0]['overdue'] is True
+    assert work['tasks'][0]['goal'] == 'Read 12 books'
+
+
+def test_a_completed_task_drops_out_of_open_work(app_module, client):
+    register(client)
+    ctx = context(app_module)
+    seed_work(ctx)
+    task_id = tools.get_open_work(ctx)['tasks'][0]['id']
+
+    tools.apply_action(ctx, {'type': 'tasks_done', 'date': '2026-09-20',
+                             'tasks': [{'task_id': task_id, 'title': 'Finish chapter 4'}]})
+
+    assert tools.get_open_work(ctx)['tasks'] == []
+
+
+def test_proposing_a_finished_task_writes_nothing(app_module, client):
+    register(client)
+    ctx = context(app_module)
+    seed_work(ctx)
+    task_id = tools.get_open_work(ctx)['tasks'][0]['id']
+
+    tools.propose_tasks_done(ctx, tasks=[{'task_id': task_id, 'title': 'Finish chapter 4'}])
+
+    assert len(ctx.queued) == 1
+    assert ctx.conn.execute(
+        'SELECT completed_on FROM tasks WHERE id = ?', (task_id,)
+    ).fetchone()['completed_on'] is None
+
+
+def test_a_task_that_is_already_done_cannot_be_proposed_again(app_module, client):
+    """Otherwise a second check-in re-closes it and the card promises nothing."""
+    register(client)
+    ctx = context(app_module)
+    seed_work(ctx)
+    task_id = tools.get_open_work(ctx)['tasks'][0]['id']
+    tools.apply_action(ctx, {'type': 'tasks_done', 'date': '2026-09-20',
+                             'tasks': [{'task_id': task_id, 'title': 'x'}]})
+
+    try:
+        tools.propose_tasks_done(ctx, tasks=[{'task_id': task_id, 'title': 'x'}])
+        assert False, 'expected a ToolError'
+    except tools.ToolError as error:
+        assert 'get_open_work' in str(error)
+
+
+def test_somebody_elses_task_is_invisible(app_module, client):
+    """Ids are sequential integers."""
+    register(client, username='owner')
+    ctx = context(app_module)
+    seed_work(ctx)
+    task_id = tools.get_open_work(ctx)['tasks'][0]['id']
+
+    stranger = context(app_module, user_id=2)
+    try:
+        tools.propose_tasks_done(stranger, tasks=[{'task_id': task_id, 'title': 'x'}])
+        assert False, 'expected a ToolError'
+    except tools.ToolError:
+        pass
+
+
+def test_goal_progress_is_the_new_total_not_the_increment(app_module, client):
+    """The tool description says so, and the applier assumes it. A model that
+    sent the delta would silently reset a goal to today's reading."""
+    register(client)
+    ctx = context(app_module)
+    goal_id = seed_work(ctx)
+
+    tools.apply_action(ctx, {'type': 'goal_progress', 'date': '2026-09-20',
+                             'goal_id': goal_id, 'title': 'Read 12 books',
+                             'current_value': 4})
+
+    assert ctx.conn.execute(
+        'SELECT current_value FROM goals WHERE id = ?', (goal_id,)
+    ).fetchone()['current_value'] == 4
+
+
+def test_a_goal_without_a_metric_cannot_take_progress(app_module, client):
+    """"Be more consistent" has no number to move, and inventing one would be
+    worse than saying so."""
+    register(client)
+    ctx = context(app_module)
+    ctx.conn.execute(
+        "INSERT INTO goals (user_id, title, status) VALUES (1, 'Be more consistent', 'active')"
+    )
+    ctx.conn.commit()
+    goal_id = ctx.conn.execute('SELECT id FROM goals LIMIT 1').fetchone()['id']
+
+    try:
+        tools.propose_goal_progress(ctx, goal_id=goal_id, title='Be more consistent',
+                                    current_value=5)
+        assert False, 'expected a ToolError'
+    except tools.ToolError as error:
+        assert 'no metric' in str(error)

@@ -25,10 +25,10 @@ trade: the duplication is small and visible, and the alternative was a hole.
 
 ## Why so few tools
 
-Eleven, against sixty-odd endpoints. A model given sixty tools chooses worse than
-one given eleven, and most of those endpoints are read paths that collapse into a
-single "what happened on this day" call. Tools are a prompt, not an API surface -
-they should describe the jobs, not the routes.
+Fourteen, against sixty-odd endpoints. A model given sixty tools chooses worse
+than one given fourteen, and most of those endpoints are read paths that collapse
+into a single "what happened on this day" call. Tools are a prompt, not an API
+surface - they should describe the jobs, not the routes.
 """
 import json
 from datetime import date as _date
@@ -883,3 +883,191 @@ def _apply_workout(ctx, action, recompute):
 
 _APPLIERS['checkin'] = _apply_checkin
 _APPLIERS['workout'] = _apply_workout
+
+
+# --- goals and tasks -----------------------------------------------------------
+#
+# Deliberately outside the weighted plan. Goals and tasks feed no attribute -
+# `init_goals` takes no recompute function, because a goal is an intention rather
+# than evidence - so ranking them alongside sleep and training would be inventing
+# an analytical weight the engine does not give them.
+#
+# They are a closing follow-up instead, which is also how they were asked for:
+# "followup with the user on their learning goals and any pending tasks".
+
+@tool(
+    name='get_open_work',
+    description=(
+        'Open goals and outstanding tasks. Use this at the end of a check-in to '
+        'follow up on what someone said they would do. These do not affect any '
+        'score - they are commitments, not evidence - so ask about them last and '
+        'briefly.'
+    ),
+    parameters=_obj({}, []),
+)
+def get_open_work(ctx):
+    today = ctx.today
+
+    goals = ctx.conn.execute(
+        'SELECT id, title, metric_name, target_value, current_value, target_date '
+        "FROM goals WHERE user_id = ? AND status = 'active' AND COALESCE(archived, 0) = 0 "
+        'ORDER BY target_date IS NULL, target_date LIMIT 8',
+        (ctx.user_id,),
+    ).fetchall()
+
+    tasks = ctx.conn.execute(
+        'SELECT tasks.id, tasks.title, tasks.due_date, tasks.priority, goals.title AS goal '
+        'FROM tasks LEFT JOIN goals ON goals.id = tasks.goal_id '
+        'WHERE tasks.user_id = ? AND tasks.completed_on IS NULL '
+        '  AND COALESCE(tasks.archived, 0) = 0 '
+        'ORDER BY tasks.due_date IS NULL, tasks.due_date, tasks.priority, tasks.position '
+        'LIMIT 12',
+        (ctx.user_id,),
+    ).fetchall()
+
+    return {
+        'goals': [
+            {
+                'id': row['id'], 'title': row['title'],
+                'metric': row['metric_name'],
+                'progress': (
+                    f'{row["current_value"] or 0:g} of {row["target_value"]:g}'
+                    if row['target_value'] else None
+                ),
+                'target_date': row['target_date'],
+            }
+            for row in goals
+        ],
+        'tasks': [
+            {
+                'id': row['id'], 'title': row['title'],
+                'due': row['due_date'],
+                # Flagged rather than left for the model to work out from dates,
+                # so "anything overdue?" is one field instead of arithmetic.
+                'overdue': bool(row['due_date'] and row['due_date'] < today),
+                'goal': row['goal'],
+            }
+            for row in tasks
+        ],
+    }
+
+
+@tool(
+    name='propose_tasks_done',
+    description=(
+        'Queue one or more tasks as finished. Take the ids from get_open_work - '
+        'never guess one. Only mark what they actually said they did.'
+    ),
+    parameters=_obj(
+        {
+            'tasks': {
+                'type': 'array',
+                'items': _obj(
+                    {
+                        'task_id': {'type': 'integer'},
+                        'title': {'type': 'string', 'description': 'For the confirmation card.'},
+                    },
+                    ['task_id', 'title'],
+                ),
+            },
+        },
+        ['tasks'],
+    ),
+    writes=True,
+)
+def propose_tasks_done(ctx, tasks=None):
+    tasks = tasks or []
+    if not tasks:
+        raise ToolError('No tasks given.')
+
+    clean = []
+    for entry in tasks:
+        row = ctx.conn.execute(
+            'SELECT id, title FROM tasks WHERE id = ? AND user_id = ? '
+            'AND completed_on IS NULL',
+            (entry.get('task_id'), ctx.user_id),
+        ).fetchone()
+        if not row:
+            raise ToolError(
+                f'No open task with id {entry.get("task_id")}. Call get_open_work.'
+            )
+        clean.append({'task_id': row['id'], 'title': row['title']})
+
+    listed = ', '.join(entry['title'] for entry in clean)
+    return _queue(
+        ctx,
+        {'type': 'tasks_done', 'date': ctx.today, 'tasks': clean},
+        f'Mark done: {listed}',
+    )
+
+
+@tool(
+    name='propose_goal_progress',
+    description=(
+        'Queue an update to where a goal has got to. Only for goals with a '
+        'metric, and only when they told you a number. The value is the new '
+        'total, not the amount added.'
+    ),
+    parameters=_obj(
+        {
+            'goal_id': {'type': 'integer'},
+            'title': {'type': 'string', 'description': 'For the confirmation card.'},
+            'current_value': {'type': 'number', 'description': 'The new total.'},
+        },
+        ['goal_id', 'title', 'current_value'],
+    ),
+    writes=True,
+)
+def propose_goal_progress(ctx, goal_id=None, title='', current_value=None):
+    row = ctx.conn.execute(
+        'SELECT id, title, metric_name, target_value FROM goals '
+        "WHERE id = ? AND user_id = ? AND status = 'active'",
+        (goal_id, ctx.user_id),
+    ).fetchone()
+    if not row:
+        raise ToolError(f'No active goal with id {goal_id}. Call get_open_work.')
+    if not row['metric_name']:
+        raise ToolError(
+            f'"{row["title"]}" has no metric to update - it is not measured by a number.'
+        )
+    if current_value is None or float(current_value) < 0:
+        raise ToolError('Give the new total as a number.')
+
+    target = f' of {row["target_value"]:g}' if row['target_value'] else ''
+    return _queue(
+        ctx,
+        {'type': 'goal_progress', 'date': ctx.today, 'goal_id': row['id'],
+         'title': row['title'], 'current_value': float(current_value)},
+        f'{row["title"]}: {float(current_value):g}{target} {row["metric_name"]}',
+    )
+
+
+def _apply_tasks_done(ctx, action, recompute):
+    """No recompute call, and that is not an omission.
+
+    Goals and tasks feed no attribute - `init_goals` is registered without one,
+    because a goal is an intention rather than evidence. Rescoring here would
+    move nothing and imply otherwise.
+    """
+    done = ctx.today
+    for entry in action['tasks']:
+        ctx.conn.execute(
+            'UPDATE tasks SET completed_on = ? WHERE id = ? AND user_id = ? '
+            'AND completed_on IS NULL',
+            (done, entry['task_id'], ctx.user_id),
+        )
+    ctx.conn.commit()
+    return f'Marked {len(action["tasks"])} task(s) done.'
+
+
+def _apply_goal_progress(ctx, action, recompute):
+    ctx.conn.execute(
+        'UPDATE goals SET current_value = ? WHERE id = ? AND user_id = ?',
+        (float(action['current_value']), action['goal_id'], ctx.user_id),
+    )
+    ctx.conn.commit()
+    return f'{action["title"]} is now at {float(action["current_value"]):g}.'
+
+
+_APPLIERS['tasks_done'] = _apply_tasks_done
+_APPLIERS['goal_progress'] = _apply_goal_progress

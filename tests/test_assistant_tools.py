@@ -59,7 +59,8 @@ def test_the_write_tools_are_the_ones_we_think_they_are():
     writes = {name for name, spec in tools.TOOLS.items() if spec['writes']}
     assert writes == {
         'propose_meal', 'propose_sleep', 'propose_lifestyle', 'propose_study',
-        'propose_checkin', 'propose_workout',
+        'propose_checkin', 'propose_workout', 'propose_tasks_done',
+        'propose_goal_progress',
     }
 
 

@@ -195,4 +195,47 @@ def plan(conn, user_id, date, survey_items=None, answered=None):
         'ask_about_in_this_order': [i['topic'] for i in items if i['priority'] > 0],
         'already_recorded': sorted(recorded),
         'items': items,
+        'follow_up': follow_up(conn, user_id, date),
+    }
+
+
+def follow_up(conn, user_id, date):
+    """Open commitments to close the check-in on - not part of the ranking.
+
+    Goals and tasks feed no attribute. `init_goals` is registered without a
+    recompute function precisely because a goal is an intention rather than
+    evidence, so giving them a priority alongside sleep and training would mean
+    inventing an analytical weight the engine does not give them.
+
+    They are worth asking about anyway, which is why they are here and not
+    omitted - just at the end, briefly, and declared as affecting nothing.
+    """
+    overdue = conn.execute(
+        'SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND completed_on IS NULL '
+        'AND COALESCE(archived, 0) = 0 AND due_date IS NOT NULL AND due_date < ?',
+        (user_id, date),
+    ).fetchone()['n']
+
+    open_tasks = conn.execute(
+        'SELECT COUNT(*) AS n FROM tasks WHERE user_id = ? AND completed_on IS NULL '
+        'AND COALESCE(archived, 0) = 0',
+        (user_id,),
+    ).fetchone()['n']
+
+    goals = conn.execute(
+        "SELECT COUNT(*) AS n FROM goals WHERE user_id = ? AND status = 'active' "
+        'AND COALESCE(archived, 0) = 0',
+        (user_id,),
+    ).fetchone()['n']
+
+    return {
+        'open_tasks': int(open_tasks),
+        'overdue_tasks': int(overdue),
+        'active_goals': int(goals),
+        'ask': (
+            'Close with anything outstanding - call get_open_work for the detail. '
+            'Keep it to one question; these affect no score.'
+            if open_tasks or goals else None
+        ),
+        'affects_scores': False,
     }
