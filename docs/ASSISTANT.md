@@ -58,23 +58,108 @@ paths that collapse into a single "what happened on this day" call.
 | Tool | Reads or proposes |
 |---|---|
 | `get_day` | everything recorded on a date, and what is missing |
+| `get_checkin_plan` | what is worth asking about, in order, with reasons |
 | `search_foods` | the catalogue, with serving and cup weights |
+| `search_exercises` | the movement library |
 | `get_survey_questions` | the check-in questions this account is asked |
 | `propose_meal` | queues a meal |
 | `propose_sleep` | queues a night |
+| `propose_workout` | queues a training session |
 | `propose_lifestyle` | queues water, steps, mood |
 | `propose_study` | queues a study session |
+| `propose_checkin` | queues answers to the daily check-in |
 
 They talk to the database directly rather than to the app's own HTTP endpoints.
 Self-calling would mean carrying a session cookie and working around the CSRF
 guard, and a codebase should not learn how to do that.
 
-**Not here yet:** training (sets and exercises are a richer shape and deserve
-their own pass) and the daily check-in. The check-in has to run `save_day()`'s
-scoring path, whose docstring says a day logged there must be indistinguishable
-from one logged by the legacy wizard — a second implementation in the tool layer
-is exactly the drift it warns about. Both land with the guided Today
-conversation.
+The check-in does not write `daily_log` itself. `save_day()` was extracted into
+`record_checklist_day()` and injected, so a day answered by talking goes through
+the same activity row, the same audit trail and the same scoring as a day
+answered by tapping. That function's docstring says a day logged there must be
+indistinguishable from one logged by the legacy wizard; a second implementation
+behind a chat window is exactly the drift it warns about, and it would surface
+weeks later as a streak wrong by a day.
+
+## The guided check-in
+
+**Today —> Check in by chat** runs the whole day as a conversation. An
+alternative route through the same data, not a replacement: tapping the list is
+faster when you know what you did, talking is faster when you have to remember
+it.
+
+### The order is derived, not written down
+
+The obvious way to build this is a fixed script — wake time, breakfast,
+training, study. It works until the third day, when it asks about the workout you
+logged from the gym two hours ago and you stop using it.
+
+So `get_checkin_plan` computes the order from two numbers that were already in
+`scoring/config.py` long before there was an assistant:
+
+- **`measured_weight = 3.0` against `self_report_weight = 1.0`.** One answer
+  about what you actually ate is worth three checklist ticks.
+- **`self_report_ceiling = 0.5`.** An attribute with no measured evidence is
+  capped at half, whatever the checklist claims. Asking about sleep does not
+  merely add evidence — it lifts a ceiling.
+
+Which gives the ranking without anyone having to invent one:
+
+| Priority | Meaning |
+|---|---|
+| 3 | nothing has evidenced this attribute today, so it is stuck at 50% |
+| 2 | nothing logged, but the attribute is evidenced by something else |
+| 1 | the checklist — 1x, but the only direct evidence of Discipline |
+| 0 | already recorded. Not asked about. |
+
+Within a band, whichever topic unblocks the most capped attributes comes first:
+training unlocks three, study two, sleep one.
+
+A worked example. Nothing logged yet:
+
+```
+3  training  Agility, Stamina and Strength have no measured evidence today...
+3  study     Focus and Knowledge have no measured evidence today...
+3  food      Recovery has no measured evidence today...
+3  sleep     Recovery has no measured evidence today...
+3  steps     Stamina has no measured evidence today...
+1  checkin   10 question(s) unanswered...
+```
+
+Log a workout and your steps, then ask again:
+
+```
+3  food      Recovery has no measured evidence today...
+3  sleep     Recovery has no measured evidence today...
+3  study     Focus and Knowledge have no measured evidence today...
+1  checkin   10 question(s) unanswered...
+0  steps     Already logged today - do not ask about this.
+0  training  Already logged today - do not ask about this.
+```
+
+The model is given the reasons, not just the order, so it can explain itself
+truthfully when asked why it wants to know about sleep. They are also true: the
+50% in that sentence is the number the engine actually enforces.
+
+### The card accumulates
+
+A check-in queues as it goes — sleep on one turn, training on the next — and
+all of it lands on **one** card at the end.
+
+Worth stating because the first implementation got it wrong, and no unit test
+caught it. Each turn's proposal superseded the last, so the card at the end held
+only the final topic and everything earlier was silently dropped: you press Save
+on something that looks right and lose two thirds of what you just said. A
+browser found it in about a minute.
+
+Proposals now extend the pending card within a conversation and supersede only
+across conversations, which keeps the property that mattered — there are never
+two live Save buttons.
+
+One-per-day actions replace rather than stack, so correcting your bedtime
+updates the queued one instead of queueing a second. The rule mirrors the
+appliers: `_apply_sleep` deletes and reinserts, so two queued sleeps for one date
+would be a card promising something the save cannot deliver.
 
 ## Editing a proposal, and why that is safe
 

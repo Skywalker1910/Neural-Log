@@ -51,9 +51,23 @@ def test_strict_mode_requires_every_property_to_be_listed_required():
 
 
 def test_the_write_tools_are_the_ones_we_think_they_are():
-    """A read tool that quietly becomes a write tool is the regression to catch."""
+    """A read tool that quietly becomes a write tool is the regression to catch.
+
+    Spelled out rather than derived, so adding one is a deliberate act that
+    shows up in a diff next to this list.
+    """
     writes = {name for name, spec in tools.TOOLS.items() if spec['writes']}
-    assert writes == {'propose_meal', 'propose_sleep', 'propose_lifestyle', 'propose_study'}
+    assert writes == {
+        'propose_meal', 'propose_sleep', 'propose_lifestyle', 'propose_study',
+        'propose_checkin', 'propose_workout',
+    }
+
+
+def test_every_write_tool_has_an_applier():
+    """A proposal whose type nothing can apply is a Save button that 400s."""
+    proposers = {name for name, spec in tools.TOOLS.items() if spec['writes']}
+    # propose_meal -> 'meal', propose_checkin -> 'checkin', and so on.
+    assert {name.removeprefix('propose_') for name in proposers} <= set(tools._APPLIERS)
 
 
 # --- reading ------------------------------------------------------------------

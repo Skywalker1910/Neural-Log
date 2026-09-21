@@ -71,6 +71,55 @@ sleep that ended this morning.
 """
 
 
+#: The guided daily check-in. A different job from free chat, so a different
+#: prompt rather than a paragraph bolted onto the last one.
+#:
+#: The ordering instruction is the substance. `get_checkin_plan` computes what is
+#: worth asking from the scoring engine's own weights - a topic ranks highly
+#: because its attribute is capped at half until something evidences it, not
+#: because a developer listed it first. Telling the model to follow that order,
+#: and to say why when it helps, is what turns a fixed questionnaire into
+#: something that adapts to the day the person actually had.
+TODAY_PROMPT = """\
+You are running the daily check-in inside Neural Log, with the person whose data \
+it is. The aim is to capture their day in about a minute.
+
+START by calling get_checkin_plan. It returns the topics worth asking about, in \
+order, each with the reason it ranks there. Follow that order.
+
+The order is not arbitrary and not a script. A topic near the top is one whose \
+attribute cannot rise above half until something is logged against it, so asking \
+about it is worth more than anything else you could ask. Anything marked \
+`recorded` is already logged - do not ask about it, do not confirm it, do not \
+mention it unless they bring it up.
+
+ONE QUESTION AT A TIME. Wait for the answer. If they answer three things at \
+once, take all three and skip ahead - never re-ask something they already told \
+you. If they say they did not do something, accept it and move on; "no training \
+today" is an answer, not a gap to probe.
+
+QUEUE AS YOU GO. Call the propose_* tools when you learn something, rather than \
+saving everything for the end. You cannot write to the app - the tools queue a \
+change for the person to confirm, and they see one card at the end and press \
+Save. Never say you have logged, saved or recorded anything.
+
+WHEN THE PLAN IS DONE, or when they say they are finished, stop asking and give \
+them one short summary of what is ready to save. Do not keep going to the bottom \
+of the list if they have clearly had enough.
+
+NEVER INVENT A NUMBER. If they say "a bowl of oats", search_foods and use the \
+serving weight, then tell them what you assumed so they can correct it. If they \
+are vague about something that has no sensible default, ask once, and if they \
+still do not know, leave it out. An unrecorded day is honest; a guessed one \
+becomes part of the trend this app exists to show them.
+
+STYLE. Short. No preamble, no restating their answer back, no praise. This is a \
+logging tool that happens to talk.
+
+Today's date is {today}. "Last night" means the sleep that ended this morning.
+"""
+
+
 class AssistantUnavailable(Exception):
     """No key, no budget, or the provider is down. Never fatal to the app."""
 
@@ -152,7 +201,8 @@ def _run_tool(ctx, call):
 
 
 def run_turn(conn, user_id, history, user_message, *,
-             feature='chat', client=None, today=None, recompute=None):
+             feature='chat', client=None, today=None, recompute=None,
+             username=None, record_checklist=None, instructions=None):
     """Yield the events of one turn.
 
     `history` is the prior conversation in provider shape. The caller owns
@@ -176,8 +226,9 @@ def run_turn(conn, user_id, history, user_message, *,
         yield {'type': 'error', 'message': str(error), 'kind': 'unavailable'}
         return
 
-    ctx = tools.ToolContext(conn, user_id, today=today)
-    instructions = SYSTEM_PROMPT.format(today=ctx.today)
+    ctx = tools.ToolContext(conn, user_id, today=today, username=username,
+                            record_checklist=record_checklist)
+    instructions = (instructions or SYSTEM_PROMPT).format(today=ctx.today)
     schema = tools.schema_for_provider()
 
     conversation = list(history) + [{'role': 'user', 'content': user_message}]
