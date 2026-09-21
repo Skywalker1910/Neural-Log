@@ -53,6 +53,8 @@ export interface AdminOverview {
   database_integrity: string
   /** The release this instance is running, from the VERSION file. */
   version: string
+  /** The commit the image was built from. 'unknown' outside CI. */
+  commit: string
   backup: BackupStatus
 }
 

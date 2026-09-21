@@ -493,9 +493,18 @@ export function Admin() {
                       Database: {data.database_integrity === 'ok' ? 'Healthy' : data.database_integrity}
                     </Badge>
                     <Badge tone="info">Registration: {data.registration_mode}</Badge>
-                    {/* The deploy ships images tagged by commit SHA, so this is
-                        the only place that answers "which release is live". */}
-                    <Badge tone="neutral">v{data.version}</Badge>
+                    {/* Which release *and* which build. The version only moves
+                        when somebody cuts one, so between releases it cannot tell
+                        two very different images apart - which is how a silent
+                        rollback went unnoticed once. */}
+                    <Badge tone="neutral">
+                      v{data.version}
+                      {data.commit && data.commit !== 'unknown' && (
+                        <span className="tabular ml-1 text-ink-subtle">
+                          {data.commit.slice(0, 7)}
+                        </span>
+                      )}
+                    </Badge>
                     <Badge tone="neutral">{data.accounts.active} accounts enabled</Badge>
                     <BackupHealth backup={data.backup} />
                   </div>

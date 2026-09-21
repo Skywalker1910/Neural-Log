@@ -316,3 +316,22 @@ def test_a_missing_version_file_does_not_stop_the_app(app_module, monkeypatch):
     monkeypatch.setattr(app_module, 'PROJECT_ROOT', pathlib.Path('/nonexistent'))
 
     assert app_module._read_version() == 'unknown'
+
+
+def test_the_health_check_reports_the_commit(raw_client, app_module):
+    """Which build is running, not just which release.
+
+    The version only moves when somebody cuts one, so between releases it cannot
+    distinguish two very different images - and CI compares this against the
+    commit it just built, which is what turns a silent rollback into a red X.
+    """
+    payload = raw_client.get('/healthz').get_json()
+
+    assert 'commit' in payload
+    assert payload['commit'] == app_module.__commit__
+
+
+def test_a_checkout_reports_an_unknown_commit(app_module):
+    """CI bakes it in at build time; a working tree is not any one commit, and
+    saying 'unknown' is more honest than inventing one."""
+    assert app_module.__commit__ == 'unknown'

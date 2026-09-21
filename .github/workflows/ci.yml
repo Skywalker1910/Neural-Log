@@ -143,6 +143,8 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           # Layer cache in GitHub's own store. The npm install is the expensive
           # layer and it changes about once a month, so this takes a rebuild
           # from ~3 minutes to well under one.
@@ -175,8 +177,37 @@ jobs:
           LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
         run: |
           image_tag="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
-          ssh -i ~/.ssh/lightsail_key -o IdentitiesOnly=yes "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
-            "cd /srv/neurallog && sudo env NEURAL_LOG_IMAGE='$image_tag' docker compose pull app && sudo env NEURAL_LOG_IMAGE='$image_tag' docker compose up -d --wait --wait-timeout 120"
+          # The tag is recorded in .env rather than passed inline, so it outlives
+          # this command.
+          #
+          # Passing it inline meant the instance ran the right image only while
+          # the deploy was running. Any later `docker compose up` on the box -
+          # to pick up an edited .env, say - fell back to :latest, and `up` does
+          # not pull, so it used whatever stale :latest happened to be cached
+          # and silently rolled production back weeks. Recording the tag makes a
+          # bare `docker compose up -d` correct instead of dangerous.
+          ssh -i ~/.ssh/lightsail_key -o IdentitiesOnly=yes "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" "
+            set -e
+            cd /srv/neurallog
+            sudo sed -i '/^NEURAL_LOG_IMAGE=/d' .env
+            printf 'NEURAL_LOG_IMAGE=%s\n' '$image_tag' | sudo tee -a .env > /dev/null
+            sudo docker compose pull app
+            sudo docker compose up -d --wait --wait-timeout 120
+          "
 
-      - name: Verify the public health endpoint
-        run: curl --fail --silent --show-error --retry 5 --retry-delay 5 https://neurallog.adityamore.dev/healthz
+      - name: Verify the deployed commit is the one we just built
+        # Not merely that something answers. A health check that passes on any
+        # running container is exactly how a rollback stays silent for a week -
+        # which is what happened, and is why this step now compares.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            body=$(curl --fail --silent --show-error https://neurallog.adityamore.dev/healthz) && break
+            sleep 5
+          done
+          echo "$body"
+          live=$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit",""))')
+          if [ "$live" != "$GITHUB_SHA" ]; then
+            echo "::error::Live commit is '$live' but this run built '$GITHUB_SHA'. The deploy did not take."
+            exit 1
+          fi
+          echo "Serving $live"
