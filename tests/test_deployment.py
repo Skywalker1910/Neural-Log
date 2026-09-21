@@ -27,7 +27,7 @@ def test_the_health_check_needs_no_session(raw_client):
     response = raw_client.get('/healthz')
 
     assert response.status_code == 200
-    assert response.get_json() == {'status': 'ok'}
+    assert response.get_json()['status'] == 'ok'
 
 
 def test_the_health_check_reads_the_database(app_module, monkeypatch):
@@ -286,3 +286,33 @@ def test_a_non_admin_cannot_read_the_backup_status(client):
     register(client, username='friend')
 
     assert client.get('/api/admin/stats').status_code == 403
+
+
+# --- knowing what is running ---------------------------------------------------
+
+def test_the_health_check_reports_the_version(raw_client, app_module):
+    """The deploy ships images tagged by commit SHA.
+
+    Without this there is no way to ask a running instance what release it is,
+    which is the first question when production looks wrong.
+    """
+    payload = raw_client.get('/healthz').get_json()
+
+    assert payload['version'] == app_module.__version__
+    assert payload['version'] != 'unknown'
+
+
+def test_the_two_version_markers_agree(app_module):
+    """VERSION and frontend/package.json drift the moment nothing checks."""
+    root = pathlib.Path(app_module.__file__).resolve().parent
+    declared = (root / 'VERSION').read_text(encoding='utf-8').strip()
+    package = json.loads((root / 'frontend' / 'package.json').read_text(encoding='utf-8'))
+
+    assert package['version'] == declared
+
+
+def test_a_missing_version_file_does_not_stop_the_app(app_module, monkeypatch):
+    """An honest 'unknown' beats refusing to boot over a label."""
+    monkeypatch.setattr(app_module, 'PROJECT_ROOT', pathlib.Path('/nonexistent'))
+
+    assert app_module._read_version() == 'unknown'

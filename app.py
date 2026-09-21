@@ -38,6 +38,27 @@ DATABASE = os.environ.get('DATABASE', 'neural_log.db')
 # directory (tests/conftest.py), and the app is often started from elsewhere.
 PROJECT_ROOT = Path(__file__).resolve().parent
 MIGRATIONS_DIR = PROJECT_ROOT / 'migrations'
+
+
+def _read_version():
+    """The release this build is, from the VERSION file beside this one.
+
+    Read rather than hard-coded so a release is one file to edit, and reported
+    over HTTP because the deploy pipeline ships images tagged by commit SHA -
+    without this there is no way to ask a running instance what it is, which is
+    the first question when something looks wrong.
+
+    Missing file means somebody is running from a checkout that predates it, or
+    a build that excluded it; 'unknown' is the honest answer and not a reason to
+    fail to start.
+    """
+    try:
+        return (PROJECT_ROOT / 'VERSION').read_text(encoding='utf-8').strip() or 'unknown'
+    except OSError:
+        return 'unknown'
+
+
+__version__ = _read_version()
 FRONTEND_DIST = PROJECT_ROOT / 'frontend' / 'dist'
 
 ICON_KEYS = {
@@ -1094,7 +1115,7 @@ def healthz():
         app.logger.exception('Health check could not reach the database')
         return jsonify({'status': 'unhealthy'}), 503
 
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'version': __version__})
 
 
 @app.route('/assets/<path:filename>')
@@ -2113,6 +2134,7 @@ def admin_stats():
         'features': feature_counts,
         'registration_mode': security.registration_mode(),
         'database_integrity': integrity,
+        'version': __version__,
         'backup': read_backup_status(),
     })
 
