@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { m } from 'motion/react'
 import {
-  Award, BookOpen, Dumbbell, Flame, Info, Lock, Receipt, Sparkles, Sun,
+  Award, BookOpen, Dumbbell, Flame, Info, Lock, Medal, Receipt, ShieldCheck, Sparkles, Sun,
   Trophy, UtensilsCrossed,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -39,10 +39,18 @@ const CATEGORY_META: Record<AchievementCategory, {
  * category is already carried by its section, and colouring tier by category
  * would make "gold" mean six different things.
  */
-const TIER_STYLE: Record<AchievementTier, { ring: string; text: string; label: string }> = {
-  bronze: { ring: 'border-[#b06a3b]/60', text: 'text-[#c98b5e]', label: 'Bronze' },
-  silver: { ring: 'border-[#9aa4b2]/60', text: 'text-[#b9c2ce]', label: 'Silver' },
-  gold: { ring: 'border-[#d4a63c]/70', text: 'text-[#e8c35c]', label: 'Gold' },
+const TIER_STYLE: Record<AchievementTier, {
+  ring: string; text: string; tint: string; label: string
+}> = {
+  bronze: {
+    ring: 'border-[#b06a3b]/60', text: 'text-[#c98b5e]', tint: 'from-[#9a5933]/35', label: 'Bronze',
+  },
+  silver: {
+    ring: 'border-[#9aa4b2]/60', text: 'text-[#b9c2ce]', tint: 'from-[#78818e]/30', label: 'Silver',
+  },
+  gold: {
+    ring: 'border-[#d4a63c]/70', text: 'text-[#e8c35c]', tint: 'from-[#9d761d]/35', label: 'Gold',
+  },
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -61,58 +69,51 @@ function formatNumber(value: number) {
 function AchievementCard({ achievement }: { achievement: Achievement }) {
   const tier = TIER_STYLE[achievement.tier]
   const pct = Math.round(achievement.progress * 100)
+  const category = CATEGORY_META[achievement.category]
+  const CategoryIcon = category.icon
 
   return (
-    <m.div
+    <m.article
       layout
       transition={spring.snappy}
       className={cn(
-        'flex min-w-0 flex-col gap-2 rounded-md border p-3 transition-colors',
+        'group relative isolate flex min-w-0 flex-col overflow-hidden rounded-xl border p-4 transition-[border,transform,box-shadow]',
         achievement.earned
-          ? cn('bg-surface-raised', tier.ring)
+          ? cn('bg-gradient-to-br via-surface-card to-surface-raised shadow-card hover:-translate-y-0.5 hover:shadow-raised', tier.tint, tier.ring)
           : 'border-line bg-surface-base',
       )}
     >
-      <div className="flex items-start gap-2">
-        <span
-          className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-full border',
-            achievement.earned
-              ? cn(tier.ring, tier.text)
-              : 'border-line text-ink-subtle',
-          )}
-          aria-hidden
-        >
-          {achievement.earned ? <Trophy size={15} /> : <Lock size={13} />}
+      <div className="pointer-events-none absolute -right-12 -top-12 -z-10 size-36 rounded-full bg-white/5 blur-3xl" />
+      <div className={cn('flex items-start justify-between gap-3', !achievement.earned && 'blur-[1.5px]')}>
+        <span className={cn(
+          'relative flex size-14 shrink-0 items-center justify-center rounded-[18px] border bg-surface-base/70 shadow-card',
+          achievement.earned ? cn(tier.ring, tier.text) : 'border-line text-ink-subtle',
+        )} aria-hidden>
+          <span className="absolute inset-1 rounded-[14px] border border-white/10" />
+          {achievement.earned ? <Medal size={24} strokeWidth={1.8} /> : <Lock size={21} />}
         </span>
 
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className={cn('truncate text-label',
-              achievement.earned ? 'text-ink' : 'text-ink-muted')}>
-              {achievement.name}
-            </span>
-            <span className={cn('shrink-0 text-caption', tier.text)}>{tier.label}</span>
+        <span className="min-w-0 flex-1 pt-0.5 text-right">
+          <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption uppercase tracking-wide',
+            achievement.earned ? cn(tier.ring, tier.text) : 'border-line text-ink-subtle')}>
+            <CategoryIcon size={11} aria-hidden /> {tier.label}
           </span>
-          <span className="block text-meta text-ink-subtle">
-            {achievement.description}
-          </span>
+          <span className="mt-2 block truncate text-section text-ink">{achievement.name}</span>
+          <span className="mt-1 block text-meta text-ink-subtle">{achievement.description}</span>
         </span>
-
-        {achievement.xp_reward > 0 && (
-          <span className={cn('tabular shrink-0 text-meta',
-            achievement.earned ? 'text-discipline' : 'text-ink-subtle')}>
-            +{achievement.xp_reward}
-          </span>
-        )}
       </div>
 
-      {/*
-        The whole reason R7 rewrote the catalogue: a locked achievement says how
-        close you are rather than sitting greyed out with no hint.
-      */}
-      {!achievement.earned && (
-        <div className="flex flex-col gap-1">
+      {achievement.earned ? (
+        <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+          <span className={cn('flex items-center gap-1.5 text-meta', tier.text)}>
+            <ShieldCheck size={14} aria-hidden /> Unlocked
+          </span>
+          {achievement.xp_reward > 0 && (
+            <span className="tabular text-label text-discipline">+{achievement.xp_reward} XP</span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 border-t border-line pt-3">
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised">
             <m.div
               className="h-full rounded-full bg-discipline"
@@ -121,12 +122,17 @@ function AchievementCard({ achievement }: { achievement: Achievement }) {
               transition={spring.soft}
             />
           </div>
-          <span className="tabular text-caption text-ink-subtle">
-            {formatNumber(achievement.current)} of {formatNumber(achievement.threshold)}
-          </span>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-meta text-ink-muted">
+              <Lock size={12} aria-hidden /> Locked badge
+            </span>
+            <span className="tabular text-caption text-ink-subtle">
+              {formatNumber(achievement.current)} / {formatNumber(achievement.threshold)}
+            </span>
+          </div>
         </div>
       )}
-    </m.div>
+    </m.article>
   )
 }
 

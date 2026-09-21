@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Camera, Check, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, Camera, Check, RefreshCw, ScanLine, X } from 'lucide-react'
 
 import { api } from '../../api/client'
 import { scanLabel, type ScannedFood } from '../../api/assistant'
-import { prepareImage } from '../../lib/imageCapture'
+import { nutritionTableConfidence, prepareImage } from '../../lib/imageCapture'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { cn } from '../../lib/cn'
@@ -55,14 +55,30 @@ function shortName(key: string): string {
 export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const detectorRef = useRef<HTMLCanvasElement | null>(null)
+  const stableFramesRef = useRef(0)
+  const scanningRef = useRef(false)
 
   const [stage, setStage] = useState<Stage>('capture')
   const [preview, setPreview] = useState<string | null>(null)
   const [food, setFood] = useState<ScannedFood | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [detecting, setDetecting] = useState(false)
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    stableFramesRef.current = 0
+    setDetecting(false)
+    setCameraOpen(false)
+  }, [])
 
   function reset() {
+    stopCamera()
     if (preview) URL.revokeObjectURL(preview)
     setPreview(null)
     setFood(null)
@@ -70,21 +86,99 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
     setStage('capture')
   }
 
-  async function handleFile(file: File | undefined) {
-    if (!file) return
+  useEffect(() => () => stopCamera(), [stopCamera])
+
+  const handleImage = useCallback(async (image: Blob | undefined, alreadyLocked = false) => {
+    if (!image || (scanningRef.current && !alreadyLocked)) return
+    scanningRef.current = true
+    stopCamera()
     setError(null)
     setStage('reading')
 
     try {
-      const image = await prepareImage(file)
-      setPreview(image.previewUrl)
-      setFood(await scanLabel(image.blob))
+      const prepared = await prepareImage(image)
+      setPreview(prepared.previewUrl)
+      setFood(await scanLabel(prepared.blob))
       setStage('review')
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'That scan did not work.')
       setStage('capture')
+    } finally {
+      scanningRef.current = false
+    }
+  }, [stopCamera])
+
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Live camera capture is not available in this browser. Take a photo instead.')
+      return
+    }
+
+    setError(null)
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      })
+      setCameraOpen(true)
+    } catch {
+      setError('Camera access was not allowed. Take a photo instead, or allow camera access and retry.')
     }
   }
+
+  const captureFrame = useCallback(async () => {
+    const video = videoRef.current
+    if (!video || !video.videoWidth || !video.videoHeight || scanningRef.current) return
+    // Lock before `toBlob` resolves. Otherwise three positive detector frames
+    // could each start their own upload on a slow phone.
+    scanningRef.current = true
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const context = canvas.getContext('2d')
+    if (!context) {
+      scanningRef.current = false
+      return
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const image = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    if (image) {
+      await handleImage(image, true)
+    } else {
+      scanningRef.current = false
+    }
+  }, [handleImage])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!cameraOpen || !video || !streamRef.current) return
+    video.srcObject = streamRef.current
+    void video.play().catch(() => {})
+
+    const interval = window.setInterval(() => {
+      if (!video.videoWidth || !video.videoHeight || scanningRef.current) return
+      const canvas = detectorRef.current ?? document.createElement('canvas')
+      detectorRef.current = canvas
+      canvas.width = 240
+      canvas.height = Math.max(120, Math.round((video.videoHeight / video.videoWidth) * 240))
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      if (!context) return
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const confidence = nutritionTableConfidence(context.getImageData(0, 0, canvas.width, canvas.height))
+      stableFramesRef.current = confidence >= 0.57 ? stableFramesRef.current + 1 : 0
+      setDetecting(stableFramesRef.current > 0)
+      if (stableFramesRef.current >= 3) {
+        stableFramesRef.current = 0
+        void captureFrame()
+      }
+    }, 420)
+
+    return () => window.clearInterval(interval)
+  }, [cameraOpen, captureFrame])
 
   async function save() {
     if (!food) return
@@ -140,27 +234,52 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
         // no permission prompt and no getUserMedia lifecycle to manage.
         capture="environment"
         className="sr-only"
-        onChange={(event) => void handleFile(event.target.files?.[0])}
+        onChange={(event) => void handleImage(event.target.files?.[0])}
       />
 
       {stage !== 'review' && (
         <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <div className="flex size-16 items-center justify-center rounded-full bg-surface-raised">
-            <Camera size={26} className="text-nutrition" aria-hidden />
-          </div>
-          <p className="max-w-sm text-meta text-ink-subtle">
-            Get the whole table in frame, including the column headings — they say
-            whether the numbers are per 100&nbsp;g or per serving, and that changes
-            everything.
-          </p>
-          <Button
-            variant="primary"
-            icon={Camera}
-            loading={stage === 'reading'}
-            onClick={() => fileRef.current?.click()}
-          >
-            {stage === 'reading' ? 'Reading the label' : 'Take a photo'}
-          </Button>
+          {cameraOpen ? (
+            <div className="w-full overflow-hidden rounded-lg border border-line bg-black text-left">
+              <div className="relative aspect-[4/3]">
+                <video ref={videoRef} muted playsInline className="size-full object-cover" />
+                <div className="pointer-events-none absolute inset-[12%] rounded-md border-2 border-brand/80 shadow-[0_0_0_999px_rgb(0_0_0_/_0.28)]" />
+                <span className={cn(
+                  'absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-meta',
+                  detecting ? 'bg-success/90 text-black' : 'bg-black/70 text-ink',
+                )}>
+                  {detecting ? 'Table detected — hold steady' : 'Centre the nutrition table'}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line p-2">
+                <span className="text-meta text-ink-subtle">Captures automatically when the table is clear.</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" icon={Camera} onClick={() => void captureFrame()}>
+                    Capture now
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={stopCamera}>Cancel</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex size-16 items-center justify-center rounded-full bg-surface-raised">
+                <ScanLine size={26} className="text-nutrition" aria-hidden />
+              </div>
+              <p className="max-w-sm text-meta text-ink-subtle">
+                Point the camera at the whole table, including column headings. It captures once the
+                label is steady and clear; nothing is saved until you review it.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="primary" icon={ScanLine} loading={stage === 'reading'} onClick={() => void startCamera()}>
+                  Scan automatically
+                </Button>
+                <Button variant="secondary" icon={Camera} disabled={stage === 'reading'} onClick={() => fileRef.current?.click()}>
+                  Take a photo
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

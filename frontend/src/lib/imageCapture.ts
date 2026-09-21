@@ -39,8 +39,8 @@ export interface PreparedImage {
  * location to a third party along with a picture of their cereal is not a trade
  * anybody agreed to, and nothing here needs the metadata.
  */
-export async function prepareImage(file: File): Promise<PreparedImage> {
-  const bitmap = await createImageBitmap(file)
+export async function prepareImage(image: Blob): Promise<PreparedImage> {
+  const bitmap = await createImageBitmap(image)
 
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
   const width = Math.round(bitmap.width * scale)
@@ -71,4 +71,66 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
     height,
     bytes: blob.size,
   }
+}
+
+/**
+ * A deliberately conservative signal for the black rules and dense text of a
+ * nutrition table. It does not identify food or read a label locally; it only
+ * decides when a steady frame is worth sending to the existing vision reader.
+ *
+ * Requiring several positive frames keeps a passing barcode, a hand, or a
+ * camera shake from immediately spending a scan. The server still validates
+ * the image and can refuse a frame that is not a nutrition panel.
+ */
+export function nutritionTableConfidence(image: ImageData): number {
+  const { data, width, height } = image
+  if (width < 40 || height < 40) return 0
+
+  const luminance = new Uint8Array(width * height)
+  let total = 0
+  for (let index = 0; index < luminance.length; index += 1) {
+    const pixel = index * 4
+    const value = Math.round(
+      data[pixel] * 0.2126 + data[pixel + 1] * 0.7152 + data[pixel + 2] * 0.0722,
+    )
+    luminance[index] = value
+    total += value
+  }
+
+  // A black frame and a blown-out frame can both have edges; neither is useful.
+  const average = total / luminance.length
+  if (average < 55 || average > 242) return 0
+
+  let textured = 0
+  let horizontalRules = 0
+  let verticalRules = 0
+  const threshold = 58
+
+  for (let y = 1; y < height; y += 1) {
+    let contrast = 0
+    for (let x = 0; x < width; x += 1) {
+      if (Math.abs(luminance[y * width + x] - luminance[(y - 1) * width + x]) > threshold) {
+        contrast += 1
+      }
+    }
+    textured += contrast
+    if (contrast > width * 0.27) horizontalRules += 1
+  }
+
+  for (let x = 1; x < width; x += 1) {
+    let contrast = 0
+    for (let y = 0; y < height; y += 1) {
+      if (Math.abs(luminance[y * width + x] - luminance[y * width + x - 1]) > threshold) {
+        contrast += 1
+      }
+    }
+    textured += contrast
+    if (contrast > height * 0.2) verticalRules += 1
+  }
+
+  const texture = textured / ((width * (height - 1) + height * (width - 1)) || 1)
+  const horizontal = Math.min(horizontalRules / 5, 1)
+  const vertical = Math.min(verticalRules / 4, 1)
+  const denseText = Math.min(texture / 0.16, 1)
+  return horizontal * 0.5 + vertical * 0.25 + denseText * 0.25
 }

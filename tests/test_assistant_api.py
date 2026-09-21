@@ -273,6 +273,21 @@ def test_chat_streams_events_and_creates_a_proposal(client, app_module, monkeypa
     assert conn.execute('SELECT COUNT(*) AS n FROM food_entries').fetchone()['n'] == 0
 
 
+def test_guided_checkin_streams_a_structured_input_card(client, monkeypatch):
+    """A card is only a faster answer; it arrives beside the normal reply."""
+    register(client)
+    use_fake(monkeypatch, turn(text='What movement did you do today?'))
+
+    events = sse(client.post('/api/assistant/chat', json={
+        'message': "Let's run through today.", 'kind': 'today', 'date': '2026-09-20',
+    }))
+
+    card = next(event['card'] for event in events if event['type'] == 'input_card')
+    assert card['topic'] == 'training'
+    assert card['fields'][0]['id'] == 'details'
+    assert card['message'] == 'I trained: {details}.'
+
+
 def test_an_empty_message_is_refused_without_calling_anything(client, monkeypatch):
     register(client)
     fake = use_fake(monkeypatch, turn(text='unreachable'))

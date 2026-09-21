@@ -13,6 +13,7 @@ export type AssistantEvent =
   | { type: 'status'; tool: string | null; writes: boolean; note?: string }
   | { type: 'done'; reply: string; queued: ProposedAction[]; budget: Budget }
   | { type: 'proposal'; id: number; actions: ProposedAction[] }
+  | { type: 'input_card'; card: AssistantInputCard }
   | { type: 'error'; kind: string; message: string }
   | { type: 'end' }
 
@@ -39,6 +40,27 @@ export interface ProposedAction {
   mood?: number | null
   topic?: string
   [key: string]: unknown
+}
+
+export interface AssistantInputField {
+  id: string
+  label: string
+  type: 'time' | 'text' | 'number' | 'select'
+  placeholder?: string
+  options?: string[]
+}
+
+export interface AssistantInputCard {
+  id: string
+  topic: string
+  eyebrow: string
+  title: string
+  prompt: string
+  reason: string
+  fields: AssistantInputField[]
+  choices?: { label: string; message: string }[]
+  submit_label: string
+  message: string
 }
 
 export interface Budget {
