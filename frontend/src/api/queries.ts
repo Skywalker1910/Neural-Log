@@ -545,6 +545,7 @@ export function useSaveLifestyle(date: string) {
     mutationFn: (body: Partial<LifestyleDay>) =>
       api.put<LifestyleDayResponse>(`/api/lifestyle/${date}`, body),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['journal'] })
       for (const key of nutritionKeysFor(date)) {
         queryClient.invalidateQueries({ queryKey: key })
       }

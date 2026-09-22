@@ -4,7 +4,7 @@ from datetime import date as _date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request, session
 
-from assistant import agent, config, usage
+from assistant import agent, config, usage, weekly
 
 feed_bp = Blueprint('feed', __name__)
 _get_db = None
@@ -176,5 +176,127 @@ def journal_summary():
             usage.record(conn, session.get('user_id'), 'journal', config.CHAT_MODEL, ok=False, error=error)
             return jsonify({'error': 'The assistant could not summarise this day right now.'}), 503
         return jsonify({'date': day.isoformat(), 'summary': summary})
+    finally:
+        conn.close()
+
+
+def _post(row):
+    return {
+        'id': row['id'], 'week_end': row['week_end'], 'generated_at': row['generated_at'],
+        'snapshot': json.loads(row['snapshot']), 'report': json.loads(row['report']),
+    }
+
+
+def _snapshot(conn, user_id, end):
+    start, _, days = _weekly_data(conn, user_id, end)
+    _, _, previous = _weekly_data(conn, user_id, start - timedelta(days=1))
+    return {'start': start.isoformat(), 'end': end.isoformat(), 'days': days, 'previous_days': previous}
+
+
+def _has_observations(days):
+    return any(
+        day['sessions'] or day['study_minutes'] or any(
+            day[key] is not None for key in ('calories', 'sleep_minutes', 'water_ml', 'steps', 'mood')
+        ) for day in days
+    )
+
+
+@feed_bp.route('/api/feed/posts')
+@_auth
+def feed_posts():
+    conn = _get_db()
+    try:
+        user_id = session['user_id']
+        today = _date.today()
+        end = today - timedelta(days=today.weekday() + 1)
+        snapshot = _snapshot(conn, user_id, end)
+        rows = conn.execute(
+            'SELECT * FROM weekly_posts WHERE user_id = ? AND report IS NOT NULL '
+            'ORDER BY week_end DESC LIMIT 52', (user_id,),
+        ).fetchall()
+        return jsonify({
+            'posts': [_post(row) for row in rows], 'configured': config.is_configured(),
+            'latest_week_end': end.isoformat(), 'has_data': _has_observations(snapshot['days']),
+        })
+    finally:
+        conn.close()
+
+
+@feed_bp.route('/api/feed/posts', methods=['POST'])
+@_auth
+def create_feed_post():
+    data = request.get_json(silent=True)
+    try:
+        if not isinstance(data, dict) or not isinstance(data.get('end'), str):
+            raise ValueError()
+        end = _date.fromisoformat(data['end'])
+        if end.weekday() != 6 or end >= _date.today() or end.year < 2000:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Choose a completed week ending on a Sunday.'}), 400
+    conn = _get_db()
+    user_id = session['user_id']
+    try:
+        existing = conn.execute(
+            'SELECT * FROM weekly_posts WHERE user_id = ? AND week_end = ?',
+            (user_id, end.isoformat()),
+        ).fetchone()
+        refresh = data.get('refresh') is True
+        if existing and existing['report'] and not refresh:
+            return jsonify(_post(existing))
+        if not config.is_configured():
+            return jsonify({'error': 'Weekly AI reviews are not configured on this instance.'}), 503
+        allowed, message = usage.check_budget(conn, user_id)
+        if not allowed:
+            return jsonify({'error': message}), 429
+        if usage.rate_limited(conn, user_id):
+            return jsonify({'error': 'Give the assistant a moment before requesting another review.'}), 429
+        snapshot = _snapshot(conn, user_id, end)
+        if not _has_observations(snapshot['days']):
+            return jsonify({'error': 'There are no recorded observations for this week yet.'}), 422
+        claimed = conn.execute(
+            "INSERT INTO weekly_posts (user_id, week_end) VALUES (?, ?) "
+            "ON CONFLICT(user_id, week_end) DO UPDATE SET status = 'pending', requested_at = datetime('now') "
+            "WHERE (weekly_posts.report IS NULL OR ? = 1) AND "
+            "(weekly_posts.status != 'pending' OR weekly_posts.requested_at < datetime('now', '-180 seconds'))",
+            (user_id, end.isoformat(), int(refresh)),
+        ).rowcount
+        conn.commit()
+        if not claimed:
+            completed = conn.execute('SELECT * FROM weekly_posts WHERE user_id = ? AND week_end = ?',
+                                     (user_id, end.isoformat())).fetchone()
+            if completed and completed['report'] and not refresh:
+                return jsonify(_post(completed))
+            return jsonify({'error': 'A review for this week is already being written. Try again shortly.'}), 409
+        try:
+            report = weekly.generate(conn, user_id, snapshot)
+        except Exception:
+            conn.execute("UPDATE weekly_posts SET status = 'failed' WHERE user_id = ? AND week_end = ?",
+                         (user_id, end.isoformat()))
+            conn.commit()
+            return jsonify({'error': 'The weekly review could not be written. Please try again.'}), 503
+        conn.execute(
+            "UPDATE weekly_posts SET status = 'ready', generated_at = datetime('now'), "
+            'snapshot = ?, report = ?, model = ? WHERE user_id = ? AND week_end = ?',
+            (json.dumps(snapshot), json.dumps(report), config.CHAT_MODEL, user_id, end.isoformat()),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM weekly_posts WHERE user_id = ? AND week_end = ?',
+                           (user_id, end.isoformat())).fetchone()
+        return jsonify(_post(row)), 201
+    finally:
+        conn.close()
+
+
+@feed_bp.route('/api/journal/entries')
+@_auth
+def journal_entries():
+    conn = _get_db()
+    try:
+        entries = conn.execute(
+            "SELECT date, journal FROM lifestyle_days WHERE user_id = ? AND TRIM(COALESCE(journal, '')) != '' "
+            'ORDER BY date DESC', (session['user_id'],),
+        ).fetchall()
+        return jsonify({'entries': [dict(entry) for entry in entries]})
     finally:
         conn.close()

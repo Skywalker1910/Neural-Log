@@ -3,7 +3,6 @@ import {
   BookOpenText,
   CalendarCheck,
   ChartLine,
-  ChefHat,
   Dumbbell,
   GraduationCap,
   House,
@@ -101,18 +100,6 @@ export const NAV_SECTIONS: NavSection[] = [
     path: '/feed',
     icon: Newspaper,
     accent: 'brand',
-  },
-  {
-    label: 'Recipe book',
-    path: '/recipes',
-    icon: ChefHat,
-    accent: 'lifestyle',
-  },
-  {
-    label: 'Exercise book',
-    path: '/exercises',
-    icon: Dumbbell,
-    accent: 'fitness',
   },
   {
     label: 'Journal',
