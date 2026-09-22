@@ -23,8 +23,23 @@ must pass before `main` will accept a merge.
 | Job | What it does | What it catches |
 |---|---|---|
 | **Backend tests** | `pytest` against an isolated temp database | Logic regressions, scoring changes, API contract breaks |
-| **Frontend checks** | `npm ci`, typecheck, lint, build | Type errors, lint violations, a build that does not compile |
+| **Frontend checks** | `npm ci`, typecheck, lint, `npm test`, build | Type errors, lint violations, detector arithmetic, a build that does not compile |
 | **Migration ledger** | `scripts/check_migrations.py` | Migrations that only work on *your* database |
+
+### Why there are frontend tests at all now
+
+For most of this SPA, typecheck plus lint plus a build is the right amount of
+checking: the components are thin, and what they get wrong is visual, which a
+test asserting `className` would not catch either.
+
+`frontend/src/lib/imageCapture.ts` is the exception, and it earned it. The
+nutrition-label detector is arithmetic on pixels, and it shipped unable to fire
+at all - one term carried half the score and went to zero at two degrees of
+tilt, putting the threshold out of reach. Typecheck, lint and build passed the
+whole time. So did opening the camera and looking at it.
+
+`npm test` runs `vitest` over that one module. The rule it implies is narrow:
+**pure functions that decide something get tests, wherever they live.**
 
 ### Why the migration check is separate from the tests
 

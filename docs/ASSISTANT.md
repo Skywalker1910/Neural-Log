@@ -228,6 +228,77 @@ tell whether the panel is per serving or per 100 g — retake the photo with the
 column headings visible."* Refusing beats guessing, because a guessed serving
 factor produces a food that is wrong in a way nobody will notice.
 
+### Firing the shutter on its own
+
+Point the camera at the panel and it captures by itself, once the frame is
+worth sending. The manual shutter never goes away.
+
+**It did not work.** The first detector scored a frame as
+`horizontalRules * 0.5 + verticalRules * 0.25 + denseText * 0.25` and captured
+above `0.57`. The rule terms counted scanlines where a quarter of the pixels
+changed sharply against the line above, which finds the black bars of a US panel
+— while the pack is parallel to the sensor.
+
+Measured against a rendered panel:
+
+| Tilt | Score | |
+|---|---|---|
+| 0 degrees | 0.651 | fires |
+| 2 degrees | 0.277 | never |
+| 5 degrees | 0.027 | never |
+
+Tilt smears a bar across several rows and the term collapses. With it gone the
+other two cap out at `0.5`, so the threshold was **arithmetically unreachable**
+— not unlikely, unreachable. Nobody holds a phone to two degrees, so it
+never fired for anyone, and the preview said *"Centre the nutrition table"*
+while a centred nutrition table sat in the middle of it.
+
+#### What it looks for now
+
+Three signals, none of which assume the pack is square to the camera.
+
+| Signal | What it is | Why |
+|---|---|---|
+| **Banding** | Ink binned into rows at seven shear angles, best one wins | A tilted table is still a table. This is the term that was broken. |
+| **Ink** | Share of the crop that is dark, after an Otsu split | Too little is a label too far away; too much is a thumb over the lens. |
+| **Focus** | Share of edges that are steep rather than smeared | A blurred frame spends a scan on something the model cannot read. |
+
+Ink and focus **multiply** rather than vote. Scoring all three as a weighted sum
+is what let a blurred frame pass on banding alone; as gates, a beautifully
+banded frame that is out of focus is simply not worth sending, and no amount of
+banding can outvote that.
+
+Two other things changed with it:
+
+- **It scores the guide box, not the sensor frame.** The preview is
+  `object-cover` in a 4:3 box, so a 16:9 stream loses its edges before anybody
+  sees them. Judging the framing by pixels the person is not being shown is how
+  a detector ends up disagreeing with the instruction printed over it.
+- **Steady now means steady.** The old loop counted qualifying frames, which is
+  also what you get panning along a shelf. Consecutive frames are compared.
+
+The preview says which signal is short — *"Hold still while it focuses"*,
+*"Move closer to the table"* — because *"Centre the nutrition table"*, held
+forever, tells you nothing about what to change.
+
+#### Why this has tests and the rest of the SPA does not
+
+`frontend/src/lib/imageCapture.test.ts` is the first frontend test in the
+project, and the reason is specific: this is arithmetic, it was wrong, and
+nothing else could have caught it. Typecheck, lint and build all passed the
+whole time it could not fire. Driving a browser did not catch it either —
+the camera looked completely normal.
+
+The fixtures are panels rendered into plain pixel buffers with tilt, blur,
+lighting and sensor grain dialled by hand, so the tilt regression is four
+assertions rather than a story. `npm test` runs them; CI runs them on every pull
+request.
+
+Verified end to end the other way too: Chromium will serve a `.y4m` file as a
+webcam, so a photograph of a panel held four degrees off square goes in as a
+real camera stream. The current build fires on it and fills the review form. The
+previous build, same feed, never fires at all.
+
 ### What it costs, and what leaves the device
 
 Scanning runs on the **extraction model**, not the chat one — this is

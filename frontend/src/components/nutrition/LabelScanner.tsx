@@ -4,7 +4,10 @@ import { AlertTriangle, Camera, Check, RefreshCw, ScanLine, X } from 'lucide-rea
 
 import { api } from '../../api/client'
 import { scanLabel, type ScannedFood } from '../../api/assistant'
-import { nutritionTableConfidence, prepareImage } from '../../lib/imageCapture'
+import {
+  CAPTURE_CONFIDENCE, STABLE_FRAMES, STEADY_DIFFERENCE,
+  frameDifference, prepareImage, readPanel, reticleSource, type PanelReading,
+} from '../../lib/imageCapture'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { cn } from '../../lib/cn'
@@ -39,6 +42,28 @@ interface LabelScannerProps {
 
 type Stage = 'capture' | 'reading' | 'review'
 
+/** Width the detector works at. Small enough to run every frame on a phone. */
+const DETECTOR_WIDTH = 240
+
+/**
+ * What to tell somebody who is pointing a camera at a packet and nothing is
+ * happening.
+ *
+ * The old preview said "Centre the nutrition table" and nothing else, for as
+ * long as you held it there - which is no help at all when the detector could
+ * not fire in the first place. A reading already knows which signal is short,
+ * so it can say so.
+ */
+function guidance(reading: PanelReading, steady: boolean): string {
+  if (reading.separation < 0.14) return 'Point at the nutrition table'
+  if (reading.ink > 0.45) return 'Too dark - more light, or move back'
+  if (reading.ink < 0.05) return 'Move closer to the table'
+  if (reading.focus < 0.35) return 'Hold still while it focuses'
+  if (reading.banding < 0.4) return 'Fit the whole table in the box'
+  if (!steady) return 'Almost - hold steady'
+  return 'Table detected - hold steady'
+}
+
 const FIELDS: { key: keyof ScannedFood; label: string; suffix: string }[] = [
   { key: 'kcal_per_100g', label: 'Calories', suffix: 'kcal' },
   { key: 'protein_per_100g', label: 'Protein', suffix: 'g' },
@@ -58,6 +83,7 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const detectorRef = useRef<HTMLCanvasElement | null>(null)
+  const previousFrameRef = useRef<ImageData | null>(null)
   const stableFramesRef = useRef(0)
   const scanningRef = useRef(false)
 
@@ -68,12 +94,15 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
   const [saving, setSaving] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
   const [detecting, setDetecting] = useState(false)
+  const [hint, setHint] = useState('Centre the nutrition table')
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     stableFramesRef.current = 0
+    previousFrameRef.current = null
     setDetecting(false)
+    setHint('Centre the nutrition table')
     setCameraOpen(false)
   }, [])
 
@@ -161,21 +190,41 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
 
     const interval = window.setInterval(() => {
       if (!video.videoWidth || !video.videoHeight || scanningRef.current) return
+
+      // Score the rectangle the guide box draws, not the whole sensor frame.
+      // The preview is object-cover in a 4:3 box, so the raw frame includes
+      // strips nobody can see - and judging the framing by pixels the person
+      // is not being shown is how you get a detector that disagrees with the
+      // instruction on screen.
+      const { sx, sy, sw, sh } = reticleSource(video.videoWidth, video.videoHeight)
       const canvas = detectorRef.current ?? document.createElement('canvas')
       detectorRef.current = canvas
-      canvas.width = 240
-      canvas.height = Math.max(120, Math.round((video.videoHeight / video.videoWidth) * 240))
+      canvas.width = DETECTOR_WIDTH
+      canvas.height = Math.round((sh / sw) * DETECTOR_WIDTH)
       const context = canvas.getContext('2d', { willReadFrequently: true })
       if (!context) return
-      context.drawImage(video, 0, 0, canvas.width, canvas.height)
-      const confidence = nutritionTableConfidence(context.getImageData(0, 0, canvas.width, canvas.height))
-      stableFramesRef.current = confidence >= 0.57 ? stableFramesRef.current + 1 : 0
-      setDetecting(stableFramesRef.current > 0)
-      if (stableFramesRef.current >= 3) {
+      context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
+      const frame = context.getImageData(0, 0, canvas.width, canvas.height)
+
+      const reading = readPanel(frame)
+      const previous = previousFrameRef.current
+      previousFrameRef.current = frame
+      // Genuinely steady, rather than three qualifying frames in a row - which
+      // is what you also get panning along a shelf of cereal boxes.
+      const steady = previous !== null
+        && frameDifference(previous, frame) <= STEADY_DIFFERENCE
+
+      const ready = reading.confidence >= CAPTURE_CONFIDENCE && steady
+      stableFramesRef.current = ready ? stableFramesRef.current + 1 : 0
+      setDetecting(ready)
+      setHint(guidance(reading, steady))
+
+      if (stableFramesRef.current >= STABLE_FRAMES) {
         stableFramesRef.current = 0
+        previousFrameRef.current = null
         void captureFrame()
       }
-    }, 420)
+    }, 380)
 
     return () => window.clearInterval(interval)
   }, [cameraOpen, captureFrame])
@@ -251,7 +300,7 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
                   'absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-meta',
                   detecting ? 'bg-success/90 text-black' : 'bg-black/70 text-ink',
                 )}>
-                  {detecting ? 'Table detected — hold steady' : 'Centre the nutrition table'}
+                  {hint}
                 </span>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line p-2">
