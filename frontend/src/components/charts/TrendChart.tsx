@@ -1,4 +1,5 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useId } from 'react'
 
 import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
 import { accentStroke, type Accent } from '../../navigation'
@@ -51,7 +52,7 @@ export function TrendChart({
 }: TrendChartProps) {
   const reducedMotion = usePrefersReducedMotion()
   const colour = accentStroke[accent]
-  const gradientId = `trend-${accent}`
+  const gradientId = useId()
 
   /*
     Dots when the observations are sparse.

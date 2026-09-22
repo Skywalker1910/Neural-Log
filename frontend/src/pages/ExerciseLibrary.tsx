@@ -5,6 +5,7 @@ import { ArrowLeft, Dumbbell, Search } from 'lucide-react'
 import { useExercises } from '../api/queries'
 import type { Exercise, MuscleGroup } from '../api/types'
 import { ExerciseAnimation } from '../components/training/ExerciseAnimation'
+import { ExerciseDemonstration } from '../components/training/ExerciseDemonstration'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -83,7 +84,7 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
   return (
     <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-line bg-surface-card p-4">
       <div className="flex min-w-0 items-start gap-3">
-        <ExerciseAnimation pattern={exercise.movement_pattern} size={72} />
+        <ExerciseAnimation pattern={exercise.movement_pattern} name={exercise.name} equipment={exercise.equipment} size={86} />
 
         <div className="min-w-0 flex-1">
           <p className="text-section text-ink">{exercise.name}</p>
@@ -103,6 +104,11 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
           Also works {exercise.secondary_muscles.join(', ')}
         </p>
       )}
+
+      <details className="text-meta text-ink-muted">
+        <summary className="mb-3 cursor-pointer">Explore the movement</summary>
+        <ExerciseDemonstration exercise={exercise} />
+      </details>
 
       {exercise.instructions.length > 0 && (
         <ul className="flex flex-col gap-1">
@@ -221,8 +227,8 @@ export function ExerciseLibrary() {
             </div>
 
             <p className="text-meta text-ink-subtle">
-              Showing {shown} of {total}. The animations show the shape of a movement, not
-              the equipment — they are a reminder, not coaching.
+              Showing {shown} of {total}. Open a movement to pause, slow down, or inspect a position.
+              The written cues explain each exercise’s setup.
             </p>
           </Card>
         </Reveal>
