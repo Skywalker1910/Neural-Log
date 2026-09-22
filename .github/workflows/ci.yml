@@ -72,6 +72,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # The detector behind auto-capture is pure arithmetic on pixels, and it
+      # shipped unable to fire: a term worth half the score went to zero at two
+      # degrees of tilt, which put the threshold out of reach. Typecheck, lint
+      # and build all passed the whole time, and so did a camera that looked
+      # perfectly normal. Only numbers catch that.
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
 
