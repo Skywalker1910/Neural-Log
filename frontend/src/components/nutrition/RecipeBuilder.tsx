@@ -33,6 +33,7 @@ export function RecipeBuilder({ open, onClose, recipe }: RecipeBuilderProps) {
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>(
     recipe?.ingredients ?? [],
   )
+  const [instructions, setInstructions] = useState(recipe?.instructions?.join('\n') ?? '')
   const [picking, setPicking] = useState(false)
 
   const rawGrams = ingredients.reduce((total, item) => total + (item.grams || 0), 0)
@@ -80,6 +81,7 @@ export function RecipeBuilder({ open, onClose, recipe }: RecipeBuilderProps) {
         ingredients: ingredients.map((item, position) => ({
           food_id: item.food_id, grams: item.grams, position,
         })),
+        instructions: instructions.split('\n').map((step) => step.trim()).filter(Boolean),
       },
       { onSuccess: onClose },
     )
@@ -176,6 +178,15 @@ export function RecipeBuilder({ open, onClose, recipe }: RecipeBuilderProps) {
               dish is what makes a portion of it accurate — leave it blank and the
               raw total is used instead.
             </span>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-meta text-ink-muted">Method — one step per line</span>
+            <textarea
+              value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={4}
+              placeholder={'Toast the spices.\nSimmer until tender.\nServe warm.'}
+              className="resize-y rounded-md border border-line bg-surface-base px-3 py-2 text-label text-ink outline-none focus:border-brand"
+            />
           </label>
 
           {ingredients.length > 0 && (

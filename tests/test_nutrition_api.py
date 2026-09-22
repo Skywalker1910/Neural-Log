@@ -148,6 +148,32 @@ def test_a_recipe_becomes_a_reusable_food(client_with_foods):
     assert 'Chicken and Rice' in names
 
 
+def test_a_recipe_keeps_its_personal_method(client_with_foods):
+    rice = _food(client_with_foods, 'Basmati Rice, cooked')
+    recipe = client_with_foods.post('/api/recipes', json={
+        'name': 'Weeknight Rice',
+        'ingredients': [{'food_id': rice['id'], 'grams': 250}],
+        'instructions': ['Rinse the rice.', 'Simmer until tender.'],
+    }).get_json()
+
+    assert recipe['instructions'] == ['Rinse the rice.', 'Simmer until tender.']
+
+    updated = client_with_foods.put(f"/api/recipes/{recipe['id']}", json={
+        'instructions': ['Steam for five minutes before serving.'],
+    }).get_json()
+    assert updated['instructions'] == ['Steam for five minutes before serving.']
+
+
+def test_recipe_method_rejects_non_text_steps(client_with_foods):
+    rice = _food(client_with_foods, 'Basmati Rice, cooked')
+    response = client_with_foods.post('/api/recipes', json={
+        'name': 'Broken Method',
+        'ingredients': [{'food_id': rice['id'], 'grams': 250}],
+        'instructions': ['Boil water.', 2],
+    })
+    assert response.status_code == 400
+
+
 def test_cooked_weight_makes_a_recipe_denser(client_with_foods):
     rice = _food(client_with_foods, 'Basmati Rice, cooked')
     raw = client_with_foods.post('/api/recipes', json={

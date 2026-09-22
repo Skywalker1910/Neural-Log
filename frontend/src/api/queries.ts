@@ -45,6 +45,7 @@ import type {
   TrainingSummary,
   UserProfile,
   Workout,
+  WeeklyFeed,
   CurrentUser,
   AdminOverview,
   AiUsageReport,
@@ -99,6 +100,7 @@ export const queryKeys = {
   adminUsers: ['admin', 'users'] as const,
   adminAiUsage: (days: number) => ['admin', 'ai-usage', days] as const,
   assistantState: ['assistant', 'state'] as const,
+  weeklyFeed: (end: string) => ['feed', 'weekly', end] as const,
 }
 
 /**
@@ -135,6 +137,13 @@ export function useAssistantState() {
     queryKey: queryKeys.assistantState,
     queryFn: () => api.get<AssistantState>('/api/assistant/state'),
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useWeeklyFeed(end: string) {
+  return useQuery({
+    queryKey: queryKeys.weeklyFeed(end),
+    queryFn: () => api.get<WeeklyFeed>(`/api/feed/weekly?end=${end}`),
   })
 }
 
