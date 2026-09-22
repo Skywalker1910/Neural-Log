@@ -79,7 +79,9 @@ optimises for that:
   because 82.5kg × 6 and 80kg × 8 are each the better set depending on what you
   are asking, and conflating them under one label is misleading.
 - **New sets inherit the previous set's load**, because most sets repeat the one
-  before.
+  before - the unit included.
+- **The weight column header is a kg/lb toggle**, because that is where you are
+  already looking when you wonder what the number means.
 - **Warm-ups are marked, not hidden.** They are real work, but they are excluded
   from volume, from records and from the scoring signal - counting them would let
   a warm-up week outscore a working one.
@@ -93,6 +95,57 @@ Driven by a target timestamp, not by decrementing a counter on an interval.
 Browsers throttle timers in background tabs and phones lock mid-set, so a counter
 would drift or freeze. Comparing against a stored end-time means the timer is
 correct the moment you look at it again, however long the tab was asleep.
+
+## Kilograms and pounds
+
+`exercise_sets.weight_unit` has stored a unit per set since R3. The reason is in
+that migration: plates are kilograms in one gym and pounds in another, and
+somebody who switches must not have last year's log silently reinterpreted.
+
+What was missing is that nothing could write anything but kilograms, and almost
+nothing read the column.
+
+### Where the unit is chosen
+
+| Level | What it decides | Where |
+|---|---|---|
+| Account | What a new set starts as | Settings, `user_profile.weight_unit` |
+| Exercise | What this exercise's sets mean today | The toggle on its card |
+| Set | What this row *is*, forever | `exercise_sets.weight_unit` |
+
+The toggle is per exercise rather than per session because a barbell in
+kilograms and a machine stack in pounds is an ordinary session, not an edge case.
+It is not per set, because you do not reload the bar in a different unit between
+set two and set three, and a toggle on every row is a decision on every row.
+
+The account preference exists so that somebody who lifts in pounds is not picking
+it forever - and eventually forgetting once, and recording a 225 kg bench press.
+
+**Weights are stored exactly as entered and converted only on read.** Changing
+the preference changes what the next number means. It never touches a stored one.
+
+### The bug this uncovered
+
+`scoring/producers.py` converted, so the Strength attribute was always right.
+Nothing else did:
+
+| Read path | Was | Now |
+|---|---|---|
+| `workout_sessions.total_volume` | `SUM(weight x reps)` raw | Summed in kg |
+| Heaviest set | `ORDER BY weight DESC` | Ordered in kg, reported as lifted |
+| Best volume set | `weight * reps` raw | Compared in kg |
+| Volume per muscle group | `SUM(weight x reps)` raw | Summed in kg |
+| Personal records | `MAX(weight)` | Ranked in kg, reported as lifted |
+
+None of it could fire while nothing could enter pounds. All of it would have
+fired the moment the toggle shipped: volume inflating 2.2x on the Training page
+and the Analytics chart, and a 135 lb bench outranking a 100 kg one in the
+records table - with the attribute correct underneath, and every number looking
+plausible.
+
+The factor lives once, in `scoring/units.py`, in the shape Python needs and the
+shape SQL needs. `tests/test_training_api.py` has a case per row of that table;
+before the fix, five of them fail.
 
 ## Routines
 

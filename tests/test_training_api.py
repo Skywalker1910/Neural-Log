@@ -366,3 +366,108 @@ def test_training_endpoints_require_login(client):
     for url in ('/api/exercises', '/api/workouts', '/api/training', '/api/measurements',
                 '/api/routines'):
         assert client.get(url).status_code == 302
+
+
+# --- pounds -------------------------------------------------------------------
+#
+# `exercise_sets.weight_unit` has stored a unit per set since R3, but until the
+# logging screen offered the toggle nothing could write anything but kilograms -
+# so every read path that compared or summed raw numbers was correct by accident.
+# These are the tests that stop being vacuous now that pounds can get in.
+
+POUND = 0.45359237
+
+
+def test_a_set_keeps_the_unit_it_was_lifted_in(client_with_library):
+    bench = _exercise(client_with_library)
+    workout_id = _log(client_with_library, TODAY.isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 135, 'reps': 8, 'weight_unit': 'lb'},
+    ])
+
+    detail = client_with_library.get(f'/api/workouts/{workout_id}').get_json()
+    assert detail['sets'][0]['weight'] == 135, 'the number must not be converted on write'
+    assert detail['sets'][0]['weight_unit'] == 'lb'
+
+
+def test_an_odd_spelling_of_pounds_is_normalised_on_the_way_in(client_with_library):
+    """So the read paths have two spellings to handle rather than every casing."""
+    bench = _exercise(client_with_library)
+    workout_id = _log(client_with_library, TODAY.isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 135, 'reps': 8, 'weight_unit': 'LBS'},
+        {'exercise_id': bench['id'], 'weight': 60, 'reps': 8, 'weight_unit': 'nonsense'},
+    ])
+
+    sets = client_with_library.get(f'/api/workouts/{workout_id}').get_json()['sets']
+    assert [s['weight_unit'] for s in sets] == ['lb', 'kg']
+
+
+def test_a_pounds_session_is_totalled_in_kilograms(client_with_library):
+    """The bug this whole module exists for: 2.2x inflation on the Training page
+    and the Analytics chart, while the Strength attribute stayed correct."""
+    bench = _exercise(client_with_library)
+    workout_id = _log(client_with_library, TODAY.isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 135, 'reps': 8, 'weight_unit': 'lb'},
+    ])
+
+    detail = client_with_library.get(f'/api/workouts/{workout_id}').get_json()
+    assert detail['total_volume'] == pytest.approx(135 * POUND * 8)
+    assert detail['total_volume'] < 600, 'raw pounds would be 1080'
+
+
+def test_the_heaviest_set_is_the_heaviest_not_the_biggest_number(client_with_library):
+    """135 lb is 61 kg. Ranking on the raw column would call it a record."""
+    bench = _exercise(client_with_library)
+    _log(client_with_library, (TODAY - timedelta(days=3)).isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 100, 'reps': 5, 'weight_unit': 'kg'},
+    ])
+    _log(client_with_library, (TODAY - timedelta(days=1)).isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 135, 'reps': 5, 'weight_unit': 'lb'},
+    ])
+
+    history = client_with_library.get(
+        f"/api/exercises/{bench['id']}/history").get_json()
+    assert history['heaviest_set']['weight'] == 100
+    assert history['heaviest_set']['weight_unit'] == 'kg'
+
+
+def test_the_best_set_is_compared_in_kilograms_too(client_with_library):
+    bench = _exercise(client_with_library)
+    _log(client_with_library, (TODAY - timedelta(days=3)).isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 90, 'reps': 8, 'weight_unit': 'kg'},
+    ])
+    _log(client_with_library, (TODAY - timedelta(days=1)).isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 185, 'reps': 8, 'weight_unit': 'lb'},
+    ])
+
+    history = client_with_library.get(
+        f"/api/exercises/{bench['id']}/history").get_json()
+    assert history['best_volume_set']['weight'] == 90, '185 lb x 8 is 671 kg, not 1480'
+
+
+def test_volume_per_muscle_group_is_totalled_in_kilograms(client_with_library):
+    bench = _exercise(client_with_library)
+    _log(client_with_library, TODAY.isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 100, 'reps': 10, 'weight_unit': 'lb'},
+    ])
+
+    overview = client_with_library.get('/api/training').get_json()
+    chest = next(row for row in overview['by_muscle'] if row['muscle'] == 'chest')
+    assert chest['volume'] == pytest.approx(100 * POUND * 10)
+
+
+def test_records_rank_by_load_and_report_the_unit_lifted(client_with_library):
+    bench = _exercise(client_with_library)
+    squat = _exercise(client_with_library, 'Back Squat')
+    _log(client_with_library, (TODAY - timedelta(days=2)).isoformat(), bench['id'], [
+        {'exercise_id': bench['id'], 'weight': 225, 'reps': 3, 'weight_unit': 'lb'},
+    ])
+    _log(client_with_library, (TODAY - timedelta(days=1)).isoformat(), squat['id'], [
+        {'exercise_id': squat['id'], 'weight': 140, 'reps': 3, 'weight_unit': 'kg'},
+    ])
+
+    records = client_with_library.get('/api/training').get_json()['records']
+    # 225 lb is 102 kg, so the squat leads - by the raw number the bench would.
+    assert [row['exercise'] for row in records][0] == squat['name']
+    bench_row = next(row for row in records if row['exercise'] == bench['name'])
+    assert (bench_row['weight'], bench_row['weight_unit']) == (225, 'lb')
+    assert 'weight_kg' not in bench_row, 'the ranking key is not part of the contract'

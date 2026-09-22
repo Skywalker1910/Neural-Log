@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { EyeOff, KeyRound, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
+import {
+  Dumbbell, EyeOff, KeyRound, Settings as SettingsIcon, SlidersHorizontal,
+} from 'lucide-react'
 
 import { ApiError, api } from '../api/client'
 import {
@@ -17,6 +19,8 @@ import { Field, TextInput } from '../components/ui/Field'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
+import { cn } from '../lib/cn'
+import { asUnit, type WeightUnit } from '../lib/units'
 
 /**
  * Targets you can set by hand.
@@ -278,6 +282,58 @@ function PrivacySettings() {
   )
 }
 
+/**
+ * Which unit a weight you type means.
+ *
+ * A preference, not a conversion. `exercise_sets.weight_unit` stores what each
+ * set was lifted in, so changing this decides what the *next* number means and
+ * leaves every recorded session reading exactly as it did.
+ */
+function UnitSettings() {
+  const query = useProfile()
+  const save = useSaveProfile()
+  const unit = asUnit(query.data?.profile.weight_unit)
+
+  return (
+    <Card
+      title="Units"
+      subtitle="What a weight means when you type it"
+      icon={Dumbbell}
+      accent="fitness"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex overflow-hidden rounded-pill border border-line">
+          {(['kg', 'lb'] as const).map((option: WeightUnit) => (
+            <button
+              key={option}
+              type="button"
+              disabled={query.isPending || save.isPending}
+              onClick={() => save.mutate({ weight_unit: option })}
+              aria-pressed={unit === option}
+              className={cn(
+                'px-4 py-1.5 text-label transition-colors disabled:opacity-60',
+                unit === option
+                  ? 'bg-fitness/20 text-fitness'
+                  : 'text-ink-muted hover:text-ink',
+              )}
+            >
+              {option === 'kg' ? 'Kilograms' : 'Pounds'}
+            </button>
+          ))}
+        </span>
+        <span className="text-meta text-ink-subtle">
+          Where new sets start. Each exercise can still be switched while you log it,
+          and nothing already recorded changes.
+        </span>
+      </div>
+
+      {save.isError && (
+        <p className="mt-3 text-label text-danger">Could not save that. Try again.</p>
+      )}
+    </Card>
+  )
+}
+
 export function Settings() {
   const onboarding = useOnboarding()
 
@@ -292,6 +348,7 @@ export function Settings() {
 
       <RevealGroup className="flex flex-col gap-4" step={0.05}>
         <Reveal><TargetSettings /></Reveal>
+        <Reveal><UnitSettings /></Reveal>
         <Reveal><PasswordSettings /></Reveal>
         <Reveal><PrivacySettings /></Reveal>
 

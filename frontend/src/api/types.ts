@@ -6,6 +6,7 @@
  * what's comfortable to keep in sync by hand.
  */
 import type { Accent } from '../navigation'
+import type { WeightUnit } from '../lib/units'
 
 export interface CurrentUser {
   user_id: number
@@ -648,6 +649,8 @@ export interface UserProfile {
   water_target_ml: number | null
   step_target: number | null
   sleep_target_minutes: number | null
+  /** What a number typed into the logging screen means. New sets only. */
+  weight_unit: WeightUnit
 }
 
 export interface ProfileResponse {
