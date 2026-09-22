@@ -51,6 +51,39 @@ export interface AssistantInputField {
   options?: string[]
 }
 
+/** One exercise on a training card, with its own numbers. */
+export interface WorkoutRow {
+  exercise_id: number
+  name: string
+  detail?: string
+  category?: string
+  selected?: boolean
+  sets?: number | null
+  reps?: number | null
+  weight?: number | null
+}
+
+/**
+ * A filled-in training card, sent as data rather than as a sentence.
+ *
+ * The server queues it through the same tool the model would have called, so
+ * this is not a second path into the database - it is the same path without
+ * paying a model to re-read numbers the card already had.
+ */
+export interface WorkoutSubmission {
+  type: 'workout'
+  name: string
+  weight_unit: 'kg' | 'lb'
+  date?: string
+  exercises: {
+    exercise_id: number
+    name: string
+    sets: number | null
+    reps: number | null
+    weight: number | null
+  }[]
+}
+
 export interface AssistantInputCard {
   id: string
   topic: string
@@ -58,11 +91,16 @@ export interface AssistantInputCard {
   title: string
   prompt: string
   reason: string
-  fields: AssistantInputField[]
+  /** Absent for the plain forms; 'workout_rows' renders per-exercise inputs. */
+  kind?: string
+  fields?: AssistantInputField[]
   choices?: { label: string; message: string }[]
   options?: { label: string; value: string; detail?: string }[]
+  rows?: WorkoutRow[]
+  weight_unit?: 'kg' | 'lb'
+  allow_add?: boolean
   submit_label: string
-  message: string
+  message?: string
 }
 
 export interface Budget {
@@ -95,7 +133,14 @@ function csrfToken(): string {
  */
 export async function* streamChat(
   message: string,
-  options: { kind?: 'general' | 'today'; date?: string; autoApply?: boolean; signal?: AbortSignal } = {},
+  options: {
+    kind?: 'general' | 'today'
+    date?: string
+    autoApply?: boolean
+    /** A filled-in card, queued server-side without a model round-trip. */
+    structured?: WorkoutSubmission
+    signal?: AbortSignal
+  } = {},
 ): AsyncGenerator<AssistantEvent> {
   let response: Response
   try {
@@ -107,6 +152,7 @@ export async function* streamChat(
       body: JSON.stringify({
         message, kind: options.kind ?? 'general', date: options.date,
         auto_apply: options.autoApply === true,
+        structured: options.structured,
       }),
     })
   } catch {
@@ -166,6 +212,14 @@ export interface ScannedFood {
   fibre_per_100g: number
   serving_name: string | null
   serving_grams: number | null
+  /**
+   * Whether a serving is a thing you can count.
+   *
+   * A scoop can be; 100 g of chicken cannot. This is what makes the food picker
+   * offer "2 scoops" instead of making you do the 30 g multiplication yourself.
+   */
+  is_countable: boolean
+  serving_label: string | null
   conversion_note: string
   unreadable: string[]
   basis: string

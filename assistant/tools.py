@@ -33,6 +33,8 @@ surface - they should describe the jobs, not the routes.
 import json
 from datetime import date as _date
 
+from scoring.units import VOLUME_KG_SQL, to_kg
+
 TOOLS = {}
 
 
@@ -728,9 +730,11 @@ def search_exercises(ctx, query):
     name='propose_workout',
     description=(
         'Queue a training session. Look every movement up with search_exercises '
-        'first. Strength sets take reps and a weight in kg; cardio and mobility '
-        'take a duration in minutes instead. "Three sets of ten at sixty" is '
-        'three sets, each with reps 10 and weight_kg 60.'
+        'first. Every set carries its own reps, weight and unit - do not average '
+        'them or assume the same load across exercises. Say the unit the person '
+        'said: "three sets of ten at sixty" in a gym that talks in pounds is '
+        'weight 60, weight_unit lb. Cardio and mobility take duration_minutes '
+        'instead of a weight.'
     ),
     parameters=_obj(
         {
@@ -748,10 +752,12 @@ def search_exercises(ctx, query):
                             'items': _obj(
                                 {
                                     'reps': {'type': ['integer', 'null']},
-                                    'weight_kg': {'type': ['number', 'null']},
+                                    'weight': {'type': ['number', 'null']},
+                                    'weight_unit': {'type': ['string', 'null'],
+                                                    'enum': ['kg', 'lb', None]},
                                     'duration_minutes': {'type': ['number', 'null']},
                                 },
-                                ['reps', 'weight_kg', 'duration_minutes'],
+                                ['reps', 'weight', 'weight_unit', 'duration_minutes'],
                             ),
                         },
                     },
@@ -788,9 +794,16 @@ def propose_workout(ctx, date=None, name=None, exercises=None):
             reps = one.get('reps')
             if reps is not None and not 0 < int(reps) <= 200:
                 raise ToolError(f'{found["name"]}: {reps} reps is not plausible.')
-            weight = one.get('weight_kg')
-            if weight is not None and not 0 <= float(weight) <= 600:
-                raise ToolError(f'{found["name"]}: {weight} kg is not plausible.')
+            # Accepts the older `weight_kg` too, so a proposal queued before this
+            # change still applies rather than 400ing on somebody's Save button.
+            weight = one.get('weight', one.get('weight_kg'))
+            unit = (one.get('weight_unit') or 'kg').lower()
+            if unit not in ('kg', 'lb', 'lbs'):
+                raise ToolError(f'{found["name"]}: "{unit}" is not kg or lb.')
+            # Checked in kilograms whatever was typed, so the ceiling means the
+            # same thing in both units - 600 lb would sail past a 600 kg test.
+            if weight is not None and not 0 <= to_kg(float(weight), unit) <= 600:
+                raise ToolError(f'{found["name"]}: {weight} {unit} is not plausible.')
 
         total_sets += len(sets)
         clean.append({'exercise_id': found['id'], 'name': found['name'], 'sets': sets})
@@ -859,16 +872,22 @@ def _apply_workout(ctx, action, recompute):
             ctx.conn.execute(
                 'INSERT INTO exercise_sets (session_id, exercise_id, position, weight, '
                 'weight_unit, reps, duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (session_id, entry['exercise_id'], position, one.get('weight_kg'),
-                 'kg', one.get('reps'),
+                (session_id, entry['exercise_id'], position,
+                 one.get('weight', one.get('weight_kg')),
+                 # Stored as entered, never converted on the way in. Someone who
+                 # switches gyms must not have last year's log reinterpreted -
+                 # which is what the column was added for. Conversion happens on
+                 # read, in scoring/units.py.
+                 (one.get('weight_unit') or 'kg').lower().replace('lbs', 'lb'),
+                 one.get('reps'),
                  int(float(duration) * 60) if duration else None),
             )
 
     # The same totals the Training workspace keeps, by the same rule: warm-ups
     # excluded, volume as weight times reps.
     totals = ctx.conn.execute(
-        'SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(weight, 0) * COALESCE(reps, 0)), 0) '
-        'AS volume FROM exercise_sets WHERE session_id = ? AND is_warmup = 0',
+        'SELECT COUNT(*) AS n, ' + VOLUME_KG_SQL + ' AS volume '
+        'FROM exercise_sets WHERE session_id = ? AND is_warmup = 0',
         (session_id,),
     ).fetchone()
     ctx.conn.execute(

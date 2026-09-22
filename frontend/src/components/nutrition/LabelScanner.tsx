@@ -196,6 +196,9 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
         fibre_per_100g: food.fibre_per_100g,
         serving_name: food.serving_name,
         serving_grams: food.serving_grams,
+        // What makes the picker offer "2 scoops" rather than making somebody do
+        // the 30 g multiplication in their head before typing it.
+        is_countable: food.is_countable,
       })
       // The catalogue is cached and the recipe builder reads it, so a new food
       // has to invalidate before the person goes looking for it.
@@ -307,6 +310,14 @@ export function LabelScanner({ open, onClose, onSaved }: LabelScannerProps) {
               <span className="text-meta text-ink-subtle">
                 Per 100 {food.unit} · {food.conversion_note}
               </span>
+              {food.serving_grams != null && (
+                <span className="text-meta text-ink-subtle">
+                  Serving: {food.serving_label
+                    ? `1 ${food.serving_label} = ${food.serving_grams}${food.unit}`
+                    : `${food.serving_grams}${food.unit}`}
+                  {food.is_countable && ' · you can log these by the number'}
+                </span>
+              )}
             </label>
           </div>
 
