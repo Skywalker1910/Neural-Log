@@ -382,30 +382,24 @@ database; it is the same path with a different caller, and it costs nothing.
 
 ## Kilograms and pounds
 
-`exercise_sets.weight_unit` has stored a unit per set since R3, and the reason
-is in that migration: plates are kilograms in one gym and pounds in another, and
-somebody who switches must not have last year's log silently reinterpreted.
+The workout card carries a `kg`/`lb` toggle, defaulting to
+`user_profile.weight_unit`, and the sets it queues store the unit they were
+entered in. So does the logging screen, which is where the same preference and
+the same conversion rules are written down in full: see
+**[TRAINING.md](TRAINING.md#kilograms-and-pounds)**.
 
-What was missing is that almost nothing read it. A card now carries a `kg`/`lb`
-toggle, defaulting to `user_profile.weight_unit` so somebody who lifts in pounds
-is not picking it on every set forever — and eventually forgetting once, and
-recording 225 kg on a bench press.
+Two things are worth repeating here, because the assistant is a second way
+into the same table:
 
-**Weights are stored exactly as entered and converted only on read.**
+- **Weights are stored exactly as entered and converted only on read.** The
+  tool layer applies its plausibility ceiling in kilograms — 600 kg is the
+  limit whichever unit you typed — and stores the number untouched.
+- **`scoring/units.py` owns the factor.** The tool that totals a session's
+  volume uses the same SQL fragment the Training endpoints use, because the
+  version that drifts is always the one nobody is looking at.
 
-### The bug this uncovered
-
-`scoring/producers.py` converted, so the Strength attribute was always right. The
-two queries that compute `workout_sessions.total_volume` did not — they summed
-`weight x reps` raw.
-
-Nothing could enter pounds, so it never fired. It would have fired the moment
-anything could: the Training page and the Analytics volume chart inflating by
-2.2x while the attribute stayed correct, both plausible, silently disagreeing.
-
-The factor now lives once in `scoring/units.py`, in the shape Python needs and
-the shape SQL needs, and both call sites use it. A real session logged through
-the card at 40/135/65 lb stores **3483.6 kg**, not 7680.
+A real session logged through the card at 40/135/65 lb stores **3483.6 kg**,
+not 7680.
 
 ## What a scanned label knows about a serving
 

@@ -250,6 +250,7 @@ export function Training() {
         accent="fitness"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Link to="/training/book"><Button size="sm">Exercise book</Button></Link>
             <Link to="/training/library">
               <Button size="sm" icon={Dumbbell}>
                 Library

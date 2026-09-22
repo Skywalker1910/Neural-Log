@@ -83,6 +83,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Install browser for interaction tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Book and feed interaction tests
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 --strictPort > /tmp/neural-preview.log 2>&1 &
+          npm run test:browser
+
   migrations:
     name: Migration ledger
     runs-on: ubuntu-latest

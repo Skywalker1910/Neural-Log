@@ -14,7 +14,7 @@ import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
  * third-party exercise GIF libraries are the same pictures with the same owner.
  * Shipping them would be someone else's copyright sitting in our repository.
  *
- * So they are stick figures, drawn here, animating between two poses.
+ * The illustrations are drawn here and interpolate between two poses.
  *
  * ## Why per pattern and not per exercise
  *
@@ -23,10 +23,8 @@ import { usePrefersReducedMotion } from '../../lib/usePrefersReducedMotion'
  * cover a library of 136, and a new exercise inherits its animation by naming
  * the pattern it belongs to rather than needing anything drawn for it.
  *
- * The honest limit of that: the animation shows the *shape* of the movement, not
- * the equipment. It is a reminder of what a hip hinge looks like, not a
- * substitute for being coached through a deadlift. The instructions underneath
- * carry the detail.
+ * These remain movement-pattern previews. Exercise-specific instructions carry
+ * the setup and technique details.
  */
 
 /** A figure, as joint coordinates in a 100x100 box. */
@@ -151,131 +149,83 @@ const SEGMENTS: [keyof Pose, keyof Pose][] = [
 interface ExerciseAnimationProps {
   pattern: string | null | undefined
   size?: number
-  /** Seconds for one full repetition, out and back. */
   duration?: number
   className?: string
+  progress?: number
+  name?: string
+  equipment?: string
 }
 
 export function ExerciseAnimation({
-  pattern,
-  size = 96,
-  duration = 2.4,
-  className,
+  pattern, size = 96, duration = 3.6, className, progress, name = '', equipment = '',
 }: ExerciseAnimationProps) {
   const reduced = usePrefersReducedMotion()
   const gradientId = useId()
-
-  const poses = pattern ? PATTERNS[pattern] : undefined
-  // Nothing rather than a wrong figure: an exercise with no pattern, or one
-  // naming a pattern nobody has drawn yet, simply shows no animation.
+  let poses = pattern ? PATTERNS[pattern] : undefined
+  const pushUp = /push.?up/i.test(name)
+  const pulldown = /pulldown/i.test(name)
+  if (pushUp) poses = [
+    pose([17, 69], [29, 72], [36, 85], [28, 94], [58, 80], [75, 87], [92, 94]),
+    pose([17, 48], [29, 52], [29, 74], [28, 94], [58, 68], [75, 82], [92, 94]),
+  ]
+  if (pulldown) poses = [
+    pose([52, 31], [52, 43], [43, 28], [42, 9], [55, 69], [31, 72], [31, 94]),
+    pose([52, 31], [52, 43], [35, 53], [40, 41], [55, 69], [31, 72], [31, 94]),
+  ]
   if (!pattern || !poses) return null
-
   const [start, end] = poses
-  // Out and back, so the figure returns to where a rep began rather than
-  // snapping home.
-  const frames = (from: [number, number], to: [number, number]) =>
-    `${from[0]},${from[1]}; ${to[0]},${to[1]}; ${from[0]},${from[1]}`
-
-  const stroke = 'var(--color-fitness)'
-
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
-      className={cn('shrink-0', className)}
-      role="img"
-      aria-label={`${PATTERN_LABELS[pattern] ?? 'Movement'} animation`}
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-fitness)" stopOpacity={0.14} />
-          <stop offset="100%" stopColor="var(--color-fitness)" stopOpacity={0} />
-        </linearGradient>
-      </defs>
-
-      <rect x="0" y="0" width="100" height="100" rx="12" fill={`url(#${gradientId})`} />
-
-      {/* Ground line, so a standing figure reads as standing. */}
-      <line x1="10" y1="96" x2="90" y2="96" stroke="var(--color-line-strong)" strokeWidth="1.5" />
-
-      {LYING.has(pattern) && (
-        <>
-          <line
-            x1="18" y1="64" x2="74" y2="64"
-            stroke="var(--color-line-strong)" strokeWidth="4" strokeLinecap="round"
-          />
-          <line x1="30" y1="64" x2="30" y2="84" stroke="var(--color-line-strong)" strokeWidth="2.5" />
-          <line x1="64" y1="64" x2="64" y2="84" stroke="var(--color-line-strong)" strokeWidth="2.5" />
-        </>
-      )}
-
-      {SEGMENTS.map(([from, to]) => (
-        <line
-          key={`${from}-${to}`}
-          x1={start[from][0]} y1={start[from][1]}
-          x2={start[to][0]} y2={start[to][1]}
-          stroke={stroke}
-          strokeWidth="4"
-          strokeLinecap="round"
-        >
-          {/*
-            SMIL rather than CSS: these are element *attributes*, which CSS
-            cannot animate, and doing it in JS would mean a render loop per
-            figure on a page showing a dozen of them.
-
-            Under reduced motion the <animate> elements are simply not rendered,
-            so the figure holds the starting pose. The shape still reads.
-          */}
-          {!reduced && (
-            <>
-              <animate
-                attributeName="x1" dur={`${duration}s`} repeatCount="indefinite"
-                values={`${start[from][0]}; ${end[from][0]}; ${start[from][0]}`}
-                calcMode="spline" keyTimes="0; 0.5; 1"
-                keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-              />
-              <animate
-                attributeName="y1" dur={`${duration}s`} repeatCount="indefinite"
-                values={`${start[from][1]}; ${end[from][1]}; ${start[from][1]}`}
-                calcMode="spline" keyTimes="0; 0.5; 1"
-                keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-              />
-              <animate
-                attributeName="x2" dur={`${duration}s`} repeatCount="indefinite"
-                values={`${start[to][0]}; ${end[to][0]}; ${start[to][0]}`}
-                calcMode="spline" keyTimes="0; 0.5; 1"
-                keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-              />
-              <animate
-                attributeName="y2" dur={`${duration}s`} repeatCount="indefinite"
-                values={`${start[to][1]}; ${end[to][1]}; ${start[to][1]}`}
-                calcMode="spline" keyTimes="0; 0.5; 1"
-                keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-              />
-            </>
-          )}
-        </line>
-      ))}
-
-      <circle cx={start.head[0]} cy={start.head[1]} r="7" fill={stroke}>
-        {!reduced && (
-          <>
-            <animate
-              attributeName="cx" dur={`${duration}s`} repeatCount="indefinite"
-              values={frames(start.head, end.head).split(';').map((p) => p.trim().split(',')[0]).join(';')}
-              calcMode="spline" keyTimes="0; 0.5; 1"
-              keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-            />
-            <animate
-              attributeName="cy" dur={`${duration}s`} repeatCount="indefinite"
-              values={frames(start.head, end.head).split(';').map((p) => p.trim().split(',')[1]).join(';')}
-              calcMode="spline" keyTimes="0; 0.5; 1"
-              keySplines="0.4 0 0.2 1; 0.4 0 0.2 1"
-            />
-          </>
-        )}
-      </circle>
-    </svg>
+  const fraction = progress == null ? 0 : (1 - Math.cos(progress * Math.PI * 2)) / 2
+  const current = (joint: keyof Pose, axis: number) => start[joint][axis] + (end[joint][axis] - start[joint][axis]) * fraction
+  const moving = !reduced && progress == null
+  const animateAttribute = (attribute: string, from: number, to: number) => moving
+    ? <animate attributeName={attribute} dur={`${duration}s`} repeatCount="indefinite"
+        values={`${from};${to};${from}`} calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.2 1;0.45 0 0.2 1" />
+    : null
+  const limb = (from: keyof Pose, to: keyof Pose, width: number, colour: string, offset = 0) => (
+    <line key={`${from}-${to}-${offset}`} x1={current(from, 0) + offset} y1={current(from, 1)}
+      x2={current(to, 0) + offset} y2={current(to, 1)} stroke={colour} strokeWidth={width} strokeLinecap="round">
+      {animateAttribute('x1', start[from][0] + offset, end[from][0] + offset)}
+      {animateAttribute('y1', start[from][1], end[from][1])}
+      {animateAttribute('x2', start[to][0] + offset, end[to][0] + offset)}
+      {animateAttribute('y2', start[to][1], end[to][1])}
+    </line>
   )
+  const weighted = /dumbbell|barbell|kettlebell/i.test(equipment) && !['squat', 'lunge'].includes(pattern)
+  return <svg viewBox="0 0 110 106" width={size} height={size} className={cn('shrink-0', className)}
+    role="img" aria-label={`${name || PATTERN_LABELS[pattern]} movement demonstration`}>
+    <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor="var(--color-fitness)" stopOpacity=".09" />
+      <stop offset="100%" stopColor="var(--color-fitness)" stopOpacity=".02" />
+    </linearGradient></defs>
+    <rect width="110" height="106" rx="10" fill={`url(#${gradientId})`} />
+    <ellipse cx="54" cy="98" rx="36" ry="3" fill="#7f8a88" opacity=".2" />
+    <path d="M10 99H100" stroke="#8c9692" strokeWidth=".6" opacity=".6" />
+    {LYING.has(pattern) && !pushUp && <path d="M17 65H75M29 65V94M65 65V94" fill="none" stroke="#758681" strokeWidth="3" strokeLinecap="round" />}
+    {pulldown && <path d="M29 75H66M57 75V97M75 8V97M32 8H75" stroke="#758681" strokeWidth="2" fill="none" />}
+    {pattern === 'vertical-pull' && !pulldown && <path d="M28 8H72" stroke="#758681" strokeWidth="3" />}
+    <g opacity=".42">
+      {limb('shoulder', 'elbow', 5, '#ba937b', 6)}
+      {limb('elbow', 'hand', 4, '#d2af94', 6)}
+      {pattern === 'lunge' ? <path d="M55 61L76 80L86 94" stroke="#637b80" strokeWidth="7" fill="none" strokeLinecap="round" /> : <>
+        {limb('hip', 'knee', 7, '#637b80', 7)}
+        {limb('knee', 'foot', 5, '#637b80', 7)}
+      </>}
+    </g>
+    {SEGMENTS.map(([from, to]) => limb(from, to, from === 'shoulder' && to === 'hip' ? 13 : from === 'hip' ? 8 : 5.5,
+      to === 'hip' ? '#4c7875' : from === 'hip' || from === 'knee' ? '#425a6b' : '#d2ac8d'))}
+    <circle cx={current('head', 0)} cy={current('head', 1)} r="6.5" fill="#d2ac8d">
+      {animateAttribute('cx', start.head[0], end.head[0])}{animateAttribute('cy', start.head[1], end.head[1])}
+    </circle>
+    <circle cx={current('elbow', 0)} cy={current('elbow', 1)} r="1.7" fill="#f8e3c3">
+      {animateAttribute('cx', start.elbow[0], end.elbow[0])}{animateAttribute('cy', start.elbow[1], end.elbow[1])}
+    </circle>
+    {weighted && <g transform={`translate(${current('hand', 0)} ${current('hand', 1)})`}>
+      {moving && <animateTransform attributeName="transform" type="translate" dur={`${duration}s`}
+        values={`${start.hand.join(' ')};${end.hand.join(' ')};${start.hand.join(' ')}`} repeatCount="indefinite"
+        calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.2 1;0.45 0 0.2 1" />}
+      <path d="M-9 0H9M-8-4V4M8-4V4" stroke="#59615f" strokeWidth="3" strokeLinecap="round" />
+    </g>}
+    <path d={`M${start.hand[0]} ${start.hand[1]}L${end.hand[0]} ${end.hand[1]}`}
+      stroke="#ad8164" strokeWidth="1" strokeDasharray="2 3" opacity=".5" />
+  </svg>
 }

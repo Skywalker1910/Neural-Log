@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request, session
 
 import scoring
 from scoring import nutrition as nut
+from scoring.units import normalise_unit
 
 nutrition_bp = Blueprint('nutrition', __name__)
 
@@ -78,6 +79,10 @@ def _profile_and_targets(conn, user_id, on_date):
     row = conn.execute('SELECT * FROM user_profile WHERE user_id = ?',
                        (user_id,)).fetchone()
     profile = dict(row) if row else {}
+    # Not every account has a profile row yet, but every account has a unit:
+    # the column is NOT NULL and has always defaulted to kilograms. Reporting
+    # nothing would make the client invent the same default.
+    profile.setdefault('weight_unit', 'kg')
 
     weight_row = conn.execute(
         "SELECT value FROM body_measurements WHERE user_id = ? AND metric = 'weight' "
@@ -727,7 +732,7 @@ def profile():
         fields = ('birth_year', 'sex', 'height_cm', 'activity_level', 'goal',
                   'calorie_target', 'protein_target_g', 'carb_target_g',
                   'fat_target_g', 'fibre_target_g', 'water_target_ml',
-                  'step_target', 'sleep_target_minutes')
+                  'step_target', 'sleep_target_minutes', 'weight_unit')
         current = conn.execute('SELECT * FROM user_profile WHERE user_id = ?',
                                (user_id,)).fetchone()
         merged = {f: (data[f] if f in data else (current[f] if current else None))
@@ -738,6 +743,11 @@ def profile():
         # fail against a profile row that does not exist yet.
         merged['activity_level'] = merged['activity_level'] or 'moderate'
         merged['goal'] = merged['goal'] or 'maintain'
+        # Same reason, and one more: this one decides what a number typed into
+        # the logging screen means, so an unrecognised value must not reach the
+        # column. It is a default for new sets only - stored sets keep the unit
+        # they were lifted in, and changing this never reinterprets history.
+        merged['weight_unit'] = normalise_unit(merged['weight_unit'])
 
         assignments = ', '.join(f'{f} = excluded.{f}' for f in fields)
         conn.execute(

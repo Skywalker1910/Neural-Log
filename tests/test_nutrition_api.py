@@ -361,6 +361,31 @@ def test_an_explicit_target_overrides_the_estimate(client_with_foods):
     assert targets['sources']['calories'] == 'set'
 
 
+def test_the_weight_unit_preference_round_trips(client_with_foods):
+    """Where a number typed on the logging screen gets its meaning."""
+    assert client_with_foods.get('/api/profile').get_json()['profile']['weight_unit'] == 'kg'
+
+    client_with_foods.put('/api/profile', json={'weight_unit': 'lb'})
+    assert client_with_foods.get('/api/profile').get_json()['profile']['weight_unit'] == 'lb'
+
+
+def test_a_partial_profile_save_does_not_reset_the_unit(client_with_foods):
+    """The column is NOT NULL, so "just set my calorie target" must not null it -
+    and must not quietly put somebody who lifts in pounds back into kilograms."""
+    client_with_foods.put('/api/profile', json={'weight_unit': 'lb'})
+    client_with_foods.put('/api/profile', json={'calorie_target': 2200})
+
+    payload = client_with_foods.get('/api/profile').get_json()
+    assert payload['profile']['weight_unit'] == 'lb'
+    assert payload['targets']['calories'] == 2200
+
+
+def test_an_unusable_weight_unit_falls_back_to_kilograms(client_with_foods):
+    """Rejecting it would be worse: the column has always defaulted to kg."""
+    client_with_foods.put('/api/profile', json={'weight_unit': 'stone'})
+    assert client_with_foods.get('/api/profile').get_json()['profile']['weight_unit'] == 'kg'
+
+
 def test_nutrition_endpoints_require_login(client):
     for url in ('/api/foods', '/api/recipes', '/api/sleep', '/api/lifestyle',
                 '/api/profile', f'/api/nutrition/{_iso()}'):

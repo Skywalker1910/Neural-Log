@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 
 import { AppShell } from './components/layout/AppShell'
 import { SkeletonGrid } from './components/ui/Skeleton'
@@ -78,8 +78,10 @@ export default function App() {
         <Route path="/training/:workoutId" element={<Lazy><WorkoutSession /></Lazy>} />
         <Route path="/nutrition" element={<Lazy><Nutrition /></Lazy>} />
         <Route path="/feed" element={<Lazy><Feed /></Lazy>} />
-        <Route path="/recipes" element={<Lazy><RecipeBook /></Lazy>} />
-        <Route path="/exercises" element={<Lazy><ExerciseBook /></Lazy>} />
+        <Route path="/nutrition/book" element={<Lazy><RecipeBook /></Lazy>} />
+        <Route path="/training/book" element={<Lazy><ExerciseBook /></Lazy>} />
+        <Route path="/recipes" element={<Navigate to="/nutrition/book" replace />} />
+        <Route path="/exercises" element={<Navigate to="/training/book" replace />} />
         <Route path="/journal" element={<Lazy><JournalBook /></Lazy>} />
         <Route path="/lifestyle" element={<Lazy><Lifestyle /></Lazy>} />
         <Route path="/learning" element={<Lazy><Learning /></Lazy>} />

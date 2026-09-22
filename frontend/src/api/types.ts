@@ -6,6 +6,7 @@
  * what's comfortable to keep in sync by hand.
  */
 import type { Accent } from '../navigation'
+import type { WeightUnit } from '../lib/units'
 
 export interface CurrentUser {
   user_id: number
@@ -591,6 +592,28 @@ export interface WeeklyFeed {
   insights: { tone: 'info' | 'success' | 'warning'; title: string; body: string }[]
 }
 
+export interface WeeklyPost {
+  id: number
+  week_end: string
+  generated_at: string
+  snapshot: { start: string; end: string; days: WeeklyFeedDay[]; previous_days: WeeklyFeedDay[] }
+  report: {
+    title: string
+    summary: string
+    strengths: { title: string; body: string }[]
+    opportunities: { title: string; body: string }[]
+    next_steps: { title: string; body: string; workspace: 'training' | 'nutrition' | 'lifestyle' | 'learning' }[]
+    coverage_note: string
+  }
+}
+
+export interface FeedPostsResponse {
+  posts: WeeklyPost[]
+  configured: boolean
+  latest_week_end: string
+  has_data: boolean
+}
+
 export interface SleepEntry {
   id?: number
   /** The date you WOKE UP - a night spans two calendar dates. */
@@ -648,6 +671,8 @@ export interface UserProfile {
   water_target_ml: number | null
   step_target: number | null
   sleep_target_minutes: number | null
+  /** What a number typed into the logging screen means. New sets only. */
+  weight_unit: WeightUnit
 }
 
 export interface ProfileResponse {

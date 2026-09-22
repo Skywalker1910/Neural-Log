@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import { m } from 'motion/react'
 import {
   ChefHat, ChevronLeft, ChevronRight, Flame, Info, Plus, ScanLine, Trash2,
@@ -276,6 +277,7 @@ export function Nutrition() {
         accent="lifestyle"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Link to="/nutrition/book"><Button size="sm">Recipe book</Button></Link>
             {/* Hidden when the instance has no assistant, like everything else
                 that needs a model. The catalogue and the recipe builder work
                 exactly as before without it. */}
