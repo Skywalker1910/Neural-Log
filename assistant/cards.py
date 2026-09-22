@@ -142,11 +142,64 @@ def _routine_choices(conn, user_id):
     ]
 
 
+def preferred_unit(conn, user_id):
+    """Which weight unit to open the form in. A default, never a meaning.
+
+    Storage stays per set and is never converted on write - see
+    migrations/021. This only decides what the toggle starts on.
+    """
+    row = conn.execute(
+        'SELECT weight_unit FROM user_profile WHERE user_id = ?', (user_id,)
+    ).fetchone()
+    unit = (row['weight_unit'] if row and 'weight_unit' in row.keys() else None) or 'kg'
+    return 'lb' if str(unit).lower().startswith('lb') else 'kg'
+
+
+def _rows_card(card_id, title, prompt, reason, rows, unit):
+    """A training card where every exercise carries its own numbers.
+
+    ## Why rows rather than three shared fields
+
+    The first version of this card asked for "sets each", "reps each" and
+    "weight each", then flattened the lot into one sentence for the model to
+    re-read. That is fine for a circuit where everything genuinely is 3x10, and
+    wrong for every other session: nobody benches and curls the same load, so
+    the card either recorded a number that was false for most of the exercises
+    or the person gave up and typed it out by hand.
+
+    It also threw away work it had already done. The card queries the exercise
+    table to build its list, so it knows each exercise's id - and then discarded
+    them, leaving the model to search the names back up one at a time.
+
+    Rows keep both: per-exercise numbers, and the ids, which is what lets the
+    submission skip the model entirely.
+    """
+    return {
+        'id': card_id,
+        'topic': 'training',
+        'eyebrow': 'Training',
+        # The client switches on this to render row inputs rather than a flat
+        # field list. Unknown kinds fall back to the plain form, so an older
+        # client degrades rather than breaks.
+        'kind': 'workout_rows',
+        'title': title,
+        'prompt': prompt,
+        'reason': reason,
+        'weight_unit': unit,
+        'rows': rows,
+        # Nobody follows a routine exactly. Without this the person logs the
+        # plan rather than the session, which is the specific dishonesty this
+        # app is built to avoid.
+        'allow_add': True,
+        'submit_label': 'Log session',
+    }
+
+
 def _exercise_card(conn, user_id, muscles):
     values = sorted({muscle for group in muscles for muscle in MUSCLES[group]})
     marks = ', '.join('?' for _ in values)
     rows = conn.execute(
-        'SELECT id, name, primary_muscle, equipment FROM exercises '
+        'SELECT id, name, primary_muscle, equipment, category FROM exercises '
         f'WHERE primary_muscle IN ({marks}) '
         'AND (user_id IS NULL OR user_id = ?) AND COALESCE(archived, 0) = 0 '
         'ORDER BY is_compound DESC, name LIMIT 12',
@@ -154,26 +207,26 @@ def _exercise_card(conn, user_id, muscles):
     ).fetchall()
     if not rows:
         return None
-    return {
-        'id': f"exercise-picker-{'-'.join(muscles)}",
-        'topic': 'training',
-        'eyebrow': 'Training',
-        'title': 'Choose your exercises',
-        'prompt': 'Pick everything you did, then add the common set details below.',
-        'reason': 'Your selected muscle groups shape this list.',
-        'options': [
-            {'label': row['name'], 'value': row['name'],
-             'detail': ' · '.join(part for part in (row['primary_muscle'], row['equipment']) if part)}
+
+    return _rows_card(
+        card_id=f"exercise-picker-{'-'.join(muscles)}",
+        title='What did you do?',
+        prompt='Tick what you did and fill in each one. Empty rows are ignored.',
+        reason='Your muscle groups shape this list.',
+        rows=[
+            {
+                'exercise_id': row['id'], 'name': row['name'],
+                'detail': ' - '.join(part for part in (row['primary_muscle'], row['equipment']) if part),
+                'category': row['category'],
+                # Nothing pre-ticked: this is a menu of what they *could* have
+                # done, and a pre-ticked menu logs the menu.
+                'selected': False,
+                'sets': None, 'reps': None, 'weight': None,
+            }
             for row in rows
         ],
-        'fields': [
-            {'id': 'sets', 'label': 'Sets each', 'type': 'number', 'placeholder': '3'},
-            {'id': 'reps', 'label': 'Reps each', 'type': 'number', 'placeholder': '10'},
-            {'id': 'weight', 'label': 'Weight kg (optional)', 'type': 'number', 'placeholder': '40'},
-        ],
-        'submit_label': 'Log selected exercises',
-        'message': 'I did {selection}: {sets} sets of {reps} reps each at {weight} kg.',
-    }
+        unit=preferred_unit(conn, user_id),
+    )
 
 
 def _routine_exercise_card(conn, user_id, text):
@@ -187,7 +240,8 @@ def _routine_exercise_card(conn, user_id, text):
     if routine is None:
         return None
     rows = conn.execute(
-        'SELECT exercises.name, exercises.primary_muscle, exercises.equipment, '
+        'SELECT exercises.id, exercises.name, exercises.primary_muscle, '
+        'exercises.equipment, exercises.category, '
         'routine_exercises.target_sets, routine_exercises.target_reps '
         'FROM routine_exercises JOIN exercises ON exercises.id = routine_exercises.exercise_id '
         'WHERE routine_exercises.routine_id = ? ORDER BY routine_exercises.position',
@@ -195,27 +249,30 @@ def _routine_exercise_card(conn, user_id, text):
     ).fetchall()
     if not rows:
         return None
-    return {
-        'id': f"routine-exercises-{routine['id']}", 'topic': 'training', 'eyebrow': 'Training',
-        'title': routine['name'],
-        'prompt': 'Select the exercises you completed. The targets are shown as a guide.',
-        'reason': 'This is one of your saved routines.',
-        'options': [
-            {'label': row['name'], 'value': row['name'],
-             'detail': ' · '.join(part for part in (
-                 row['primary_muscle'],
-                 f"{row['target_sets']} × {row['target_reps']}" if row['target_sets'] and row['target_reps'] else None,
-             ) if part)}
+
+    return _rows_card(
+        card_id=f"routine-exercises-{routine['id']}",
+        title=routine['name'],
+        prompt='Targets are filled in as a guide. Change anything you did differently, '
+               'untick what you skipped.',
+        reason='One of your saved routines.',
+        rows=[
+            {
+                'exercise_id': row['id'], 'name': row['name'],
+                'detail': ' - '.join(part for part in (row['primary_muscle'], row['equipment']) if part),
+                'category': row['category'],
+                # Pre-ticked, unlike the muscle picker: they said they followed
+                # this routine, so the likely edit is removing one rather than
+                # adding six.
+                'selected': True,
+                # The plan as a starting point, not as the record. Prefilling
+                # saves typing; the person still confirms every number.
+                'sets': row['target_sets'], 'reps': row['target_reps'], 'weight': None,
+            }
             for row in rows
         ],
-        'fields': [
-            {'id': 'sets', 'label': 'Sets each', 'type': 'number', 'placeholder': '3'},
-            {'id': 'reps', 'label': 'Reps each', 'type': 'number', 'placeholder': '10'},
-            {'id': 'weight', 'label': 'Weight kg (optional)', 'type': 'number', 'placeholder': '40'},
-        ],
-        'submit_label': 'Log selected exercises',
-        'message': 'I did {selection}: {sets} sets of {reps} reps each at {weight} kg.',
-    }
+        unit=preferred_unit(conn, user_id),
+    )
 
 
 def general_input_card(conn, user_id, message, prior):

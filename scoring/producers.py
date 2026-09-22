@@ -19,6 +19,7 @@ because fewer sessions means less volume in the window. No special-casing.
 """
 from datetime import date as _date, timedelta as _timedelta
 
+from . import units
 from .config import (
     CATEGORY_ATTRIBUTES,
     DEFAULT_CONFIG,
@@ -94,7 +95,9 @@ def set_contribution(row, config=DEFAULT_CONFIG):
 
 
 def _to_kg(weight, unit):
-    return weight * 0.45359237 if (unit or 'kg').lower() in ('lb', 'lbs') else weight
+    # Delegates so the factor has one home - see scoring/units.py for why the
+    # two total_volume queries had drifted from this one.
+    return units.to_kg(weight, unit)
 
 
 def training_ratios(set_rows, dates, strength_targets=None, config=DEFAULT_CONFIG):

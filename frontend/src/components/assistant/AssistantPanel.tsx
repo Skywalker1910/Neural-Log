@@ -7,6 +7,7 @@ import { api } from '../../api/client'
 import { onOpenAssistant, type OpenAssistantRequest } from '../../lib/assistantBus'
 import {
   streamChat, type AssistantInputCard, type AssistantState, type ProposedAction,
+  type WorkoutSubmission,
 } from '../../api/assistant'
 import { useAssistantState } from '../../api/queries'
 import { Button } from '../ui/Button'
@@ -108,7 +109,11 @@ export function AssistantPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns, status, proposal, inputCard])
 
-  async function send(override?: string, autoApply = true) {
+  async function send(
+    override?: string,
+    autoApply = true,
+    structured?: WorkoutSubmission,
+  ) {
     const message = (override ?? input).trim()
     if (!message || busy) return
 
@@ -125,6 +130,7 @@ export function AssistantPanel({
         kind: request.kind,
         date: request.date,
         autoApply,
+        structured,
       })) {
         if (event.type === 'status') {
           setStatus(TOOL_LABELS[event.tool ?? ''] ?? 'working')
@@ -281,7 +287,7 @@ export function AssistantPanel({
         )}
 
         {inputCard && !proposal && (
-          <InputCard card={inputCard} disabled={busy} onSend={(message, autoApply) => void send(message, autoApply)} />
+          <InputCard card={inputCard} disabled={busy} onSend={(message, autoApply, structured) => void send(message, autoApply, structured)} />
         )}
 
         {error && !proposal && <p className="text-label text-danger">{error}</p>}

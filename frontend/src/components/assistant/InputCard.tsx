@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { ArrowUpRight, CircleDot, Sparkles } from 'lucide-react'
 import { m } from 'motion/react'
 
-import type { AssistantInputCard } from '../../api/assistant'
+import type { AssistantInputCard, WorkoutSubmission } from '../../api/assistant'
+import { WorkoutRowsCard } from './WorkoutRowsCard'
 import { Button } from '../ui/Button'
 import { cn } from '../../lib/cn'
 
@@ -14,12 +15,26 @@ export function InputCard({
 }: {
   card: AssistantInputCard
   disabled: boolean
-  onSend: (message: string, autoApply: boolean) => void
+  onSend: (message: string, autoApply: boolean, structured?: WorkoutSubmission) => void
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
   const [selected, setSelected] = useState<string[]>([])
   const [sent, setSent] = useState(false)
-  const complete = card.fields.every((field) => {
+
+  // A training card carries per-exercise rows rather than three shared fields,
+  // so it has its own component. Delegated rather than branched inline, because
+  // the two forms share almost nothing beyond the border around them.
+  if (card.kind === 'workout_rows') {
+    return (
+      <WorkoutRowsCard
+        card={card}
+        disabled={disabled}
+        onSubmit={(message, structured) => onSend(message, true, structured)}
+      />
+    )
+  }
+
+  const complete = (card.fields ?? []).every((field) => {
     // Lifestyle fields are intentionally optional: somebody may know their
     // steps but not their water, and the assistant will only log what they say.
     if (card.id === 'lifestyle-entry') return true
@@ -38,7 +53,7 @@ export function InputCard({
     setSent(true)
     const message = card.id === 'lifestyle-entry'
       ? `Today I had ${lifestyleParts.join(', ')}.`
-      : card.message.replace(/\{(\w+)\}/g, (_, key: string) =>
+      : (card.message ?? '').replace(/\{(\w+)\}/g, (_, key: string) =>
       key === 'selection' ? selected.join(', ') : values[key]?.trim() ?? '',
       )
     onSend(message, true)
@@ -79,7 +94,7 @@ export function InputCard({
         <p className="mt-1 text-caption text-ink-subtle">Why now: {card.reason}</p>
 
         <div className="mt-3 grid gap-2">
-          {card.fields.map((field) => (
+          {(card.fields ?? []).map((field) => (
             <label key={field.id} className="grid gap-1 text-caption uppercase tracking-wide text-ink-subtle">
               {field.label}
               {field.type === 'select' ? (

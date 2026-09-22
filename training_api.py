@@ -11,6 +11,7 @@ import json
 from flask import Blueprint, jsonify, request, session
 
 import scoring
+from scoring.units import VOLUME_KG_SQL
 
 training = Blueprint('training', __name__)
 
@@ -330,8 +331,8 @@ def workout_detail(workout_id):
             )
 
         totals = conn.execute(
-            'SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(weight, 0) * COALESCE(reps, 0)), 0) '
-            'AS volume FROM exercise_sets WHERE session_id = ? AND is_warmup = 0',
+            'SELECT COUNT(*) AS n, ' + VOLUME_KG_SQL + ' AS volume '
+            'FROM exercise_sets WHERE session_id = ? AND is_warmup = 0',
             (workout_id,),
         ).fetchone()
         conn.execute(

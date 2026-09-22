@@ -257,6 +257,101 @@ extra format is another decoder to trust.
 Request bodies are now capped at 8 MB, which until this feature there was no
 limit on at all.
 
+## Logging a session
+
+Ask to log a workout and the assistant looks for your saved routines first.
+
+```
+you        "I want to log my workout"
+           -> Back & Biceps  (4 exercises)
+           -> Chest & Triceps (4 exercises)
+you        picks one
+           -> a row per exercise, targets pre-filled, each with its own numbers
+you        corrects what differed, unticks what you skipped, adds what you added
+           -> one card to confirm
+```
+
+With no routines saved it asks which muscles you worked and offers exercises
+from those groups instead, with nothing pre-ticked.
+
+### Why a row per exercise
+
+The first version asked for "sets each", "reps each" and "weight each" — one
+set of numbers for everything you ticked — and flattened the lot into a
+sentence for the model to re-read.
+
+That is fine for a circuit that genuinely is 3x10 and wrong for every other
+session, because nobody benches and curls the same load. It recorded a number
+that was false for most of the exercises, or you gave up and typed the session
+out by hand.
+
+Routine rows arrive **pre-ticked with the targets filled in**, because you said
+you followed that routine — the likely edit is removing one, not adding six. A
+muscle-group pick arrives with **nothing ticked**, because that list is a menu of
+what you *could* have done and a pre-ticked menu logs the menu.
+
+Every card can add an exercise from the library. Nobody follows a routine
+exactly, and without that you log the plan rather than the session.
+
+### Why the card submits data rather than a sentence
+
+Every other card answers by composing a sentence and sending it as an ordinary
+chat turn. That is a good rule — one validated path — and this deliberately
+departs from it.
+
+Six exercises with their own sets, reps, weights and units flatten into a
+paragraph that costs one round trip to write and another to re-parse, and throws
+away the exercise ids the card already looked up — so the model searches every
+name back up and can pick the wrong Bench Press.
+
+So the card submits what it already knows, and the server queues it by calling
+**the same tool function the model would have called**. Same validation, same
+plausibility checks, same confirmation card. It is not a second path into the
+database; it is the same path with a different caller, and it costs nothing.
+
+## Kilograms and pounds
+
+`exercise_sets.weight_unit` has stored a unit per set since R3, and the reason
+is in that migration: plates are kilograms in one gym and pounds in another, and
+somebody who switches must not have last year's log silently reinterpreted.
+
+What was missing is that almost nothing read it. A card now carries a `kg`/`lb`
+toggle, defaulting to `user_profile.weight_unit` so somebody who lifts in pounds
+is not picking it on every set forever — and eventually forgetting once, and
+recording 225 kg on a bench press.
+
+**Weights are stored exactly as entered and converted only on read.**
+
+### The bug this uncovered
+
+`scoring/producers.py` converted, so the Strength attribute was always right. The
+two queries that compute `workout_sessions.total_volume` did not — they summed
+`weight x reps` raw.
+
+Nothing could enter pounds, so it never fired. It would have fired the moment
+anything could: the Training page and the Analytics volume chart inflating by
+2.2x while the attribute stayed correct, both plausible, silently disagreeing.
+
+The factor now lives once in `scoring/units.py`, in the shape Python needs and
+the shape SQL needs, and both call sites use it. A real session logged through
+the card at 40/135/65 lb stores **3483.6 kg**, not 7680.
+
+## What a scanned label knows about a serving
+
+A panel does not only say what is in 100 g. It usually says what one serving is,
+and that is what somebody actually eats.
+
+| Label says | Stored as |
+|---|---|
+| Whey protein, "per scoop (30 g)" | `serving_name` "1 scoop", `serving_grams` 30, **countable** |
+| Chicken breast, "per 100 g" | no serving, not countable |
+
+`is_countable` is what makes the food picker offer **"2 scoops"** instead of
+making you do the 30 g multiplication in your head before typing it. It is set
+only when the label names a serving as a thing — a scoop, a bar, a slice —
+*and* says what one weighs, because a counter without a weight cannot be turned
+into macros.
+
 ## Editing a proposal, and why that is safe
 
 The card lets you correct numbers, because the mistakes are numeric. The

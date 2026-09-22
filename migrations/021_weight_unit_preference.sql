@@ -1,0 +1,15 @@
+-- Which unit somebody enters weights in.
+--
+-- `exercise_sets.weight_unit` has stored this per set since R3, and the comment
+-- there explains why it is per set rather than per user: plates are kilograms in
+-- one gym and pounds in another, and somebody who switches must not have last
+-- year's log silently reinterpreted.
+--
+-- That is still right. This column is a different thing: which unit to *offer*
+-- when the entry form opens. Without it, a person who lifts in pounds picks
+-- "lb" on every set of every session forever, and will eventually forget once
+-- and record 225 kg on a bench press.
+--
+-- So: storage stays per set and is never converted on write. This is a default
+-- for the form, and nothing reads it when deciding what a number means.
+ALTER TABLE user_profile ADD COLUMN weight_unit TEXT NOT NULL DEFAULT 'kg';

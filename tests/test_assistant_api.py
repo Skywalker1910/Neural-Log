@@ -298,8 +298,15 @@ def test_general_assistant_offers_exercise_tiles_for_a_muscle_group(client, app_
     ])
 
     assert card['topic'] == 'training'
-    assert card['options']
-    assert {'sets', 'reps'} <= {field['id'] for field in card['fields']}
+    # Rows rather than a flat option list with three shared fields. Nobody
+    # benches and curls the same load, so one "weight each" box recorded a
+    # number that was false for most of the session.
+    assert card['kind'] == 'workout_rows'
+    assert card['rows'], 'the muscle groups should have produced exercises'
+    assert {'exercise_id', 'name', 'sets', 'reps', 'weight'} <= set(card['rows'][0])
+    # Nothing pre-ticked: this is a menu of what they *could* have done.
+    assert all(row['selected'] is False for row in card['rows'])
+    assert card['allow_add'] is True
 
 
 def test_card_answers_apply_and_report_the_change(client, app_module, monkeypatch):

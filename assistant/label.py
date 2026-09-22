@@ -74,6 +74,15 @@ EXTRACTION_TOOL = {
                 'type': ['string', 'null'],
                 'description': 'How the label describes one serving, e.g. "1 slice (40 g)".',
             },
+            'serving_label': {
+                'type': ['string', 'null'],
+                'description': (
+                    'The countable noun for one serving, singular and lower case - '
+                    '"scoop", "bar", "slice", "biscuit", "capsule". Null when a '
+                    'serving is only a weight or a volume with no name for it, '
+                    'which is the usual case for meat, rice or loose produce.'
+                ),
+            },
             'kcal': {'type': ['number', 'null'], 'description': 'Energy in kcal, not kJ.'},
             'protein': {'type': ['number', 'null'], 'description': 'Grams.'},
             'carbs': {'type': ['number', 'null'], 'description': 'Grams of total carbohydrate.'},
@@ -94,7 +103,7 @@ EXTRACTION_TOOL = {
         },
         'required': [
             'product_name', 'basis', 'serving_size', 'serving_unit', 'serving_name',
-            'kcal', 'protein', 'carbs', 'fat', 'fibre', 'unreadable',
+            'serving_label', 'kcal', 'protein', 'carbs', 'fat', 'fibre', 'unreadable',
             'is_nutrition_label',
         ],
         'additionalProperties': False,
@@ -119,6 +128,15 @@ and unambiguous.
 A number you cannot read is null, and its field name goes in `unreadable`. Never \
 estimate, never infer a typical value for the product: a missing number is \
 honest and a guessed one becomes part of somebody's daily intake.
+
+Report the serving size whenever the label states one, even when the numbers \
+themselves are per 100 g. It is what somebody actually eats, so it is what they \
+will want to log with.
+
+If the label names a serving as a countable thing - a scoop, a bar, a slice - \
+put that noun in serving_label and its weight in serving_size. A whey protein \
+tub saying "per scoop (30 g)" is serving_label "scoop", serving_size 30, \
+serving_unit g. Chicken breast saying only "per 100 g" has no serving_label.
 
 If the photograph is not a nutrition panel, set is_nutrition_label false and \
 leave everything else null.
@@ -203,6 +221,24 @@ def build_food(extracted):
     unit = 'ml' if extracted.get('serving_unit') == 'ml' \
         or extracted.get('basis') == 'per_100ml' else 'g'
 
+    # What one serving is, and whether it is a thing you can count.
+    #
+    # This is the difference between logging "2 scoops" and doing the 30 g
+    # multiplication in your head before typing it. `is_countable` is what makes
+    # the food picker offer a counter at all - see lib/foodUnits.ts, which only
+    # offers pieces when a food is countable *and* knows what one weighs.
+    #
+    # Named "1 scoop" rather than "1 scoop (30 g)" on purpose: the picker strips
+    # the leading "1 " and pluralises, so the longer form reads "2 scoop (30 g)s".
+    # The weight is already carried separately and shown beside it.
+    label_noun = (extracted.get('serving_label') or '').strip().lower() or None
+    size = extracted.get('serving_size')
+    serving_name = extracted.get('serving_name')
+    if label_noun:
+        serving_name = f'1 {label_noun}'
+    elif size:
+        serving_name = serving_name or f'{size:g} {unit}'
+
     return {
         'name': (extracted.get('product_name') or '').strip() or 'Scanned product',
         'category': 'prepared',
@@ -212,8 +248,11 @@ def build_food(extracted):
         'carbs_per_100g': macros.get('carbs') or 0,
         'fat_per_100g': macros.get('fat') or 0,
         'fibre_per_100g': macros.get('fibre') or 0,
-        'serving_name': extracted.get('serving_name'),
-        'serving_grams': extracted.get('serving_size'),
+        'serving_name': serving_name,
+        'serving_grams': size,
+        # A scoop can be counted; 100 g of chicken cannot.
+        'is_countable': bool(label_noun and size),
+        'serving_label': label_noun,
         # Surfaced so the card can show its working and flag what to check.
         'conversion_note': note,
         'unreadable': extracted.get('unreadable') or [],

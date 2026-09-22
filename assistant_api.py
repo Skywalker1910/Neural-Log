@@ -30,7 +30,7 @@ from datetime import date as _date
 
 from flask import Blueprint, Response, jsonify, request, session, stream_with_context
 
-from assistant import agent, cards, config, label, store, usage
+from assistant import agent, cards, config, label, store, tools, usage
 
 assistant_bp = Blueprint('assistant', __name__)
 
@@ -105,6 +105,68 @@ def state():
 
 # --- talking -------------------------------------------------------------------
 
+
+def _queue_structured(conn, user_id, payload, today):
+    """Turn a filled-in card into queued actions, through the ordinary tools.
+
+    ## Why this does not go through the model
+
+    Every other card answers by composing a sentence and sending it as a normal
+    chat turn, which is a good rule: one validated path, and the model can catch
+    nonsense on the way past.
+
+    A filled-in workout defeats it. Six exercises with their own sets, reps,
+    weights and units flatten into a paragraph that costs a round trip to write,
+    another to re-parse, and loses the exercise ids the card already had - so the
+    model searches every name back up by hand and occasionally picks the wrong
+    Bench Press.
+
+    So the card submits what it already knows, and it is queued by calling the
+    *same tool function* the model would have called. Same validation, same
+    plausibility checks, same proposal for the person to confirm. It is not a
+    second path into the database; it is the same path with a different caller.
+
+    Returns queued actions, or raises ToolError with something the person can act
+    on.
+    """
+    if not isinstance(payload, dict) or payload.get('type') != 'workout':
+        raise tools.ToolError('That card is not one this version understands.')
+
+    ctx = tools.ToolContext(conn, user_id, today=today)
+    exercises = [
+        entry for entry in (payload.get('exercises') or [])
+        # An untouched row is not a claim that they did nothing - it is a row
+        # they did not fill in, and dropping it is the honest reading.
+        if entry.get('sets')
+    ]
+    if not exercises:
+        raise tools.ToolError('Nothing was filled in, so there is nothing to log.')
+
+    built = []
+    for entry in exercises:
+        count = int(entry.get('sets') or 0)
+        if not 0 < count <= 20:
+            raise tools.ToolError(f'{entry.get("name")}: {count} sets is not plausible.')
+        # The card collects one line per exercise and expands it here, rather
+        # than asking somebody to type the same numbers three times. Per-set
+        # variation still arrives intact when the model builds the payload.
+        built.append({
+            'exercise_id': entry.get('exercise_id'),
+            'name': entry.get('name') or '',
+            'sets': [{
+                'reps': entry.get('reps'),
+                'weight': entry.get('weight'),
+                'weight_unit': entry.get('weight_unit') or payload.get('weight_unit') or 'kg',
+                'duration_minutes': entry.get('duration_minutes'),
+            } for _ in range(count)],
+        })
+
+    tools.propose_workout(
+        ctx, date=payload.get('date'), name=payload.get('name'), exercises=built,
+    )
+    return ctx.queued
+
+
 @assistant_bp.route('/api/assistant/chat', methods=['POST'])
 @_auth
 def chat():
@@ -121,6 +183,7 @@ def chat():
 
     user_id = session.get('user_id')
     username = session.get('username') or f'user_{user_id}'
+    structured = data.get('structured')
 
     def events():
         # The generator outlives the view, so it owns its own connection rather
@@ -134,14 +197,32 @@ def chat():
             store.add_message(conn, conversation_id, 'user', message)
 
             queued, reply = [], ''
-            for event in agent.run_turn(
+
+            if structured:
+                # A filled-in card knows exactly what it means, so it is queued
+                # directly rather than described to the model and read back.
+                try:
+                    queued = _queue_structured(conn, user_id, structured, _today())
+                    reply = 'Ready to save that session.'
+                except tools.ToolError as error:
+                    yield 'data: ' + json.dumps({
+                        'type': 'error', 'kind': 'card', 'message': str(error),
+                    }) + '\n\n'
+                    yield 'data: ' + json.dumps({'type': 'end'}) + '\n\n'
+                    return
+                yield 'data: ' + json.dumps({
+                    'type': 'done', 'reply': reply, 'queued': queued,
+                    'budget': usage.budget_state(conn, user_id),
+                }) + '\n\n'
+
+            for event in ([] if structured else agent.run_turn(
                 conn, user_id, prior, message,
                 feature=kind, today=_today(), recompute=_recompute,
                 username=username, record_checklist=_record_checklist,
                 # A guided check-in is a different job from free chat, so it
                 # gets its own instructions rather than a paragraph bolted on.
                 instructions=agent.TODAY_PROMPT if kind == 'today' else None,
-            ):
+            )):
                 if event['type'] == 'done':
                     queued = event['queued']
                     reply = event['reply']
