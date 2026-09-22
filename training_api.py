@@ -11,7 +11,7 @@ import json
 from flask import Blueprint, jsonify, request, session
 
 import scoring
-from scoring.units import VOLUME_KG_SQL
+from scoring.units import VOLUME_KG_SQL, normalise_unit, volume_kg_sql, weight_kg_sql
 
 training = Blueprint('training', __name__)
 
@@ -137,6 +137,8 @@ def exercise_history(exercise_id):
     # Two different records, because "best" means two things in a gym and
     # conflating them is misleading: 82.5kg x 6 is the heavier lift, 80kg x 8 is
     # the bigger set. Both are worth seeing before you pick today's weight.
+    # Ordered by the load in kilograms, but returned in the unit it was lifted
+    # in. Comparing the raw numbers would rank a 135 lb set above a 100 kg one.
     heaviest = conn.execute(
         f'''
         SELECT x.weight, x.weight_unit, x.reps, s.date AS date
@@ -144,7 +146,7 @@ def exercise_history(exercise_id):
         JOIN workout_sessions s ON s.id = x.session_id
         WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0
           AND x.weight IS NOT NULL AND x.reps IS NOT NULL{skip}
-        ORDER BY x.weight DESC, x.reps DESC
+        ORDER BY {weight_kg_sql('x.')} DESC, x.reps DESC
         LIMIT 1
         ''',
         scope,
@@ -153,7 +155,7 @@ def exercise_history(exercise_id):
     best_volume = conn.execute(
         f'''
         SELECT x.weight, x.weight_unit, x.reps, s.date AS date,
-               (x.weight * x.reps) AS volume
+               ({weight_kg_sql('x.')} * x.reps) AS volume
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
         WHERE s.user_id = ? AND x.exercise_id = ? AND x.is_warmup = 0
@@ -323,7 +325,9 @@ def workout_detail(workout_id):
                 'weight_unit, reps, duration_seconds, distance, distance_unit, rpe, '
                 'is_warmup, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (workout_id, entry['exercise_id'], position, entry.get('weight'),
-                 entry.get('weight_unit', 'kg'), entry.get('reps'),
+                 # Normalised on the way in, so the read paths only ever have
+                 # two spellings to convert rather than every casing of "lbs".
+                 normalise_unit(entry.get('weight_unit')), entry.get('reps'),
                  entry.get('duration_seconds'), entry.get('distance'),
                  entry.get('distance_unit'), entry.get('rpe'),
                  1 if entry.get('is_warmup') else 0,
@@ -374,9 +378,9 @@ def training_summary():
     # this is the honest version of it - sets per group, not a guess from the
     # routine's name.
     by_muscle = conn.execute(
-        '''
+        f'''
         SELECT e.primary_muscle AS muscle, COUNT(*) AS sets,
-               COALESCE(SUM(COALESCE(x.weight, 0) * COALESCE(x.reps, 0)), 0) AS volume
+               {volume_kg_sql('x.')} AS volume
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
         JOIN exercises e ON e.id = x.exercise_id
@@ -387,14 +391,15 @@ def training_summary():
     ).fetchall()
 
     records = conn.execute(
-        '''
-        SELECT e.name AS exercise, e.id AS exercise_id, MAX(x.weight) AS weight,
-               x.weight_unit, x.reps, s.date AS date
+        f'''
+        SELECT e.name AS exercise, e.id AS exercise_id, x.weight,
+               x.weight_unit, x.reps, s.date AS date,
+               MAX({weight_kg_sql('x.')}) AS weight_kg
         FROM exercise_sets x
         JOIN workout_sessions s ON s.id = x.session_id
         JOIN exercises e ON e.id = x.exercise_id
         WHERE s.user_id = ? AND x.is_warmup = 0 AND x.weight IS NOT NULL
-        GROUP BY e.id ORDER BY x.weight DESC LIMIT 8
+        GROUP BY e.id ORDER BY weight_kg DESC LIMIT 8
         ''',
         (user_id,),
     ).fetchall()
@@ -415,7 +420,12 @@ def training_summary():
         'recent': [_session_payload(conn, row) for row in recent],
         'volume_trend': [dict(row) for row in reversed(volume_by_day)],
         'by_muscle': [dict(row) for row in by_muscle],
-        'records': [dict(row) for row in records],
+        # weight_kg only exists to rank them; the row reports the load in
+        # the unit it was lifted in.
+        'records': [
+            {k: v for k, v in dict(row).items() if k != 'weight_kg'}
+            for row in records
+        ],
         'measurements': [dict(row) for row in measurements],
     }
     conn.close()

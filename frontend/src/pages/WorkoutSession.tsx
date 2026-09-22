@@ -4,7 +4,9 @@ import { m } from 'motion/react'
 import { Check, Dumbbell, Plus, Timer, Trash2, TrendingUp } from 'lucide-react'
 
 import type { Exercise, LoggedSet, Workout } from '../api/types'
-import { useExerciseHistory, useRoutine, useSaveWorkout, useWorkout } from '../api/queries'
+import {
+  useExerciseHistory, useProfile, useRoutine, useSaveWorkout, useWorkout,
+} from '../api/queries'
 import { ExercisePicker } from '../components/training/ExercisePicker'
 import { RestTimer } from '../components/training/RestTimer'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -17,6 +19,7 @@ import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
 import { slideIn, spring } from '../lib/motion'
+import { asUnit, toKg, type WeightUnit } from '../lib/units'
 
 /** A set as the form holds it - strings, because a half-typed "8" is not a number. */
 interface DraftSet {
@@ -25,6 +28,12 @@ interface DraftSet {
   exercise_name: string
   category: string
   weight: string
+  /**
+   * Per set, because that is how the column stores it and how a gym works: a
+   * barbell in kilograms and a machine stack in pounds is an ordinary session,
+   * not an edge case. The toggle sets a whole exercise at once.
+   */
+  weight_unit: WeightUnit
   reps: string
   duration: string
   is_warmup: boolean
@@ -40,6 +49,9 @@ function toDraft(set: LoggedSet): DraftSet {
     exercise_name: set.exercise_name ?? 'Exercise',
     category: set.category ?? 'strength',
     weight: set.weight != null ? String(set.weight) : '',
+    // A stored set keeps the unit it was lifted in. Re-opening a session must
+    // never reinterpret last month's numbers through today's preference.
+    weight_unit: asUnit(set.weight_unit),
     reps: set.reps != null ? String(set.reps) : '',
     duration: set.duration_seconds != null ? String(Math.round(set.duration_seconds / 60)) : '',
     is_warmup: Boolean(set.is_warmup),
@@ -62,6 +74,7 @@ function toPayload(draft: DraftSet): LoggedSet {
   return {
     exercise_id: draft.exercise_id,
     weight: draft.weight === '' ? null : Number(draft.weight),
+    weight_unit: draft.weight_unit,
     reps: draft.reps === '' ? null : Number(draft.reps),
     duration_seconds: draft.duration === '' ? null : Math.round(minutes * 60),
     is_warmup: draft.is_warmup,
@@ -79,13 +92,22 @@ function PreviousPerformance(
     return <span className="text-meta text-ink-subtle">First time logging this</span>
   }
 
+  // "Last time: 135x8" is a different instruction depending on the unit, so the
+  // unit is shown - once at the end when the session used one, and per set on
+  // the rare day that mixed them.
+  const units = new Set(last.filter((set) => set.weight != null)
+    .map((set) => asUnit(set.weight_unit)))
+  const mixed = units.size > 1
   const summary = last
-    .map((set) => (set.weight != null ? `${set.weight}×${set.reps ?? '?'}` : `${set.reps ?? '?'} reps`))
+    .map((set) => (set.weight != null
+      ? `${set.weight}${mixed ? asUnit(set.weight_unit) : ''}×${set.reps ?? '?'}`
+      : `${set.reps ?? '?'} reps`))
     .join(', ')
+  const suffix = units.size === 1 ? ` ${[...units][0]}` : ''
 
   return (
     <span className="text-meta text-ink-subtle">
-      Last time: <span className="text-ink-muted">{summary}</span>
+      Last time: <span className="text-ink-muted">{summary}{suffix}</span>
       {data.heaviest_set && (
         <>
           {' · '}best {data.heaviest_set.weight}
@@ -104,13 +126,15 @@ interface ExerciseBlockProps {
   onChange: (key: string, patch: Partial<DraftSet>) => void
   onRemove: (key: string) => void
   onAddSet: (exerciseId: number, name: string, category: string) => void
+  onUnit: (exerciseId: number, unit: WeightUnit) => void
   onRest: () => void
 }
 
 function ExerciseBlock({
-  exerciseId, workoutId, name, sets, onChange, onRemove, onAddSet, onRest,
+  exerciseId, workoutId, name, sets, onChange, onRemove, onAddSet, onUnit, onRest,
 }: ExerciseBlockProps) {
   const isCardio = sets[0]?.category !== 'strength'
+  const unit = sets[0]?.weight_unit ?? 'kg'
 
   return (
     <Card
@@ -125,7 +149,35 @@ function ExerciseBlock({
       <div className="flex max-w-md flex-col gap-2">
         <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(0,1fr)_2.5rem_2rem] items-center gap-2 text-caption uppercase tracking-wide text-ink-subtle">
           <span className="text-center">Set</span>
-          <span>{isCardio ? 'Minutes' : 'Weight'}</span>
+          {isCardio ? (
+            <span>Minutes</span>
+          ) : (
+            /* The toggle is the column header, because that is where you are
+               already looking when you wonder what the number means. Per
+               exercise: the barbell and the machine stack can disagree. */
+            <span className="flex items-center gap-1.5">
+              Weight
+              <span className="flex overflow-hidden rounded-pill border border-line">
+                {(['kg', 'lb'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onUnit(exerciseId, option)}
+                    aria-pressed={unit === option}
+                    aria-label={`Record ${name} in ${option === 'kg' ? 'kilograms' : 'pounds'}`}
+                    className={cn(
+                      'px-2 py-0.5 text-meta lowercase tracking-normal transition-colors',
+                      unit === option
+                        ? 'bg-fitness/20 text-fitness'
+                        : 'text-ink-subtle hover:text-ink',
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </span>
+            </span>
+          )}
           <span>{isCardio ? '' : 'Reps'}</span>
           <span className="text-center">W/U</span>
           <span />
@@ -159,7 +211,7 @@ function ExerciseBlock({
                 <input
                   type="number" inputMode="decimal" step="0.5" min="0" value={set.weight}
                   onChange={(event) => onChange(set.key, { weight: event.target.value })}
-                  placeholder="kg" aria-label="Weight"
+                  placeholder={unit} aria-label={`Weight in ${unit}`}
                   className="rounded-md border border-line bg-surface-base px-2 py-1.5 text-label tabular text-ink outline-none focus:border-brand"
                 />
                 <input
@@ -233,10 +285,20 @@ export function WorkoutSession() {
     query.data && query.data.sets.length === 0 ? query.data.routine_id : null,
   )
 
+  // Your default, not the app's. Somebody who lifts in pounds should not pick
+  // the unit on every set forever - and eventually forget once, and record a
+  // 225 kg bench press.
+  const profile = useProfile()
+  const preferred = asUnit(profile.data?.profile.weight_unit)
+
   const sets = useMemo(() => {
     if (drafts) return drafts
     if (!query.data) return []
     if (query.data.sets.length > 0) return query.data.sets.map(toDraft)
+    // Stored sets carry their own unit; planned rows have to borrow yours, so
+    // they wait for it. Seeding kilograms and correcting a moment later would
+    // put a pounds lifter one fast tap away from a silently wrong session.
+    if (profile.isPending) return []
     return (plan.data?.exercises ?? []).flatMap((entry) =>
       Array.from({ length: Math.max(1, entry.target_sets ?? 1) }, () => ({
         key: nextKey(),
@@ -244,12 +306,13 @@ export function WorkoutSession() {
         exercise_name: entry.name ?? 'Exercise',
         category: entry.category ?? 'strength',
         weight: '',
+        weight_unit: preferred,
         reps: entry.target_reps != null ? String(entry.target_reps) : '',
         duration: '',
         is_warmup: false,
       })),
     )
-  }, [drafts, query.data, plan.data])
+  }, [drafts, query.data, plan.data, preferred, profile.isPending])
 
   const byExercise = useMemo(() => {
     const groups: { exerciseId: number; name: string; sets: DraftSet[] }[] = []
@@ -262,10 +325,14 @@ export function WorkoutSession() {
   }, [sets])
 
   const logged = useMemo(() => sets.filter(hasData), [sets])
+  // In kilograms, because that is what the card underneath it says and what the
+  // server will store. Summing the raw numbers would show a pounds session at
+  // 2.2x until it saved and the figure silently corrected itself.
   const volume = useMemo(
     () => logged
       .filter((set) => !set.is_warmup)
-      .reduce((total, set) => total + (Number(set.weight) || 0) * (Number(set.reps) || 0), 0),
+      .reduce((total, set) => total
+        + toKg(Number(set.weight) || 0, set.weight_unit) * (Number(set.reps) || 0), 0),
     [logged],
   )
   const workingSets = logged.filter((set) => !set.is_warmup).length
@@ -289,10 +356,18 @@ export function WorkoutSession() {
       // Carrying the previous set's load forward is what makes logging fast -
       // most sets repeat the one before.
       weight: previous?.weight ?? '',
+      weight_unit: previous?.weight_unit ?? preferred,
       reps: previous?.reps ?? '',
       duration: previous?.duration ?? '',
       is_warmup: false,
     }])
+  }
+
+  // Sets the whole exercise, not the row. You do not load a bar in pounds for
+  // set two, and per-set toggles would be a decision on every line.
+  function setUnit(exerciseId: number, unit: WeightUnit) {
+    setDrafts((current) => (current ?? sets).map((set) =>
+      set.exercise_id === exerciseId ? { ...set, weight_unit: unit } : set))
   }
 
   function addExercise(exercise: Exercise) {
@@ -373,6 +448,7 @@ export function WorkoutSession() {
                       onChange={update}
                       onRemove={remove}
                       onAddSet={addSet}
+                      onUnit={setUnit}
                       onRest={() => setRestOpen(true)}
                     />
                   </Reveal>
