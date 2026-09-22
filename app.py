@@ -2164,6 +2164,7 @@ from analytics_api import init_analytics  # noqa: E402
 from onboarding_api import init_onboarding  # noqa: E402
 from survey_api import init_survey  # noqa: E402
 from assistant_api import init_assistant  # noqa: E402
+from feed_api import init_feed  # noqa: E402
 
 init_training(app, get_db_connection, login_required, recompute_after_change)
 
@@ -2191,6 +2192,7 @@ init_survey(app, get_db_connection, login_required, recompute_after_change)
 # as they would if the person had typed them in.
 init_assistant(app, get_db_connection, login_required, admin_required,
                recompute_after_change, record_checklist_day)
+init_feed(app, get_db_connection, login_required)
 
 # Applied at import time so migrations run under gunicorn too, not only when
 # this module is executed directly. init_db() is idempotent.

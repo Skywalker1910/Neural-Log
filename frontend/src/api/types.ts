@@ -565,8 +565,30 @@ export interface Recipe {
   /** Cooked weight. Not the sum of the raw ingredients. */
   total_grams: number | null
   notes: string | null
+  instructions: string[]
   ingredients: RecipeIngredient[]
   food: Food | null
+}
+
+export interface WeeklyFeedDay {
+  date: string
+  calories: number | null
+  protein_g: number | null
+  sessions: number
+  sets: number
+  volume: number
+  sleep_minutes: number | null
+  water_ml: number | null
+  steps: number | null
+  mood: number | null
+  study_minutes: number
+}
+
+export interface WeeklyFeed {
+  range: { start: string; end: string }
+  days: WeeklyFeedDay[]
+  totals: Record<string, number | null>
+  insights: { tone: 'info' | 'success' | 'warning'; title: string; body: string }[]
 }
 
 export interface SleepEntry {

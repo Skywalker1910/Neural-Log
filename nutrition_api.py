@@ -6,6 +6,7 @@ registration rather than imported, so this module never imports app. The test
 suite swaps modules per test, and importing app here would bind to whichever copy
 happened to load first.
 """
+import json
 from datetime import date as _date
 
 from flask import Blueprint, jsonify, request, session
@@ -201,6 +202,7 @@ def _recipe_payload(conn, row):
         'servings': row['servings'],
         'total_grams': row['total_grams'],
         'notes': row['notes'],
+        'instructions': json.loads(row['instructions'] or '[]'),
         'ingredients': [dict(i) for i in ingredients],
         'food': _food_row(food) if food else None,
     }
@@ -258,6 +260,19 @@ def _load_ingredients(conn, entries):
     return resolved
 
 
+def _recipe_instructions(value):
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 40:
+        raise ValueError('instructions must be a list of up to 40 steps')
+    if any(not isinstance(step, str) for step in value):
+        raise ValueError('each instruction must be text')
+    steps = [step.strip() for step in value if step.strip()]
+    if any(len(step) > 500 for step in steps):
+        raise ValueError('each instruction must be 500 characters or fewer')
+    return steps
+
+
 @nutrition_bp.route('/api/recipes', methods=['GET', 'POST'])
 @_auth
 def recipes():
@@ -270,6 +285,12 @@ def recipes():
         if not name:
             conn.close()
             return jsonify({'error': 'name is required'}), 400
+
+        try:
+            instructions = _recipe_instructions(data.get('instructions'))
+        except ValueError as error:
+            conn.close()
+            return jsonify({'error': str(error)}), 400
 
         ingredients = _load_ingredients(conn, data.get('ingredients'))
         if not ingredients:
@@ -296,9 +317,10 @@ def recipes():
         _write_recipe_food(conn, food_id, name, ingredients, total_grams, servings)
 
         cursor.execute(
-            'INSERT INTO recipes (user_id, food_id, name, servings, total_grams, notes) '
-            'VALUES (?, ?, ?, ?, ?, ?)',
-            (user_id, food_id, name, servings, total_grams, data.get('notes')),
+            'INSERT INTO recipes (user_id, food_id, name, servings, total_grams, notes, instructions) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (user_id, food_id, name, servings, total_grams, data.get('notes'),
+             json.dumps(instructions)),
         )
         recipe_id = cursor.lastrowid
         for position, ingredient in enumerate(ingredients):
@@ -348,6 +370,13 @@ def recipe_detail(recipe_id):
         data = request.json or {}
         name = (data.get('name') or row['name']).strip()
         total_grams = data.get('total_grams', row['total_grams'])
+        try:
+            instructions = _recipe_instructions(
+                data['instructions'] if 'instructions' in data else json.loads(row['instructions'] or '[]')
+            )
+        except ValueError as error:
+            conn.close()
+            return jsonify({'error': str(error)}), 400
 
         if 'ingredients' in data:
             ingredients = _load_ingredients(conn, data['ingredients'])
@@ -372,9 +401,10 @@ def recipe_detail(recipe_id):
         servings = float(data.get('servings') or row['servings'] or 1)
         _write_recipe_food(conn, row['food_id'], name, ingredients, total_grams, servings)
         conn.execute(
-            'UPDATE recipes SET name = ?, servings = ?, total_grams = ?, notes = ? '
+            'UPDATE recipes SET name = ?, servings = ?, total_grams = ?, notes = ?, instructions = ? '
             'WHERE id = ?',
-            (name, servings, total_grams, data.get('notes', row['notes']), recipe_id),
+            (name, servings, total_grams, data.get('notes', row['notes']),
+             json.dumps(instructions), recipe_id),
         )
         conn.commit()
 
