@@ -12,6 +12,7 @@ import { AttributeBadge } from '../components/ui/AttributeBadge'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { MetricCard } from '../components/ui/MetricCard'
+import { JourneyHero } from '../components/ui/JourneyHero'
 import { ProgressRing } from '../components/ui/ProgressRing'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
@@ -193,6 +194,8 @@ export function Home() {
             {/* Renders nothing once setup is finished or declined, so it costs
                 an existing user no space. */}
             <Reveal><SetupBanner /></Reveal>
+
+            <Reveal><JourneyHero today={data.today} daysLogged={data.days_logged} /></Reveal>
 
             <Reveal>
             <Card accent="discipline" bodyClassName="flex flex-wrap items-center gap-6">

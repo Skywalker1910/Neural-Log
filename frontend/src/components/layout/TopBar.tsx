@@ -1,7 +1,9 @@
 import { Flame } from 'lucide-react'
+import { Link } from 'react-router'
 
 import { useCurrentUser, useGamificationSummary } from '../../api/queries'
 import { Skeleton } from '../ui/Skeleton'
+import { UserAvatar } from '../ui/UserAvatar'
 
 function greeting(hour: number): string {
   if (hour < 5) return 'Still up'
@@ -94,6 +96,10 @@ export function TopBar() {
             </span>
           </>
         ) : null}
+        <Link to="/profile" className="profile-nav-link" aria-label={user.data?.username ? `${user.data.username}'s profile` : 'Your profile'} title="Your profile">
+          <UserAvatar username={user.data?.username} />
+          <span>{user.data?.username || 'Profile'}</span>
+        </Link>
       </div>
     </header>
   )

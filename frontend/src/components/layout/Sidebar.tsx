@@ -5,6 +5,7 @@ import { m } from 'motion/react'
 import { api } from '../../api/client'
 import { useCurrentUser } from '../../api/queries'
 import { cn } from '../../lib/cn'
+import { UserAvatar } from '../ui/UserAvatar'
 import { ADMIN_SECTION, accentText, NAV_SECTIONS, SETTINGS_SECTION, type NavSection } from '../../navigation'
 
 interface SidebarProps {
@@ -12,14 +13,18 @@ interface SidebarProps {
   onToggle: () => void
 }
 
-function SidebarLink({ section, collapsed }: { section: NavSection; collapsed: boolean }) {
+function SidebarLink({ section, collapsed, username }: { section: NavSection; collapsed: boolean; username?: string }) {
   const Icon = section.icon
+  const isProfile = section.path === '/profile'
+  const label = isProfile && username ? username : section.label
+  const accessibleLabel = isProfile && username ? `${username}'s profile` : section.label
 
   return (
     <NavLink
       to={section.path}
       end={section.path === '/'}
-      title={collapsed ? section.label : undefined}
+      title={accessibleLabel}
+      aria-label={accessibleLabel}
       className={({ isActive }) =>
         cn(
           'group relative flex items-center gap-3 rounded-md px-3 py-2 text-label',
@@ -45,7 +50,7 @@ function SidebarLink({ section, collapsed }: { section: NavSection; collapsed: b
               aria-hidden
             />
           )}
-          <Icon
+          {isProfile && username ? <UserAvatar username={username} className="sidebar-avatar relative" /> : <Icon
             size={18}
             strokeWidth={1.9}
             className={cn(
@@ -53,8 +58,8 @@ function SidebarLink({ section, collapsed }: { section: NavSection; collapsed: b
               isActive ? accentText[section.accent] : 'text-current',
             )}
             aria-hidden
-          />
-          {!collapsed && <span className="relative truncate">{section.label}</span>}
+          />}
+          {!collapsed && <span className="relative min-w-0"><span className="block truncate">{label}</span>{isProfile && username && <span className="block text-caption text-ink-muted">Your profile</span>}</span>}
         </>
       )}
     </NavLink>
@@ -90,7 +95,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <nav aria-label="Main" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
         {NAV_SECTIONS.map((section) => (
-          <SidebarLink key={section.path} section={section} collapsed={collapsed} />
+          <SidebarLink key={section.path} section={section} collapsed={collapsed} username={user.data?.username} />
         ))}
       </nav>
 

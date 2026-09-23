@@ -1,6 +1,6 @@
 import {
   Activity,
-  BookOpenText,
+  LibraryBig,
   CalendarCheck,
   ChartLine,
   Dumbbell,
@@ -102,9 +102,9 @@ export const NAV_SECTIONS: NavSection[] = [
     accent: 'brand',
   },
   {
-    label: 'Journal',
-    path: '/journal',
-    icon: BookOpenText,
+    label: 'Library',
+    path: '/library',
+    icon: LibraryBig,
     accent: 'goals',
   },
   {

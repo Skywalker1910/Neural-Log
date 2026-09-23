@@ -6,6 +6,7 @@ import { LazyMotion } from 'motion/react'
 
 import '@fontsource-variable/inter'
 import './index.css'
+import './engagement.css'
 import { loadDomAnimation } from './lib/motionFeatures'
 import App from './App.tsx'
 

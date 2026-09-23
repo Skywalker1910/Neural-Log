@@ -37,6 +37,7 @@ const RecipeBook = page(() => import('./pages/RecipeBook'), 'RecipeBook')
 const ExerciseBook = page(() => import('./pages/ExerciseBook'), 'ExerciseBook')
 const JournalBook = page(() => import('./pages/JournalBook'), 'JournalBook')
 const Lifestyle = page(() => import('./pages/Lifestyle'), 'Lifestyle')
+const Library = page(() => import('./pages/Library'), 'Library')
 const Learning = page(() => import('./pages/Learning'), 'Learning')
 const Goals = page(() => import('./pages/Goals'), 'Goals')
 const Achievements = page(() => import('./pages/Achievements'), 'Achievements')
@@ -82,7 +83,9 @@ export default function App() {
         <Route path="/training/book" element={<Lazy><ExerciseBook /></Lazy>} />
         <Route path="/recipes" element={<Navigate to="/nutrition/book" replace />} />
         <Route path="/exercises" element={<Navigate to="/training/book" replace />} />
-        <Route path="/journal" element={<Lazy><JournalBook /></Lazy>} />
+        <Route path="/journal" element={<Navigate to="/lifestyle/journal" replace />} />
+        <Route path="/lifestyle/journal" element={<Lazy><JournalBook /></Lazy>} />
+        <Route path="/library" element={<Lazy><Library /></Lazy>} />
         <Route path="/lifestyle" element={<Lazy><Lifestyle /></Lazy>} />
         <Route path="/learning" element={<Lazy><Learning /></Lazy>} />
         <Route path="/goals" element={<Lazy><Goals /></Lazy>} />

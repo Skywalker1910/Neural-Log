@@ -17,6 +17,8 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { StatCard } from '../components/ui/StatCard'
+import { BookWorkspace } from '../components/ui/BookPreview'
+import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { cn } from '../lib/cn'
 import { shortDate, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
@@ -244,7 +246,9 @@ export function Lifestyle() {
       <QueryBoundary query={summary} loading={<SkeletonGrid />}>
         {(data: LifestyleSummary) => (
           <RevealGroup className="flex flex-col gap-4">
-            <Reveal className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Reveal><WorkspaceStory kind="lifestyle" /></Reveal>
+            <BookWorkspace kind="journal">
+            <Reveal className="grid grid-cols-2 gap-3">
               <StatCard
                 label="Average sleep"
                 value={hoursMinutes(data.averages.sleep_minutes)}
@@ -271,6 +275,8 @@ export function Lifestyle() {
                 hint={`target ${data.targets.steps.toLocaleString()}`}
               />
             </Reveal>
+
+            </BookWorkspace>
 
             <Reveal className="grid gap-4 lg:grid-cols-2">
               <Card title="Last night" icon={BedDouble} accent="recovery">
@@ -377,15 +383,9 @@ export function Lifestyle() {
 
             <Reveal>
               <Card title="Journal" icon={NotebookPen} accent="goals">
-                <textarea
-                  defaultValue={current?.journal ?? ''}
-                  onBlur={(event) => patch({ journal: event.target.value })}
-                  rows={4}
-                  placeholder="Anything worth remembering about today."
-                  className="w-full resize-y rounded-md border border-line bg-surface-base px-3 py-2 text-label text-ink outline-none focus:border-brand"
-                />
+                <p className="whitespace-pre-wrap font-serif text-label leading-7 text-ink-muted">{current?.journal || 'Your day is still an open page.'}</p>
                 <p className="mt-2 text-caption text-ink-subtle">
-                  Saved when you click away.
+                  Open the journal cover above to write, revisit a day, or ask for an AI draft.
                 </p>
               </Card>
             </Reveal>

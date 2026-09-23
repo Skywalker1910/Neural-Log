@@ -25,6 +25,8 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { StatCard } from '../components/ui/StatCard'
+import { BookWorkspace } from '../components/ui/BookPreview'
+import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { shortDate, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
 
@@ -250,10 +252,9 @@ export function Training() {
         accent="fitness"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/training/book"><Button size="sm">Exercise book</Button></Link>
             <Link to="/training/library">
               <Button size="sm" icon={Dumbbell}>
-                Library
+                Exercises
               </Button>
             </Link>
             <Button size="sm" icon={Ruler} onClick={() => setMeasuring(true)}>
@@ -275,7 +276,9 @@ export function Training() {
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(summary) => (
           <RevealGroup className="flex flex-col gap-4">
-            <Reveal className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Reveal><WorkspaceStory kind="training" /></Reveal>
+            <BookWorkspace kind="exercise">
+            <Reveal className="grid grid-cols-2 gap-3">
               <StatCard
                 label="Sessions" value={summary.total_sessions}
                 icon={CalendarDays} accent="fitness"
@@ -299,6 +302,8 @@ export function Training() {
                 icon={Trophy} accent="goals" hint="exercises tracked"
               />
             </Reveal>
+
+            </BookWorkspace>
 
             {summary.total_sessions === 0 ? (
               <Reveal>

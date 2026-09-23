@@ -16,8 +16,8 @@ The scoring system follows that goal. Logged sets, study time, sleep, and comple
 - **Learning and goals** - study areas, timed sessions, milestones, tasks, and linked habits.
 - **Progression** - eight attributes, XP transactions, levels, achievements, and privacy-aware leaderboards.
 - **Analytics** - comparisons, calendar heatmaps, and honest handling of unobserved days.
-- **Weekly feed** - private AI feedback posts with strengths, opportunities, and charts drawn from recorded data.
-- **Personal books** - page-turning recipe, exercise, and journal collections with illustrated covers and chapter indexes. [How they work](docs/BOOKS-AND-FEED.md).
+- **Weekly feed** - private, newsletter-style AI reviews with strengths, opportunities, charts, and a reading list of past editions.
+- **Personal library** - recipe, exercise, and journal books on one shelf, also available in Nutrition, Training, and Lifestyle. Illustrated covers expand into readers with drag/swipe page turns and chapter indexes. [How they work](docs/BOOKS-AND-FEED.md).
 - **Classic tools** - Excel export and milestone insights remain available at `/classic`.
 
 ## Architecture

@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
 import { m } from 'motion/react'
 import {
-  Award, BookOpen, Dumbbell, Flame, Info, Lock, Medal, Receipt, ShieldCheck, Sparkles, Sun,
+  Award, BookOpen, Dumbbell, Flame, Info, Receipt, Sparkles, Sun,
   Trophy, UtensilsCrossed,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import type {
-  AchievementCategory, AchievementTier, Badge as Achievement, XpEntry, XpLedger,
+  AchievementCategory, XpEntry, XpLedger,
 } from '../api/types'
 import { useGamificationSummary, useXpLedger } from '../api/queries'
+import { AchievementCard } from '../components/gamification/AchievementCard'
+import { AchievementEmblem } from '../components/gamification/AchievementEmblem'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
@@ -32,27 +34,6 @@ const CATEGORY_META: Record<AchievementCategory, {
   mastery: { label: 'Mastery', icon: Sparkles, accent: 'goals' },
 }
 
-/**
- * Tier colours, deliberately not from the category palette.
- *
- * A gold achievement should read as gold whatever category it sits in - the
- * category is already carried by its section, and colouring tier by category
- * would make "gold" mean six different things.
- */
-const TIER_STYLE: Record<AchievementTier, {
-  ring: string; text: string; tint: string; label: string
-}> = {
-  bronze: {
-    ring: 'border-[#b06a3b]/60', text: 'text-[#c98b5e]', tint: 'from-[#9a5933]/35', label: 'Bronze',
-  },
-  silver: {
-    ring: 'border-[#9aa4b2]/60', text: 'text-[#b9c2ce]', tint: 'from-[#78818e]/30', label: 'Silver',
-  },
-  gold: {
-    ring: 'border-[#d4a63c]/70', text: 'text-[#e8c35c]', tint: 'from-[#9d761d]/35', label: 'Gold',
-  },
-}
-
 const SOURCE_LABEL: Record<string, string> = {
   checklist: 'Checklist',
   training: 'Training',
@@ -64,76 +45,6 @@ const SOURCE_LABEL: Record<string, string> = {
 
 function formatNumber(value: number) {
   return value >= 1000 ? value.toLocaleString() : String(value)
-}
-
-function AchievementCard({ achievement }: { achievement: Achievement }) {
-  const tier = TIER_STYLE[achievement.tier]
-  const pct = Math.round(achievement.progress * 100)
-  const category = CATEGORY_META[achievement.category]
-  const CategoryIcon = category.icon
-
-  return (
-    <m.article
-      layout
-      transition={spring.snappy}
-      className={cn(
-        'group relative isolate flex min-w-0 flex-col overflow-hidden rounded-xl border p-4 transition-[border,transform,box-shadow]',
-        achievement.earned
-          ? cn('bg-gradient-to-br via-surface-card to-surface-raised shadow-card hover:-translate-y-0.5 hover:shadow-raised', tier.tint, tier.ring)
-          : 'border-line bg-surface-base',
-      )}
-    >
-      <div className="pointer-events-none absolute -right-12 -top-12 -z-10 size-36 rounded-full bg-white/5 blur-3xl" />
-      <div className={cn('flex items-start justify-between gap-3', !achievement.earned && 'blur-[1.5px]')}>
-        <span className={cn(
-          'relative flex size-14 shrink-0 items-center justify-center rounded-[18px] border bg-surface-base/70 shadow-card',
-          achievement.earned ? cn(tier.ring, tier.text) : 'border-line text-ink-subtle',
-        )} aria-hidden>
-          <span className="absolute inset-1 rounded-[14px] border border-white/10" />
-          {achievement.earned ? <Medal size={24} strokeWidth={1.8} /> : <Lock size={21} />}
-        </span>
-
-        <span className="min-w-0 flex-1 pt-0.5 text-right">
-          <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption uppercase tracking-wide',
-            achievement.earned ? cn(tier.ring, tier.text) : 'border-line text-ink-subtle')}>
-            <CategoryIcon size={11} aria-hidden /> {tier.label}
-          </span>
-          <span className="mt-2 block truncate text-section text-ink">{achievement.name}</span>
-          <span className="mt-1 block text-meta text-ink-subtle">{achievement.description}</span>
-        </span>
-      </div>
-
-      {achievement.earned ? (
-        <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-          <span className={cn('flex items-center gap-1.5 text-meta', tier.text)}>
-            <ShieldCheck size={14} aria-hidden /> Unlocked
-          </span>
-          {achievement.xp_reward > 0 && (
-            <span className="tabular text-label text-discipline">+{achievement.xp_reward} XP</span>
-          )}
-        </div>
-      ) : (
-        <div className="mt-4 border-t border-line pt-3">
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised">
-            <m.div
-              className="h-full rounded-full bg-discipline"
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={spring.soft}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-meta text-ink-muted">
-              <Lock size={12} aria-hidden /> Locked badge
-            </span>
-            <span className="tabular text-caption text-ink-subtle">
-              {formatNumber(achievement.current)} / {formatNumber(achievement.threshold)}
-            </span>
-          </div>
-        </div>
-      )}
-    </m.article>
-  )
 }
 
 function XpBreakdown({ ledger }: { ledger: XpLedger }) {
@@ -218,6 +129,7 @@ export function Achievements() {
   const summary = useGamificationSummary()
   const ledger = useXpLedger(40)
   const [filter, setFilter] = useState<AchievementCategory | 'all'>('all')
+  const [status, setStatus] = useState<'all' | 'earned' | 'locked'>('all')
 
   const grouped = useMemo(() => {
     const badges = summary.data?.badges ?? []
@@ -243,9 +155,10 @@ export function Achievements() {
     }
   }, [summary.data])
 
-  const visible = filter === 'all'
-    ? grouped
-    : grouped.filter((group) => group.category === filter)
+  const visible = grouped
+    .filter(group => filter === 'all' || group.category === filter)
+    .map(group => ({ ...group, items: group.items.filter(badge => status === 'all' || (status === 'earned' ? badge.earned : !badge.earned)) }))
+    .filter(group => group.items.length > 0)
 
   return (
     <>
@@ -259,6 +172,12 @@ export function Achievements() {
       <QueryBoundary query={summary} loading={<SkeletonGrid />}>
         {(data) => (
           <RevealGroup className="flex flex-col gap-4">
+            <Reveal>
+              <section className="achievement-intro">
+                <div><p className="story-eyebrow">The milestone collection</p><h2>Little wins. Lasting reminders.</h2><p>Every badge has a story. Collect yours through the things you do, one day at a time.</p></div>
+                <div className="achievement-intro-count"><Trophy size={28} aria-hidden="true" /><strong>{counts.earned}<span> / {counts.total}</span></strong><span>milestones collected</span></div>
+              </section>
+            </Reveal>
             <Reveal className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard label="Unlocked" value={`${counts.earned} / ${counts.total}`}
                         icon={Trophy} accent="discipline" />
@@ -274,14 +193,17 @@ export function Achievements() {
 
             {counts.nearest && (
               <Reveal>
-                <Card title="Closest to unlocking" icon={Sparkles} accent="discipline">
-                  <AchievementCard achievement={counts.nearest} />
-                </Card>
+                <section className="achievement-next" aria-label="Closest to unlocking">
+                  <AchievementEmblem achievement={counts.nearest} compact />
+                  <div><p className="story-eyebrow">Your next milestone</p><h2>{counts.nearest.name}</h2><p>{counts.nearest.description}</p></div>
+                  <span>{Math.round(counts.nearest.progress * 100)}% of the way</span>
+                </section>
               </Reveal>
             )}
 
             <Reveal>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-1 flex-wrap gap-1.5" role="group" aria-label="Achievement category">
                 <button
                   type="button"
                   onClick={() => setFilter('all')}
@@ -312,20 +234,29 @@ export function Achievements() {
                   </button>
                 ))}
               </div>
+              <label className="flex items-center gap-2 text-meta text-ink-muted">Show
+                <select aria-label="Achievement status" value={status} onChange={event => setStatus(event.target.value as typeof status)} className="rounded-md border border-line bg-surface-card px-3 py-2 text-ink">
+                  <option value="all">All badges</option><option value="earned">Collected</option><option value="locked">Locked</option>
+                </select>
+              </label>
+              </div>
             </Reveal>
+
+            {visible.length === 0 && <p className="rounded-xl border border-line p-8 text-center text-label text-ink-muted" role="status">No badges here yet. Try another category or choose All badges.</p>}
 
             {visible.map(({ category, items }) => {
               const meta = CATEGORY_META[category]
-              const earned = items.filter((item) => item.earned).length
+              const allItems = grouped.find(group => group.category === category)?.items ?? []
+              const earned = allItems.filter((item) => item.earned).length
               return (
                 <Reveal key={category}>
                   <Card
                     title={meta.label}
-                    subtitle={`${earned} of ${items.length} unlocked`}
+                    subtitle={`${earned} of ${allItems.length} unlocked`}
                     icon={meta.icon}
                     accent={meta.accent}
                   >
-                    <div className="grid gap-2 lg:grid-cols-2">
+                    <div className="achievement-grid">
                       {items.map((achievement) => (
                         <AchievementCard key={achievement.code} achievement={achievement} />
                       ))}

@@ -11,6 +11,7 @@ import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { shortDate } from '../lib/date'
 import type { Accent } from '../navigation'
+import './feed.css'
 
 const METRICS: { key: keyof WeeklyFeedDay; label: string; unit: string; accent: Accent }[] = [
   { key: 'protein_g', label: 'Protein', unit: ' g', accent: 'lifestyle' },
@@ -27,28 +28,30 @@ function WeeklyArticle({ post }: { post: WeeklyPost }) {
   const write = useWriteWeeklyPost()
   const metric = METRICS[metricIndex]
   const report = post.report
-  return <article className="overflow-hidden rounded-2xl border border-line bg-surface-card" aria-label={report.title}>
-    <header className="flex items-center gap-3 px-5 py-4 sm:px-7">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-muted text-brand"><Sparkles size={19} /></span>
-      <div className="flex-1"><p className="text-label font-semibold text-ink">Neural Log <span className="ml-1 text-caption font-normal text-ink-subtle">AI weekly review</span></p><p className="mt-0.5 text-caption text-ink-subtle">{shortDate(post.snapshot.start)} – {shortDate(post.week_end)} · Private to you</p></div>
-      <span className="hidden rounded-full border border-line px-2 py-1 text-caption text-ink-muted sm:block">Weekly edition</span>
+  const words = [report.summary, ...report.strengths.map((item) => item.body), ...report.opportunities.map((item) => item.body), ...report.next_steps.map((item) => item.body)].join(' ').split(/\s+/).length
+  return <article className="weekly-article" aria-label={report.title} id={`edition-${post.week_end}`}>
+    <header className="edition-masthead">
+      <span>Neural Log / The weekly letter</span>
+      <time dateTime={post.week_end}>{shortDate(post.snapshot.start)} – {shortDate(post.week_end)}</time>
     </header>
-    <div className="relative overflow-hidden border-y border-line bg-gradient-to-br from-brand-muted via-surface-card to-surface-base px-6 py-9 sm:px-8 sm:py-12">
-      <div aria-hidden className="absolute -right-10 -top-12 size-56 rounded-full border-[30px] border-brand/5" />
-      <p className="relative text-caption uppercase tracking-[.25em] text-brand">A moment to look back</p>
-      <h2 className="relative mt-4 max-w-xl font-serif text-3xl leading-tight text-ink sm:text-4xl">{report.title}</h2>
-      <p className="relative mt-5 max-w-xl text-label leading-7 text-ink-muted">{report.summary}</p>
+    <div className="edition-lead">
+      <p className="edition-eyebrow">Personal progress · Weekly perspective</p>
+      <h2>{report.title}</h2>
+      <p className="edition-deck">{report.summary}</p>
+      <div className="edition-byline"><Sparkles size={15} aria-hidden /><span>Written by your AI assistant</span><span>·</span><span>{Math.max(1, Math.ceil(words / 200))} min read</span><span className="edition-private">Private to you</span></div>
     </div>
-    <div className="space-y-7 p-5 sm:p-7">
+    <div className="edition-body">
+      <div className="edition-columns">
       <section>
-        <h3 className="mb-3 flex items-center gap-2 text-label font-semibold text-ink"><Check size={16} className="text-lifestyle" /> What’s working</h3>
-        <div className="space-y-3">{report.strengths.map((item, index) => <div key={index} className="border-l-2 border-lifestyle/40 pl-4"><h4 className="text-label text-ink">{item.title}</h4><p className="mt-1 text-meta leading-6 text-ink-muted">{item.body}</p></div>)}</div>
+        <h3 className="edition-section-title"><Check size={16} className="text-lifestyle" /> What’s working</h3>
+        <div className="edition-observations">{report.strengths.map((item, index) => <div key={index}><h4>{item.title}</h4><p>{item.body}</p></div>)}</div>
       </section>
       <section>
-        <h3 className="mb-3 flex items-center gap-2 text-label font-semibold text-ink"><Lightbulb size={16} className="text-goals" /> Room to grow</h3>
-        <div className="space-y-3">{report.opportunities.map((item, index) => <div key={index} className="border-l-2 border-goals/40 pl-4"><h4 className="text-label text-ink">{item.title}</h4><p className="mt-1 text-meta leading-6 text-ink-muted">{item.body}</p></div>)}</div>
+        <h3 className="edition-section-title"><Lightbulb size={16} className="text-goals" /> Room to grow</h3>
+        <div className="edition-observations">{report.opportunities.map((item, index) => <div key={index}><h4>{item.title}</h4><p>{item.body}</p></div>)}</div>
       </section>
-      <section className="rounded-xl border border-line bg-surface-base/40 p-4">
+      </div>
+      <section className="edition-evidence">
         <h3 className="mb-3 flex items-center gap-2 text-label text-ink"><ChartNoAxesCombined size={16} /> Your week in numbers</h3>
         <div className="mb-3 flex flex-wrap gap-1.5" aria-label="Chart metric">{METRICS.map((item, index) => <button type="button" key={item.key} aria-pressed={index === metricIndex} onClick={() => setMetricIndex(index)} className={`rounded-full px-3 py-1.5 text-caption ${metricIndex === index ? 'bg-surface-overlay text-ink' : 'text-ink-subtle hover:text-ink'}`}>{item.label}</button>)}</div>
         <TrendChart data={post.snapshot.days.map((day) => ({ label: shortDate(day.date), value: metric.key === 'sets' && !day.sessions ? null : typeof day[metric.key] === 'number' ? day[metric.key] as number : null }))} name={metric.label} unit={metric.unit} accent={metric.accent} height={180} />
@@ -62,11 +65,11 @@ function WeeklyArticle({ post }: { post: WeeklyPost }) {
       </section>
       <section>
         <h3 className="mb-3 text-label font-semibold text-ink">Take one small step</h3>
-        <div className="space-y-2">{report.next_steps.map((item, index) => <Link key={index} to={`/${item.workspace}`} className="group flex items-start gap-3 rounded-lg border border-line p-4 transition-colors hover:border-brand/50">
+        <div className="space-y-2">{report.next_steps.map((item, index) => <Link key={index} to={`/${item.workspace}`} className="edition-action group flex items-start gap-3 border-b border-line py-4">
           <span className="text-caption text-brand">0{index + 1}</span><div className="flex-1"><p className="text-label text-ink">{item.title}</p><p className="mt-1 text-meta leading-6 text-ink-muted">{item.body}</p><p className="mt-2 text-caption capitalize text-ink-subtle">Open {item.workspace}</p></div><ArrowUpRight size={16} className="shrink-0 text-ink-subtle group-hover:text-brand" />
         </Link>)}</div>
       </section>
-      <p className="text-caption leading-5 text-ink-subtle">{report.coverage_note}</p>
+      <p className="edition-note">{report.coverage_note}</p>
     </div>
     <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-caption text-ink-subtle">
       <time dateTime={`${post.generated_at.replace(' ', 'T')}Z`}>Written {new Date(`${post.generated_at.replace(' ', 'T')}Z`).toLocaleDateString()}</time>
@@ -88,9 +91,9 @@ export function Feed() {
     write.mutate({ end: data.latest_week_end })
   }, [data, write])
   return <>
-    <PageHeader title="Your weekly feed" description="A little perspective on the week you lived. Written for you, from the days you recorded." icon={Sparkles} accent="brand" />
+    <PageHeader title="The weekly letter" description="Your private feed. A little perspective on the week you lived, from the days you recorded." icon={Sparkles} accent="brand" />
     <QueryBoundary query={feed} loading={<SkeletonGrid />}>{(response) => <div className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[minmax(0,720px)_240px]">
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-10">
         {write.isPending && <div role="status" className="flex items-center gap-3 rounded-xl border border-brand/30 bg-brand-muted/30 p-5 text-label text-ink"><Sparkles size={18} className="animate-pulse text-brand" />Your weekly review is being written…</div>}
         {write.error && <div role="alert" className="rounded-xl border border-line p-5 text-meta text-ink-muted"><p>{write.error.message}</p><button type="button" className="mt-3 text-brand" onClick={() => write.mutate({ end: selectedEnd || response.latest_week_end })}>Try again</button></div>}
         {response.posts.length === 0 && !write.isPending && <div className="rounded-2xl border border-line bg-surface-card p-8 text-center"><Sparkles size={32} className="mx-auto text-brand" /><h2 className="mt-5 font-serif text-2xl text-ink">Your story is taking shape.</h2><p className="mx-auto mt-3 max-w-md text-label leading-7 text-ink-muted">{!response.configured ? 'AI weekly reviews will be available when the assistant is configured. Your daily logs are ready whenever you are.' : !response.has_data ? 'Record meals, movement, sleep, or learning. Your first review will be ready after a week with recorded activity has ended.' : 'Your first weekly review brings your recorded days together.'}</p><Link to="/today" className="mt-5 inline-block text-label text-brand">Go to today’s log →</Link></div>}
@@ -104,6 +107,7 @@ export function Feed() {
           <Button className="mt-3 w-full" icon={Sparkles} disabled={write.isPending} onClick={() => write.mutate({ end: selectedEnd || response.latest_week_end })}>Write review</Button>
         </div>}
         <Link to="/analytics" className="mt-5 flex items-center gap-2 text-meta text-ink-muted">Explore all analytics <ArrowUpRight size={14} /></Link>
+        {response.posts.length > 0 && <nav aria-label="Past editions" className="edition-archive"><h3>On your reading list</h3>{response.posts.map((post) => <a key={post.id} href={`#edition-${post.week_end}`}><span>{shortDate(post.week_end)}</span>{post.report.title}</a>)}</nav>}
       </div></aside>
     </div>}</QueryBoundary>
   </>

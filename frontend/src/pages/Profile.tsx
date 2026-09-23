@@ -4,6 +4,7 @@ import { ArrowRight, Scale, Target, User } from 'lucide-react'
 import { useAttributes, useCurrentUser, useOnboarding, useOnboardingPrompt } from '../api/queries'
 import type { AttributeScore, OnboardingState } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
+import { ProfileIdentity } from '../components/ui/ProfileIdentity'
 import { AttributeBadge } from '../components/ui/AttributeBadge'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -38,7 +39,7 @@ function Detail({ label, value, note }: { label: string; value: string; note?: s
   return (
     <div className="min-w-0">
       <dt className="text-meta text-ink-subtle">{label}</dt>
-      <dd className="tabular mt-0.5 text-section font-semibold text-ink">{value}</dd>
+      <dd className="tabular mt-0.5 break-words text-section font-semibold text-ink">{value}</dd>
       {note && <p className="mt-0.5 text-meta text-ink-subtle">{note}</p>}
     </div>
   )
@@ -164,6 +165,8 @@ export function Profile() {
           user.data?.is_admin ? <Badge tone="neutral">Admin</Badge> : undefined
         }
       />
+
+      <Reveal className="mb-5"><ProfileIdentity /></Reveal>
 
       <QueryBoundary query={onboarding} loading={<SkeletonGrid />}>
         {(state) => (
