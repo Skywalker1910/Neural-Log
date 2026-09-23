@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { m } from 'motion/react'
 import {
-  BedDouble, Droplets, Footprints, Info, NotebookPen, Smile, Sun, Timer,
+  BedDouble, Droplets, Footprints, Info, NotebookPen, Smile, Timer,
 } from 'lucide-react'
 
 import type { LifestyleDay, LifestyleSummary } from '../api/types'
@@ -18,7 +18,6 @@ import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { StatCard } from '../components/ui/StatCard'
 import { BookWorkspace } from '../components/ui/BookPreview'
-import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { cn } from '../lib/cn'
 import { shortDate, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
@@ -238,15 +237,13 @@ export function Lifestyle() {
     <>
       <PageHeader
         title="Lifestyle"
-        description="Sleep feeds Recovery, a steady schedule feeds Discipline, and steps feed Stamina."
-        icon={Sun}
+        storyKind="lifestyle"
         accent="recovery"
       />
 
       <QueryBoundary query={summary} loading={<SkeletonGrid />}>
         {(data: LifestyleSummary) => (
           <RevealGroup className="flex flex-col gap-4">
-            <Reveal><WorkspaceStory kind="lifestyle" /></Reveal>
             <BookWorkspace kind="journal">
             <Reveal className="grid grid-cols-2 gap-3">
               <StatCard

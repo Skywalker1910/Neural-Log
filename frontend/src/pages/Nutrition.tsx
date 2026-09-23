@@ -21,7 +21,6 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
 import { BookWorkspace } from '../components/ui/BookPreview'
-import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
@@ -273,8 +272,7 @@ export function Nutrition() {
     <>
       <PageHeader
         title="Nutrition"
-        description="Hitting the targets you set feeds Discipline. What you weigh is context, not a score."
-        icon={UtensilsCrossed}
+        storyKind="nutrition"
         accent="lifestyle"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -313,7 +311,6 @@ export function Nutrition() {
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(day) => (
           <RevealGroup className="flex flex-col gap-4">
-            <Reveal><WorkspaceStory kind="nutrition" /></Reveal>
             <BookWorkspace kind="recipe">
             <Reveal>
               <Card title="Today's totals" icon={Flame} accent="lifestyle">
