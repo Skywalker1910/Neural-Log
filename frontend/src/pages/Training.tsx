@@ -26,7 +26,6 @@ import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { StatCard } from '../components/ui/StatCard'
 import { BookWorkspace } from '../components/ui/BookPreview'
-import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { shortDate, todayISO } from '../lib/date'
 import { spring } from '../lib/motion'
 
@@ -243,12 +242,12 @@ export function Training() {
     <>
       <PageHeader
         title="Training"
+        storyKind="training"
         description={
           query.data?.recent[0]
-            ? `Last session ${query.data.recent[0].date}. Every set you log here feeds Strength, Stamina and Agility.`
-            : 'Every set you log here feeds Strength, Stamina and Agility.'
+            ? `Last session ${query.data.recent[0].date}`
+            : undefined
         }
-        icon={Dumbbell}
         accent="fitness"
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -276,7 +275,6 @@ export function Training() {
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(summary) => (
           <RevealGroup className="flex flex-col gap-4">
-            <Reveal><WorkspaceStory kind="training" /></Reveal>
             <BookWorkspace kind="exercise">
             <Reveal className="grid grid-cols-2 gap-3">
               <StatCard
