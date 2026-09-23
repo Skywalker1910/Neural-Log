@@ -15,10 +15,17 @@ Nutrition → Recipe book lives at `/nutrition/book`. New dishes and edits use t
 same recipe builder as the nutrition log. Ingredients and cooking methods are
 successive pages. `/recipes` redirects to the new address.
 
-Journal stays in its own section. Its index groups dated entries by month. Pick
+Journal lives in Lifestyle at `/lifestyle/journal`; `/journal` redirects there.
+Its index groups dated entries by month. Pick
 a date to write or ask for a draft from that day's recorded activity, then save
 the entry. Unsaved text survives turning pages within the journal; leaving the
-journal or reloading still requires saving first.
+journal's workspace or reloading still requires saving first.
+
+Each workspace pairs its stats with a small book cover. Clicking the cover
+expands it into a near-full-window reader. Escape or Close book returns to the
+workspace, restores focus to the cover, and keeps the reader's current page and
+journal drafts while that workspace stays mounted. The Library gathers all
+three covers on one shelf, opening the same data rather than separate copies.
 
 The visual reference is the collectible-album feel of [Panini Digital
 Collections](https://apps.apple.com/us/app/panini-digital-collections/id6450683397/).
@@ -29,7 +36,10 @@ On a wide screen, the book opens as a spread. Drag horizontally to move a leaf,
 release to complete the turn, or let a short drag fall back into place. On a
 phone, one page fits the screen and a horizontal swipe turns it. Vertical
 scrolling still works. Previous/Next buttons and arrow keys provide the same
-navigation, and reduced-motion preferences remove animated turns.
+navigation, and reduced-motion preferences remove animated turns. Opening the
+cover has a slower, lifted turn; ordinary leaves follow the drag with a small
+bend and moving shadows. The unused half of a closed spread stays transparent
+throughout the opening gesture rather than flashing an empty white page.
 
 Exercise demonstrations use illustrated poses, with specific push-up and
 pulldown variants. Both the library and book offer play/pause, half speed, and a
@@ -42,6 +52,11 @@ The feed is private to the signed-in user. On the first visit after a completed
 Monday–Sunday week, it requests a review if that week contains recorded data.
 This is generated on opening the feed, not by a background scheduler. Older
 weeks can be requested from the date picker.
+
+Reviews read like a personal newsletter: a dated masthead, headline, short
+introduction, two editorial columns, and an interactive data inset. The reading
+list links to saved editions. This changes presentation, not generation or
+privacy settings.
 
 The existing OpenAI chat model writes a headline, a short review, strengths,
 opportunities, and practical next steps. It receives seven days of recorded
@@ -85,7 +100,8 @@ npm run test:browser
 ```
 
 `BROWSER_EXECUTABLE_PATH` can point to a locally installed Chromium browser.
-The check covers desktop dragging, cancelled turns, chapter links, searches
+The check covers library covers, expanding readers, focus restoration, nested
+recipe editors, workspace layouts, desktop dragging, cancelled turns, chapter links, searches
 beyond the old 30-exercise limit, journal draft retention, feed generation and
 reuse, charts, a real touch swipe, mobile width, and reduced motion. Screenshots
 go to the ignored `.pytest_cache/ui` directory. CI runs this after the frontend

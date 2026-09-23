@@ -6,6 +6,7 @@ import { cn } from '../../lib/cn'
 import { useCurrentUser } from '../../api/queries'
 import { ADMIN_SECTION, accentText, OVERFLOW_SECTIONS, PRIMARY_SECTIONS, SETTINGS_SECTION } from '../../navigation'
 import { Modal } from '../ui/Modal'
+import { UserAvatar } from '../ui/UserAvatar'
 
 const TAB_CLASSES =
   'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-caption transition-colors duration-200 ease-apple active:scale-95'
@@ -70,11 +71,12 @@ export function BottomNav() {
               <li key={section.path}>
                 <NavLink
                   to={section.path}
+                  aria-label={section.path === '/profile' && user.data?.username ? `${user.data.username}'s profile` : section.label}
                   onClick={() => setMoreOpen(false)}
                   className="flex items-center gap-2.5 rounded-md border border-line px-3 py-2.5 text-label text-ink-muted transition-colors duration-200 ease-apple hover:bg-surface-raised hover:text-ink"
                 >
-                  <Icon size={17} className={accentText[section.accent]} aria-hidden />
-                  {section.label}
+                  {section.path === '/profile' && user.data?.username ? <UserAvatar username={user.data.username} className="sidebar-avatar" /> : <Icon size={17} className={accentText[section.accent]} aria-hidden />}
+                  <span className="min-w-0 truncate">{section.path === '/profile' ? user.data?.username || section.label : section.label}</span>
                 </NavLink>
               </li>
             )

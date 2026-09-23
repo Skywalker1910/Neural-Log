@@ -27,6 +27,7 @@ let generated = 0
 const journal = new Map([['2026-09-21', 'A quiet walk and a good meal.']])
 const browser = await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE_PATH, headless:true})
 const errors = []
+const targets = {calories:2200, protein_g:130, carbs_g:250, fat_g:70, fibre_g:30, water_ml:2500, steps:8000, sleep_minutes:480, sources:{calories:'manual',protein:'manual',carbs:'manual',fat:'manual'}, tdee:null}
 async function setup(options) {
   const context = await browser.newContext(options)
   await context.route('**/api/**', async route => {
@@ -37,6 +38,10 @@ async function setup(options) {
     else if(path === '/api/assistant/state') body = {configured:false}
     else if(path === '/api/exercises') body = {exercises}
     else if(path === '/api/recipes') body = {recipes:[recipe]}
+    else if(path === '/api/routines') body = {routines:[]}
+    else if(path === '/api/training') body = {total_sessions:0,total_volume:0,recent:[],volume_trend:[],by_muscle:[],records:[],measurements:[]}
+    else if(path.startsWith('/api/nutrition/')) body = {date:path.split('/').at(-1),entries:[],by_meal:{},totals:{calories:1200,protein_g:80,carbs_g:160,fat_g:40,fibre_g:18},targets,body_weight_kg:null}
+    else if(path === '/api/lifestyle') body = {sleep:[],lifestyle:[],targets,averages:{sleep_minutes:470,schedule_consistency:85,water_ml:2100,steps:7000}}
     else if(path === '/api/feed/posts') {
       if(route.request().method() === 'POST') { generated++; posts=[post]; body=post }
       else body = {posts,configured:true,has_data:true,latest_week_end:'2026-09-20'}
@@ -45,7 +50,7 @@ async function setup(options) {
     else if(path.startsWith('/api/lifestyle/')) {
       const date=path.split('/').at(-1)
       if(route.request().method() === 'PUT') journal.set(date,route.request().postDataJSON().journal)
-      body={lifestyle:{date,journal:journal.get(date)??''},sleep:null}
+      body={lifestyle:{date,journal:journal.get(date)??''},sleep:null,targets}
     }
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)})
   })
@@ -61,11 +66,62 @@ async function drag(page, fraction, direction = -1) {
   await page.mouse.down()
   await page.mouse.move(start+direction*box.width*fraction,box.y+91,{steps:12})
   assert.equal(await page.locator('.book-turning').count(),1)
+  const absent = page.locator('.book-absent')
+  if (await absent.count()) assert.equal(await absent.first().evaluate(element => getComputedStyle(element).visibility),'hidden')
+  await page.screenshot({path:resolve(artifacts, direction < 0 ? 'book-mid-turn.png' : 'book-backward-turn.png')})
   await page.mouse.up()
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(800)
 }
 try {
   const {page} = await setup({viewport:{width:1440,height:1050}})
+  await page.goto(baseURL+'/library')
+  await page.getByRole('button',{name:'Open Exercise book',exact:true}).waitFor()
+  assert.equal(await page.locator('.book-preview').count(),3)
+  await page.waitForTimeout(800)
+  await page.screenshot({path:resolve(artifacts,'library-desktop.png'),fullPage:true})
+  await page.getByRole('button',{name:'Open Exercise book',exact:true}).click()
+  const reader = page.getByRole('dialog',{name:'Exercise book',exact:true})
+  await reader.locator('.book-controls').waitFor()
+  await page.waitForTimeout(800)
+  assert.ok(await reader.evaluate(element => element.contains(document.activeElement)))
+  await page.getByRole('button',{name:'Index',exact:true}).click()
+  await page.screenshot({path:resolve(artifacts,'expanded-reader.png'),fullPage:true})
+  await page.keyboard.press('Escape')
+  await reader.waitFor({state:'hidden'})
+  assert.equal(await page.getByRole('button',{name:'Open Exercise book',exact:true}).evaluate(element => element === document.activeElement),true)
+  await page.getByRole('button',{name:'Open Exercise book',exact:true}).click()
+  await reader.waitFor()
+  assert.match(await reader.locator('.book-controls').innerText(),/Page 1–2/)
+  await page.getByRole('button',{name:'Close book',exact:true}).click()
+  await page.getByRole('button',{name:'Open Recipe book',exact:true}).click()
+  await page.getByRole('button',{name:'Add recipe',exact:true}).click()
+  await page.getByRole('dialog').filter({hasText:'Cancel'}).last().waitFor()
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('dialog[open]').count(),1)
+  await page.getByRole('button',{name:'Close book',exact:true}).click()
+  for (const [path,label] of [['training','Exercise book'],['nutrition','Recipe book'],['lifestyle','Journal']]) {
+    await page.goto(baseURL+'/'+path)
+    const preview = page.getByRole('button',{name:`Open ${label}`,exact:true})
+    await preview.waitFor()
+    await page.waitForTimeout(650)
+    const placement = await page.locator('.book-workspace').evaluate(element => {
+      const stats = element.firstElementChild.getBoundingClientRect()
+      const cover = element.querySelector('.book-preview').getBoundingClientRect()
+      return {statsRight:stats.right,coverLeft:cover.left}
+    })
+    assert.ok(placement.statsRight < placement.coverLeft)
+    await page.screenshot({path:resolve(artifacts,`${path}-workspace.png`),fullPage:true})
+    await preview.click()
+    await page.locator('dialog[open] .book-controls').waitFor()
+    if (path === 'lifestyle') {
+      await page.getByLabel('Journal date',{exact:true}).fill('2026-09-21')
+      await page.getByRole('textbox',{name:'Journal for 2026-09-21'}).fill('A draft kept while closing the book.')
+      await page.getByRole('button',{name:'Close book',exact:true}).click()
+      await preview.click()
+      assert.equal(await page.getByRole('textbox',{name:'Journal for 2026-09-21'}).inputValue(),'A draft kept while closing the book.')
+    }
+    await page.getByRole('button',{name:'Close book',exact:true}).click()
+  }
   await ready(page,'/training/book')
   assert.equal(await page.locator('.book-wide').count(),1)
   await page.screenshot({path:resolve(artifacts,'exercise-cover.png'),fullPage:true})
@@ -104,6 +160,7 @@ try {
   await page.getByRole('heading',{name:'Sunday rice bowl',exact:true,level:2}).waitFor()
   await page.screenshot({path:resolve(artifacts,'recipe-spread.png'),fullPage:true})
   await ready(page,'/journal')
+  assert.match(page.url(),/lifestyle\/journal/)
   await page.getByLabel('Journal date',{exact:true}).fill('2026-09-21')
   const editor = page.getByRole('textbox',{name:'Journal for 2026-09-21'})
   await editor.fill('An unsaved thought worth keeping.')
@@ -121,11 +178,24 @@ try {
   assert.equal(await page.getByRole('button',{name:'Sleep',exact:true}).getAttribute('aria-pressed'),'true')
   await page.getByText('View recorded data',{exact:true}).click()
   await page.getByRole('table').waitFor()
+  await page.evaluate(()=>window.scrollTo(0,0))
   await page.screenshot({path:resolve(artifacts,'feed-desktop.png'),fullPage:true})
   await page.reload()
   await page.getByRole('heading',{name:post.report.title,exact:true}).waitFor()
   assert.equal(generated,1)
   const {page:mobile,context:mobileContext} = await setup({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1})
+  for (const path of ['library','training','nutrition','lifestyle']) {
+    await mobile.goto(baseURL+'/'+path)
+    await mobile.locator('.book-preview').first().waitFor()
+    await mobile.waitForTimeout(650)
+    assert.ok(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1), `${path} fits mobile`)
+    await mobile.screenshot({path:resolve(artifacts,`${path}-mobile.png`),fullPage:true})
+  }
+  await mobile.getByRole('button',{name:'Open Journal',exact:true}).click()
+  await mobile.locator('dialog[open] .book-controls').waitFor()
+  await mobile.waitForTimeout(700)
+  assert.ok(await mobile.locator('dialog[open]').evaluate(element=>element.scrollWidth<=element.clientWidth+1))
+  await mobile.getByRole('button',{name:'Close book',exact:true}).click()
   await ready(mobile,'/training/book')
   assert.equal(await mobile.locator('.book-single').count(),1)
   await mobile.screenshot({path:resolve(artifacts,'book-mobile-cover.png'),fullPage:true})
@@ -136,7 +206,7 @@ try {
     await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:mobileBox.x+mobileBox.width*(.85-step*.07),y:mobileBox.y+90}]})
   }
   await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
-  await mobile.waitForTimeout(650)
+  await mobile.waitForTimeout(800)
   assert.match(await mobile.locator('.book-controls').innerText(),/Page 1 of/)
   assert.ok(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1))
   await mobile.getByRole('combobox',{name:'Jump to muscle chapter'}).selectOption('chest')
@@ -153,5 +223,5 @@ try {
   await mobile.waitForTimeout(100)
   assert.match(await mobile.locator('.book-controls').innerText(),/Page 1 of/)
   assert.deepEqual(errors,[])
-  console.log('PASS: desktop drag, cancelled and backward turns, cover boundary, keyboard turns, muscle chapters, all-exercise search, recipe redirect/index, journal draft retention/save, automatic feed persistence, chart/table controls, mobile touch swipe, viewport overflow, reduced motion. No browser exceptions.')
+  console.log('PASS: library covers, expandable readers, nested editor Escape, focus restoration, preserved reader pages/drafts, workspace cover placement, desktop drag without a blank leaf, cancelled/backward turns, keyboard turns, chapter/search navigation, legacy redirects, journal save, feed persistence/charts/tables, mobile workspaces, touch swipe, viewport overflow, reduced motion. No browser exceptions.')
 } finally { await browser.close() }

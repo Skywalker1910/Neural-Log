@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
 import { m } from 'motion/react'
 import {
   ChefHat, ChevronLeft, ChevronRight, Flame, Info, Plus, ScanLine, Trash2,
@@ -21,6 +20,8 @@ import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Modal } from '../components/ui/Modal'
 import { QueryBoundary } from '../components/ui/QueryBoundary'
+import { BookWorkspace } from '../components/ui/BookPreview'
+import { WorkspaceStory } from '../components/ui/WorkspaceStory'
 import { Reveal, RevealGroup } from '../components/ui/Reveal'
 import { SkeletonGrid } from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
@@ -277,7 +278,6 @@ export function Nutrition() {
         accent="lifestyle"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/nutrition/book"><Button size="sm">Recipe book</Button></Link>
             {/* Hidden when the instance has no assistant, like everything else
                 that needs a model. The catalogue and the recipe builder work
                 exactly as before without it. */}
@@ -313,6 +313,8 @@ export function Nutrition() {
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(day) => (
           <RevealGroup className="flex flex-col gap-4">
+            <Reveal><WorkspaceStory kind="nutrition" /></Reveal>
+            <BookWorkspace kind="recipe">
             <Reveal>
               <Card title="Today's totals" icon={Flame} accent="lifestyle">
                 <div className="flex flex-col gap-4">
@@ -372,6 +374,8 @@ export function Nutrition() {
                 </div>
               </Card>
             </Reveal>
+
+            </BookWorkspace>
 
             <Reveal className="grid gap-4 lg:grid-cols-2">
               {MEALS.map((meal) => (

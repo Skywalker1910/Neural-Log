@@ -254,7 +254,8 @@ it is the most Apple-feeling detail in the shell.
 
 Rules this encodes:
 
-- **Motion is short.** Anything over ~400ms is in the way on a dashboard opened daily.
+- **Interactions are short.** Keep transitions around 400ms or less. Decorative
+  illustrations can settle more slowly, but must not delay an action or loop forever.
 - **Entrances move a small distance.** Large translations read as decoration.
 - **Springs for interaction, easing for state.** Overshoot feels physical under a
   cursor and wrong on a progress bar.
@@ -312,6 +313,30 @@ The one finding was **two `<h1>`s on every shell page** - `TopBar` headed the
 greeting and `PageHeader` headed the page. The bar is chrome that persists across
 every route, so it competes with the page's own title; it is a `<p>` now and the
 page owns the h1.
+
+## Personal cards and illustrated spaces
+
+The profile has a personal card with the account name, level, and a few collected
+badges. The same name appears in the desktop sidebar, top bar, and mobile menu.
+Long names truncate in navigation and wrap on the profile card.
+
+Achievements use bronze, silver, and gold seals with artwork for each shipped
+milestone. Locked artwork is blurred, but its name, requirement, and progress stay
+readable. Category and collection filters work together. Progress and unlocks
+still come from the existing API.
+
+The visual references are [imtausef's card](https://uiverse.io/imtausef/hungry-rattlesnake-3)
+and [WattoRex's profile card](https://uiverse.io/WattoRex/odd-fish-37). The cards here
+use our own markup, artwork, and styles. Home, Training, Nutrition, and Lifestyle
+also have local SVG illustrations, so no image service or remote image requests
+are needed.
+
+`engagement.css` holds these treatments. Decorative motion settles within five
+seconds. Pointer tilt only runs for a mouse, and reduced-motion settings disable
+tilt and decorative animation. Information and actions remain visible without
+hovering. The browser suite covers badge filters, profile links, narrow screens,
+long names, empty and unavailable collections, and reduced motion with mocked API
+responses.
 
 ## Layout traps worth knowing
 

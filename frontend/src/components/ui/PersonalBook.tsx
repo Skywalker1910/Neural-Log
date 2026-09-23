@@ -32,7 +32,7 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
   const [wide, setWide] = useState(false)
   const [turn, setTurn] = useState<Turn | null>(null)
   const stage = useRef<HTMLDivElement>(null)
-  const gesture = useRef<{ pointer: number; x: number; y: number; started: number } | null>(null)
+  const gesture = useRef<{ pointer: number; x: number; y: number; started: number; width: number } | null>(null)
   const reduced = usePrefersReducedMotion()
   const indexCount = Math.max(1, Math.ceil(pages.length / 10))
   const indexPages = Array.from({ length: indexCount }, (_, index) => ({
@@ -65,6 +65,7 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
   }, [])
 
   const targetId = turn ? leaves[turn.target]?.id : undefined
+  const turningCover = Boolean(turn && (spread === 0 || turn.target === 0))
   useEffect(() => {
     if (!turn?.released || !targetId) return
     const timeout = window.setTimeout(() => {
@@ -73,9 +74,9 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
         onPageChange?.(targetId)
       }
       setTurn(null)
-    }, reduced ? 0 : 430)
+    }, reduced ? 0 : turningCover ? 650 : 430)
     return () => window.clearTimeout(timeout)
-  }, [turn, targetId, onPageChange, reduced])
+  }, [turn, targetId, onPageChange, reduced, turningCover])
 
   function navigate(id: string) {
     if (turn) return
@@ -100,7 +101,7 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
     if (turn || !event.isPrimary || event.button !== 0 ||
         (event.target as HTMLElement).closest('button,a,input,textarea,select,[data-no-turn]')) return
-    gesture.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, started: event.timeStamp }
+    gesture.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, started: event.timeStamp, width: event.currentTarget.clientWidth / (wide ? 2 : 1) }
   }
 
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -116,14 +117,15 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
     const target = targetFor(direction)
     if (target === spread) return
     event.currentTarget.setPointerCapture(event.pointerId)
-    const width = event.currentTarget.clientWidth / (wide ? 2 : 1)
-    const progress = Math.min(0.99, Math.max(0, -distance * direction / width))
+    const progress = Math.min(0.99, Math.max(0, -distance * direction / start.width))
     setTurn({ target, direction, progress, released: false, commit: false })
   }
 
   function pointerUp(event: PointerEvent<HTMLDivElement>, cancelled = false) {
     const start = gesture.current
+    if (!start || start.pointer !== event.pointerId) return
     gesture.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (!turn || turn.released) return
     const quick = start && event.timeStamp - start.started < 350 && Math.abs(event.clientX - start.x) > 35
     const commit = !cancelled && (turn.progress > 0.22 || Boolean(quick))
@@ -132,7 +134,8 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
 
   function leaf(index: number | null, side: string, hidden = false) {
     const entry = index === null ? undefined : leaves[index]
-    return <div className={`book-paper ${side} ${entry?.id === 'cover' ? 'book-cover-paper' : ''}`} inert={hidden || !entry} aria-hidden={hidden || !entry || undefined}>
+    return <div className={`book-paper ${side} ${index === null ? 'book-absent' : ''} ${entry?.id === 'cover' ? 'book-cover-paper' : ''}`} inert={hidden || !entry} aria-hidden={hidden || !entry || undefined}>
+      {!entry && index !== null && <div className="book-endpaper"><BookOpen size={32} /><p>Room for what comes next.</p><span>Your collection keeps growing.</span></div>}
       {entry && (entry.id === 'cover' ? entry.content : <>
         <header><span>{entry.chapter}</span><h2>{entry.title}</h2></header>
         <div className="book-paper-content">{entry.content}</div>
@@ -148,6 +151,7 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
   const targetLeft = target === 0 ? null : target
   const targetRight = target === 0 ? 0 : target + 1
   const coverOffset = wide ? (spread === 0 ? 1 - (turn?.progress ?? 0) : target === 0 ? turn?.progress ?? 0 : 0) : 0
+  const lift = Math.sin((turn?.progress ?? 0) * Math.PI)
 
   return <section className={`personal-book book-${kind}`} aria-label={title}>
     <div className="book-toolbar">
@@ -156,10 +160,11 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
       <span>Drag a page · swipe to turn</span>
     </div>
     <div ref={stage} className="book-stage">
-      <div className={`book-spread ${wide ? 'book-wide' : 'book-single'} ${spread === 0 && !turn ? 'book-closed' : ''} ${turn?.released ? 'book-positioning' : ''}`}
-        style={{ transform: `translateX(${-25 * coverOffset}%)` }}
+      <div className={`book-spread ${wide ? 'book-wide' : 'book-single'} ${spread === 0 && !turn ? 'book-closed' : ''} ${turningCover ? 'book-cover-turn' : ''} ${turn?.released ? 'book-positioning' : ''}`}
+        style={{ '--binding-inset': `${50 * coverOffset}%`, transform: `translateX(${-25 * coverOffset}%) translateY(${reduced ? 0 : -lift * (turningCover ? 14 : 2)}px)` } as CSSProperties}
         tabIndex={0} role="group" aria-label="Book pages" onPointerDown={pointerDown} onPointerMove={pointerMove}
         onPointerUp={pointerUp} onPointerCancel={(event) => pointerUp(event, true)}
+        onLostPointerCapture={(event) => { if (gesture.current) pointerUp(event, true) }}
         onKeyDown={(event) => {
           if ((event.target as HTMLElement).closest('input,textarea,select,button,a')) return
           if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
@@ -167,12 +172,13 @@ export function PersonalBook({ title, subtitle, pages, kind = 'journal', activeI
             flip(event.key === 'ArrowRight' ? 1 : -1)
           }
         }}>
+        <div className="book-binding" aria-hidden />
         {wide ? <>
           {leaf(turn && !forward ? targetLeft : left, 'book-left', Boolean(turn))}
           {leaf(turn && forward ? targetRight : right, 'book-right', Boolean(turn))}
         </> : leaf(turn ? target : spread, 'book-right', Boolean(turn))}
         {turn && <div className={`book-turning ${forward ? 'book-forward' : 'book-backward'} ${turn.released ? 'book-settling' : ''}`}
-          aria-hidden inert style={{ '--turn': `${turn.progress * (forward ? -180 : 180)}deg`, '--shade': Math.sin(turn.progress * Math.PI) * 0.3 } as CSSProperties}>
+          aria-hidden inert style={{ '--turn': `${turn.progress * (forward ? -180 : 180)}deg`, '--shade': lift * 0.65, '--page-lift': `${lift * (turningCover ? 26 : 12)}px`, '--page-bend': `${turningCover ? 0 : lift * (forward ? -1 : 1)}deg` } as CSSProperties}>
           <div className="book-face book-front">{leaf(wide ? (forward ? right : left) : spread, '', true)}</div>
           <div className="book-face book-back">{leaf(wide ? (forward ? targetLeft : targetRight) : target, '', true)}</div>
         </div>}
