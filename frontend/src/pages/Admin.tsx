@@ -617,7 +617,7 @@ export function Admin() {
         )}
       </header>
 
-      <main className="admin-content">
+      <main id="main" className="admin-content" data-page-theme="admin">
         <PageHeader
           title="Admin"
           description="The operational view of Neural Log: people, usage, and the safeguards around both."
