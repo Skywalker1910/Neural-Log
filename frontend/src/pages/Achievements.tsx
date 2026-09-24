@@ -163,6 +163,7 @@ export function Achievements() {
   return (
     <>
       <PageHeader
+        illustration="achievements"
         title="Achievements"
         description="What you have unlocked, and how close you are to the rest."
         icon={Trophy}

@@ -51,7 +51,7 @@ export function BookPreview({ kind }: { kind: BookKind }) {
       <div className="book-miniature"><BookCover kind={kind} title={book.title} subtitle={book.subtitle} /></div>
       <span className="book-preview-caption">{book.label}<ArrowUpRight size={15} aria-hidden /></span>
     </button>
-    {visited && createPortal(<dialog ref={dialog} className="book-reader" aria-label={book.label}
+    {visited && createPortal(<dialog ref={dialog} className="book-reader" aria-label={book.label} data-page-theme={kind === 'exercise' ? 'training' : kind === 'recipe' ? 'nutrition' : 'lifestyle'}
       style={{ '--reader-x': `${origin.x}px`, '--reader-y': `${origin.y}px` } as CSSProperties}
       onKeyDownCapture={(event) => {
         if (event.key === 'Escape' && dialog.current?.querySelector('[role="dialog"]')) event.preventDefault()

@@ -321,6 +321,7 @@ export function Goals() {
   return (
     <>
       <PageHeader
+        illustration="goals"
         title="Goals"
         description="Habits are what you repeat; goals are where they are going. Neither is scored on intention."
         icon={Target}

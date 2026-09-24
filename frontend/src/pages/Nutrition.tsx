@@ -276,15 +276,10 @@ export function Nutrition() {
         accent="lifestyle"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* Hidden when the instance has no assistant, like everything else
-                that needs a model. The catalogue and the recipe builder work
-                exactly as before without it. */}
-            {assistant.data?.configured && (
-              <Button size="sm" variant="secondary" icon={ScanLine}
-                      onClick={() => setScanning(true)}>
-                Scan a label
-              </Button>
-            )}
+            <Button size="sm" variant="secondary" icon={ScanLine}
+                    onClick={() => setScanning(true)}>
+              Scan a label
+            </Button>
             <Button size="sm" icon={ChefHat} onClick={() => setEditingRecipe(null)}>
               Build a dish
             </Button>
@@ -306,18 +301,30 @@ export function Nutrition() {
                 onClick={() => setDate(shiftISO(date, 1))} />
       </div>
 
-      <LabelScanner open={scanning} onClose={() => setScanning(false)} />
+      <LabelScanner open={scanning && assistant.data?.configured === true} onClose={() => setScanning(false)} />
+      <Modal open={scanning && assistant.data?.configured !== true} onClose={() => setScanning(false)} title="Scan a nutrition label" size="sm">
+        <p role="status" className="text-label leading-6 text-ink-muted">
+          {assistant.isFetching ? 'Checking label scanner availability…'
+            : assistant.isError ? 'Could not check label scanner availability. Please retry, or enter the food manually.'
+              : 'Label scanning needs the AI service enabled on this server. Ask your administrator to configure it, or enter the food manually.'}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button loading={assistant.isFetching} onClick={() => void assistant.refetch()}>Retry</Button>
+          <Button onClick={() => { setScanning(false); setCustomOpen(true) }}>Enter food manually</Button>
+        </div>
+      </Modal>
 
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(day) => (
           <RevealGroup className="flex flex-col gap-4">
             <BookWorkspace kind="recipe">
             <Reveal>
-              <Card title="Today's totals" icon={Flame} accent="lifestyle">
+              <section className="nutrition-totals" aria-labelledby="nutrition-totals-title">
+                <header className="nutrition-totals-heading"><Flame size={22} aria-hidden /><h2 id="nutrition-totals-title">Today's totals</h2></header>
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
                     <div>
-                      <p className="tabular text-metric text-ink">
+                      <p className="nutrition-calories tabular text-ink">
                         {Math.round(day.totals.calories)}
                       </p>
                       <p className="text-label text-ink-muted">calories</p>
@@ -341,7 +348,7 @@ export function Nutrition() {
                     )}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="nutrition-macros">
                     <MacroBar
                       label="Protein" value={day.totals.protein_g}
                       target={day.targets.protein_g} accent="bg-fitness"
@@ -369,7 +376,7 @@ export function Nutrition() {
                     </p>
                   )}
                 </div>
-              </Card>
+              </section>
             </Reveal>
 
             </BookWorkspace>

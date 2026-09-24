@@ -384,6 +384,7 @@ export function WorkoutSession() {
   return (
     <>
       <PageHeader
+        storyKind="training"
         title={query.data?.name ?? 'Workout'}
         description={query.data?.date}
         icon={Dumbbell}

@@ -314,6 +314,8 @@ export function Today() {
   return (
     <>
       <PageHeader
+        illustration="today"
+        accent="discipline"
         title={humanDate(date, today)}
         description={date === today ? 'What did the day actually look like?' : date}
         icon={CalendarCheck}

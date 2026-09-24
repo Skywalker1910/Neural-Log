@@ -14,7 +14,7 @@ export function ExerciseBook() {
   const [active, setActive] = useState('cover')
   const [search, setSearch] = useState('')
   return <>
-    <PageHeader title="Exercise book" description="A field guide to movement. Open a chapter, find your exercise, and follow the demonstration."
+    <PageHeader title="Exercise book" storyKind="training" description="A field guide to movement. Open a chapter, find your exercise, and follow the demonstration."
       icon={Dumbbell} accent="fitness" actions={<Link to="/training" className="flex items-center gap-2 text-meta text-ink-muted"><ArrowLeft size={16} /> Training</Link>} />
     <QueryBoundary query={exercises} loading={<SkeletonGrid />}>{(data) => {
       const sorted = [...data.exercises].sort((first, second) => first.primary_muscle.localeCompare(second.primary_muscle) || first.name.localeCompare(second.name))
