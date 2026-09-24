@@ -170,6 +170,7 @@ export function ExerciseLibrary() {
   return (
     <>
       <PageHeader
+        storyKind="training"
         title="Exercise library"
         description={`${total} exercises, grouped by the muscle they target. Every one shows the shape of its movement.`}
         icon={Dumbbell}

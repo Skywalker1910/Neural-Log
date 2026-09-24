@@ -15,7 +15,7 @@ export function RecipeBook() {
   const recipes = useRecipes()
   const [editing, setEditing] = useState<Recipe | null | undefined>(undefined)
   return <>
-    <PageHeader title="Recipe book" description="The dishes you make your own. Ingredients, little rituals, and the method worth remembering."
+    <PageHeader title="Recipe book" storyKind="nutrition" description="The dishes you make your own. Ingredients, little rituals, and the method worth remembering."
       icon={ChefHat} accent="lifestyle" actions={<div className="flex items-center gap-4"><Link to="/nutrition" className="flex items-center gap-2 text-meta text-ink-muted"><ArrowLeft size={16} /> Nutrition</Link><Button icon={Plus} onClick={() => setEditing(null)}>Add recipe</Button></div>} />
     <QueryBoundary query={recipes} loading={<SkeletonGrid />}>{(data) => {
       const pages: BookPage[] = data.recipes.flatMap((recipe) => [

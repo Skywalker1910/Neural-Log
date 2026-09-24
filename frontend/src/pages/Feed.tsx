@@ -91,7 +91,7 @@ export function Feed() {
     write.mutate({ end: data.latest_week_end })
   }, [data, write])
   return <>
-    <PageHeader title="The weekly letter" description="Your private feed. A little perspective on the week you lived, from the days you recorded." icon={Sparkles} accent="brand" />
+    <PageHeader title="The weekly letter" illustration="feed" description="Your private feed. A little perspective on the week you lived, from the days you recorded." icon={Sparkles} accent="brand" />
     <QueryBoundary query={feed} loading={<SkeletonGrid />}>{(response) => <div className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[minmax(0,720px)_240px]">
       <div className="min-w-0 space-y-10">
         {write.isPending && <div role="status" className="flex items-center gap-3 rounded-xl border border-brand/30 bg-brand-muted/30 p-5 text-label text-ink"><Sparkles size={18} className="animate-pulse text-brand" />Your weekly review is being written…</div>}

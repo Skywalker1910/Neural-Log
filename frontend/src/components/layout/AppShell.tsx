@@ -24,7 +24,7 @@ export function AppShell() {
   }, [collapsed])
 
   return (
-    <div className="flex min-h-dvh bg-surface-base">
+    <div className="flex min-h-dvh bg-surface-base" data-page-theme={location.pathname.split('/')[1] || 'home'}>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface-overlay focus:px-4 focus:py-2 focus:text-label focus:text-ink"

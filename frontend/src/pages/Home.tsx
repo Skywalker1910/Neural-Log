@@ -1,4 +1,4 @@
-import { CalendarCheck, ChartLine, Flame, House, Radar, Sparkles, TrendingUp } from 'lucide-react'
+import { CalendarCheck, ChartLine, Flame, Radar, Sparkles, TrendingUp } from 'lucide-react'
 
 import { m } from 'motion/react'
 
@@ -6,7 +6,6 @@ import type { AttributeScore, HomeSummary } from '../api/types'
 import { useHomeSummary } from '../api/queries'
 import { AttributeRadar, TrendChart, type AttributeDatum } from '../components/charts'
 import { SetupBanner } from '../components/onboarding/SetupBanner'
-import { PageHeader } from '../components/layout/PageHeader'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { AttributeBadge } from '../components/ui/AttributeBadge'
 import { Card } from '../components/ui/Card'
@@ -22,13 +21,6 @@ import { EASE } from '../lib/motion'
 
 /** The minimum active attributes before a radar shape means anything. */
 const RADAR_MIN_AXES = 3
-
-function greeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
-}
 
 function AttributePanel({ attributes }: { attributes: AttributeScore[] }) {
   const active = attributes.filter((a) => a.status === 'active' && a.score !== null)
@@ -178,15 +170,7 @@ export function Home() {
 
   return (
     <>
-      <PageHeader
-        title={greeting()}
-        description={new Date().toLocaleDateString(undefined, {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        })}
-        icon={House}
-      />
+      <JourneyHero today={query.data?.today} daysLogged={query.data?.days_logged} />
 
       <QueryBoundary query={query} loading={<SkeletonGrid />}>
         {(data) => (
@@ -194,8 +178,6 @@ export function Home() {
             {/* Renders nothing once setup is finished or declined, so it costs
                 an existing user no space. */}
             <Reveal><SetupBanner /></Reveal>
-
-            <Reveal><JourneyHero today={data.today} daysLogged={data.days_logged} /></Reveal>
 
             <Reveal>
             <Card accent="discipline" bodyClassName="flex flex-wrap items-center gap-6">

@@ -45,7 +45,7 @@ export function JournalBook() {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const entries = useQuery({ queryKey: ['journal', 'entries'], queryFn: () => api.get<{ entries: { date: string; journal: string }[] }>('/api/journal/entries') })
   return <>
-    <PageHeader title="Journal" description="A place for the ordinary days, the milestones, and everything between." icon={BookOpenText} accent="goals"
+    <PageHeader title="Journal" storyKind="lifestyle" description="A place for the ordinary days, the milestones, and everything between." icon={BookOpenText} accent="goals"
       actions={<label className="flex items-center gap-2 text-meta text-ink-muted">Write for<input aria-label="Journal date" type="date" value={date} onChange={(event) => {
         if (event.target.value) { setDate(event.target.value); setActive(`day-${event.target.value}`) }
       }} className="rounded-md border border-line bg-surface-card px-2 py-1.5 text-ink" /></label>} />

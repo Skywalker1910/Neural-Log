@@ -235,6 +235,7 @@ export function Learning() {
   return (
     <>
       <PageHeader
+        illustration="learning"
         title="Learning"
         description="Study time feeds Knowledge. How that time is shaped feeds Focus."
         icon={Brain}

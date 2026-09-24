@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:browser": "node tests/books-feed.mjs && node tests/engagement-ui.mjs"
+    "test:browser": "node tests/books-feed.mjs && node tests/engagement-ui.mjs && node tests/heroes-ui.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

@@ -7,7 +7,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand text-white hover:bg-brand-hover border-transparent',
+  primary: 'border-transparent',
   secondary: 'bg-surface-raised text-ink border-line hover:border-line-strong hover:bg-surface-overlay',
   ghost: 'bg-transparent text-ink-muted border-transparent hover:bg-surface-raised hover:text-ink',
   danger: 'bg-transparent text-danger border-danger/40 hover:bg-danger/10',
@@ -47,13 +47,9 @@ export function Button({
       type="button"
       disabled={disabled || loading}
       className={cn(
-        // Pill, not a rounded rectangle. Apple has used a full-radius button
-        // everywhere for years, and it is the first thing the eye reads as
-        // theirs - before colour, before type.
-        'inline-flex items-center justify-center rounded-pill border font-medium tracking-tight',
+        `app-button button-${variant}`,
+        'inline-flex max-w-full items-center justify-center rounded-md border font-medium tracking-tight',
         'transition-all duration-200 ease-apple disabled:cursor-not-allowed disabled:opacity-50',
-        // A press should be felt. Scale rather than a colour flip, so it reads
-        // the same on every variant.
         'active:scale-[0.97] disabled:active:scale-100',
         VARIANTS[variant],
         SIZES[size],

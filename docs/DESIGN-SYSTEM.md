@@ -73,8 +73,11 @@ content would scroll illegibly underneath.
 
 ## Colour
 
-One accent carries interactive intent. Category colours carry *identity* - they
-belong to sections and data series, never to ordinary buttons or links.
+Category colours carry identity in navigation and data series. Page actions use
+the softer palette from their hero: warm peach for Training, sage for Nutrition,
+lavender for Lifestyle, blue for Learning and Analytics, and gold for Goals,
+Library, Today, and Achievements. Home uses olive; other pages use warm blush.
+Danger actions keep their red status colour.
 
 | Token | Value | Meaning |
 |---|---|---|
@@ -120,13 +123,17 @@ as size goes up; at display sizes, default letter spacing reads as loose.
 | Token | Value | Used for |
 |---|---|---|
 | `radius-sm` | 8px | Inputs, small chips |
-| `radius-md` | 12px | Icon tiles, list rows, inner panels |
+| `radius-md` | 12px | Buttons, icon tiles, list rows, inner panels |
 | `radius-lg` | 18px | Cards |
 | `radius-xl` | 24px | Modals, large panels |
-| `radius-pill` | 980px | Buttons, badges, progress bars |
+| `radius-pill` | 980px | Badges, segmented controls, progress bars |
 
-Buttons are full pills. That single decision does more to make the app read as
-Apple-like than any colour, and it is why `Button` no longer takes `rounded-md`.
+Buttons use 12px corners, a quiet surface highlight, and a small lift on mouse
+hover. Primary actions use the page accent with dark text; secondary actions use
+a quieter tint of the same colour. Focus and hover follow that palette too.
+`data-page-theme` on the app shell supplies `--button-accent` for nested actions
+and forms. Portaled book readers set their own theme, so a recipe opened from
+Library still has Nutrition's colours.
 
 Numbers use the `.tabular` class (tabular figures) anywhere they update in place,
 so digits don't jitter as values change.
@@ -350,10 +357,25 @@ baked into both `Card` and `Reveal` rather than remembered per call site.
 the element that actually inherits `min-width: auto`, and `Card`'s own floor does
 nothing from behind it.
 
-`PageHeader`'s action slot is the related case. `shrink-0` is right - a pair of
-buttons should not be squeezed to fit a long title - but alone it also lets the
-actions grow past the viewport, and a `flex-wrap` inside them never fires because
-the container is never the thing under pressure. It carries `max-w-full` too.
+`PageHeader` puts the illustration, title, and actions inside one tinted hero.
+The action slot can shrink and wrap, including the rows passed into it. On phones
+it sits below the title, inside the same border. Keep `min-width: 0` and
+`max-width: 100%` on those rows; otherwise their buttons can escape the hero.
+
+The illustrations are local SVGs in `LifeIllustration` and `SectionIllustration`.
+Each section can choose its artwork without changing the shared layout. Buttons
+use softly rounded corners, subtle highlights, and a visible keyboard focus ring.
+Touch targets grow to 44px on small screens. Decorative motion respects reduced
+motion. Nutrition totals sit directly in the left half of the book workspace,
+without an extra card border. Mobile sign-out is in **More → Sign out**.
+
+Nutrition's **Scan a label** action stays visible while AI availability loads or
+fails. It opens the scanner when available, or explains the issue with a retry
+and a manual food-entry option instead of silently hiding the feature.
+
+`tests/heroes-ui.mjs` checks hero containment at 320, 390, 768, and 1440px,
+borderless nutrition totals, reduced motion, and mobile sign-out with mocked
+responses (including a failed request and retry).
 
 Any *other* row that is a grid item and holds fixed-width controls needs the same
 floor; the Training routine rows are the current example.

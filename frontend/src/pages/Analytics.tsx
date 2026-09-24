@@ -66,9 +66,7 @@ function PeriodPicker({
     <div
       role="tablist"
       aria-label="Period"
-      // max-w-full + overflow-x-auto: five pills do not fit on a 390px screen,
-      // and scrolling them is better than hiding periods or stacking them.
-      className="flex max-w-full overflow-x-auto rounded-pill border border-line bg-surface-card p-0.5"
+      className="flex max-w-full flex-wrap rounded-md border border-line bg-surface-card p-0.5"
     >
       {PERIODS.map((period) => {
         const active = period.value === value
@@ -128,6 +126,7 @@ export function Analytics() {
   return (
     <>
       <PageHeader
+        illustration="analytics"
         title="Analytics"
         description="Long-range trends across every workspace, measured only on the days you logged."
         icon={ChartLine}

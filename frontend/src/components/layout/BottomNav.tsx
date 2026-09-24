@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router'
-import { Menu } from 'lucide-react'
+import { LogOut, Menu } from 'lucide-react'
 
 import { cn } from '../../lib/cn'
 import { useCurrentUser } from '../../api/queries'
 import { ADMIN_SECTION, accentText, OVERFLOW_SECTIONS, PRIMARY_SECTIONS, SETTINGS_SECTION } from '../../navigation'
 import { Modal } from '../ui/Modal'
 import { UserAvatar } from '../ui/UserAvatar'
+import { api } from '../../api/client'
+import { Button } from '../ui/Button'
 
 const TAB_CLASSES =
   'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-caption transition-colors duration-200 ease-apple active:scale-95'
@@ -18,6 +20,20 @@ const TAB_CLASSES =
 export function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   const user = useCurrentUser()
+  const [signingOut, setSigningOut] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
+
+  async function signOut() {
+    setSigningOut(true)
+    setSignOutError('')
+    try {
+      await api.post('/logout')
+      window.location.href = '/login'
+    } catch {
+      setSignOutError('Could not sign out. Please try again.')
+      setSigningOut(false)
+    }
+  }
 
   return (
     <>
@@ -82,6 +98,10 @@ export function BottomNav() {
             )
           })}
         </ul>
+        <div className="mt-4 border-t border-line pt-4">
+          <Button className="w-full" icon={LogOut} onClick={() => void signOut()} loading={signingOut}>Sign out</Button>
+          {signOutError && <p role="alert" className="mt-2 text-meta text-danger">{signOutError}</p>}
+        </div>
       </Modal>
     </>
   )
