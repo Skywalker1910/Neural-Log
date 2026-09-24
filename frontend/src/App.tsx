@@ -67,6 +67,7 @@ export default function App() {
           and framing it with the sidebar of an app you have not set up yet is
           both noisy and an invitation to wander off mid-question. */}
       <Route path="/welcome" element={<Lazy><Welcome /></Lazy>} />
+      <Route path="/admin" element={<Lazy><Admin /></Lazy>} />
 
       <Route element={<AppShell />}>
         <Route index element={<Home />} />
@@ -94,7 +95,6 @@ export default function App() {
         <Route path="/profile" element={<Lazy><Profile /></Lazy>} />
         <Route path={SETTINGS_SECTION.path} element={<Lazy><Settings /></Lazy>} />
         <Route path={DESIGN_SECTION.path} element={<Lazy><DesignSystem /></Lazy>} />
-        <Route path="/admin" element={<Lazy><Admin /></Lazy>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

@@ -18,6 +18,17 @@ export interface CurrentUser {
   leaderboard_opt_out: boolean
 }
 
+export interface InviteCode {
+  id: number
+  code: string
+  label: string | null
+  created_by: string
+  used_by: string | null
+  created_at: string
+  used_at: string | null
+  revoked: number
+}
+
 export interface AdminUser {
   id: number
   username: string

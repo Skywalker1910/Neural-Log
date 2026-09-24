@@ -122,7 +122,7 @@ def registration_code():
     return (os.environ.get('REGISTRATION_CODE') or '').strip()
 
 
-def check_registration(payload):
+def check_registration(payload, conn=None):
     """`(ok, message, status)` for an attempt to create an account.
 
     Returns rather than raises because the caller has a database connection open
@@ -134,16 +134,36 @@ def check_registration(payload):
         return False, 'Registration is closed. Ask the owner for an account.', 403
 
     if mode == INVITE:
-        expected = registration_code()
         supplied = (payload.get('invite_code') or '').strip()
         if not supplied:
             return False, 'An invite code is required.', 403
-        # compare_digest rather than ==, so the failure takes the same time
-        # whether the first character is wrong or the last one is.
+
+        # Try DB-backed codes first (admin-generated), fall back to the env var.
+        if conn is not None:
+            row = conn.execute(
+                'SELECT id FROM invite_codes '
+                'WHERE code = ? AND used_by IS NULL AND revoked = 0',
+                (supplied,),
+            ).fetchone()
+            if row:
+                return True, None, None
+
+        # Legacy env-var code still honoured so existing deployments keep working.
+        expected = registration_code()
         if not expected or not secrets.compare_digest(supplied, expected):
             return False, 'That invite code is not valid.', 403
 
     return True, None, None
+
+
+def redeem_invite_code(conn, code, user_id):
+    """Mark a DB-backed invite code as used after successful registration."""
+    conn.execute(
+        'UPDATE invite_codes SET used_by = ?, used_at = CURRENT_TIMESTAMP '
+        'WHERE code = ? AND used_by IS NULL AND revoked = 0',
+        (user_id, code),
+    )
+    conn.commit()
 
 
 def grants_admin(username, existing_user_count):
