@@ -9,6 +9,7 @@ from pathlib import Path
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import os
+import secrets
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from dotenv import load_dotenv
@@ -746,17 +747,17 @@ def register():
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
 
-        # Checked before the database is touched. In production this is an invite
-        # code; locally it is nothing at all, so the signup flow stays testable
-        # without a secret in the environment.
-        allowed, refusal, status = security.check_registration(data)
-        if not allowed:
-            return jsonify({'success': False, 'message': refusal}), status
-
         # No path to choose since migration 011. Everyone gets the shared daily
         # survey, and anything they want on top of it they add afterwards.
-        
+
         conn = get_db_connection()
+
+        # Checked with the database open so DB-backed invite codes can be
+        # validated alongside the legacy env-var code.
+        allowed, refusal, status = security.check_registration(data, conn)
+        if not allowed:
+            conn.close()
+            return jsonify({'success': False, 'message': refusal}), status
         
         # Check if username already exists
         existing_user = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
@@ -785,10 +786,11 @@ def register():
         conn.commit()
         user_id = cursor.lastrowid
 
-        # Nothing to seed. The shared survey already exists, owned by nobody, so
-        # a just-registered account is asked the same questions as everyone else
-        # from its first request. This used to have to materialise forty habit
-        # rows per user before streaks or adherence would read as anything.
+        # If a DB-backed invite code was used, mark it redeemed.
+        invite_code = (data.get('invite_code') or '').strip()
+        if invite_code:
+            security.redeem_invite_code(conn, invite_code, user_id)
+
         conn.close()
 
         # Log in the new user
@@ -2150,6 +2152,67 @@ def admin_stats():
         'commit': __commit__,
         'backup': read_backup_status(),
     })
+
+# --- invite codes (admin) ---------------------------------------------------
+
+@app.route('/api/admin/invite-codes')
+@admin_required
+def list_invite_codes():
+    """List all invite codes with usage info."""
+    conn = get_db_connection()
+    rows = conn.execute('''
+        SELECT ic.id, ic.code, ic.label, ic.revoked,
+               ic.created_at, ic.used_at,
+               creator.username AS created_by,
+               redeemer.username AS used_by
+        FROM invite_codes ic
+        JOIN users creator ON creator.id = ic.created_by
+        LEFT JOIN users redeemer ON redeemer.id = ic.used_by
+        ORDER BY ic.created_at DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.route('/api/admin/invite-codes', methods=['POST'])
+@admin_required
+def create_invite_code():
+    """Generate a new invite code."""
+    data = request.json or {}
+    label = (data.get('label') or '').strip() or None
+    code = secrets.token_urlsafe(12)
+
+    conn = get_db_connection()
+    conn.execute(
+        'INSERT INTO invite_codes (code, label, created_by) VALUES (?, ?, ?)',
+        (code, label, session['user_id']),
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({'code': code, 'label': label}), 201
+
+
+@app.route('/api/admin/invite-codes/<int:code_id>/revoke', methods=['POST'])
+@admin_required
+def revoke_invite_code(code_id):
+    """Revoke an unused invite code so it can no longer be redeemed."""
+    conn = get_db_connection()
+    row = conn.execute(
+        'SELECT used_by FROM invite_codes WHERE id = ?', (code_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Code not found.'}), 404
+    if row['used_by'] is not None:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Code has already been used.'}), 400
+
+    conn.execute('UPDATE invite_codes SET revoked = 1 WHERE id = ?', (code_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
 
 # Training endpoints live in their own module - app.py is already long enough,
 # and they are self-contained. Registered after the helpers they depend on are

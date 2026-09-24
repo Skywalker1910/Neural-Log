@@ -50,6 +50,7 @@ import type {
   AdminOverview,
   AiUsageReport,
   AdminUser,
+  InviteCode,
   DayDetail,
   GamificationSummary,
   HomeSummary,
@@ -99,6 +100,7 @@ export const queryKeys = {
   adminOverview: ['admin', 'overview'] as const,
   adminUsers: ['admin', 'users'] as const,
   adminAiUsage: (days: number) => ['admin', 'ai-usage', days] as const,
+  adminInviteCodes: ['admin', 'invite-codes'] as const,
   assistantState: ['assistant', 'state'] as const,
   weeklyFeed: (end: string) => ['feed', 'weekly', end] as const,
 }
@@ -173,6 +175,13 @@ export function useAdminUsers() {
   return useQuery({
     queryKey: queryKeys.adminUsers,
     queryFn: () => api.get<AdminUser[]>('/api/admin/users'),
+  })
+}
+
+export function useAdminInviteCodes() {
+  return useQuery({
+    queryKey: queryKeys.adminInviteCodes,
+    queryFn: () => api.get<InviteCode[]>('/api/admin/invite-codes'),
   })
 }
 

@@ -1,18 +1,24 @@
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import {
   Activity,
+  ArrowLeft,
   Ban,
   Bot,
+  Check,
+  Copy,
   Database,
   HardDriveDownload,
   KeyRound,
+  Plus,
   RefreshCw,
   ShieldCheck,
   ShieldOff,
+  Ticket,
   Trash2,
   UserCheck,
   Users,
+  X,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -20,11 +26,12 @@ import { ApiError, api } from '../api/client'
 import {
   queryKeys,
   useAdminAiUsage,
+  useAdminInviteCodes,
   useAdminOverview,
   useAdminUsers,
   useCurrentUser,
 } from '../api/queries'
-import type { AdminUser, BackupStatus } from '../api/types'
+import type { AdminUser, BackupStatus, InviteCode } from '../api/types'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -441,6 +448,155 @@ function AssistantSpend() {
   )
 }
 
+function InviteCodeManagement() {
+  const codes = useAdminInviteCodes()
+  const queryClient = useQueryClient()
+  const [creating, setCreating] = useState(false)
+  const [label, setLabel] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState<number | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.adminInviteCodes })
+
+  const create = async () => {
+    setBusy(true)
+    setNotice(null)
+    try {
+      const result = await api.post<{ code: string }>('/api/admin/invite-codes', { label: label || undefined })
+      setNotice({ tone: 'success', text: `Code created: ${result.code}` })
+      setCreating(false)
+      setLabel('')
+      refresh()
+    } catch (error) {
+      setNotice({ tone: 'error', text: error instanceof ApiError ? error.message : 'Could not create code.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const revoke = async (id: number) => {
+    setNotice(null)
+    try {
+      await api.post(`/api/admin/invite-codes/${id}/revoke`)
+      setNotice({ tone: 'success', text: 'Code revoked.' })
+      refresh()
+    } catch (error) {
+      setNotice({ tone: 'error', text: error instanceof ApiError ? error.message : 'Could not revoke code.' })
+    }
+  }
+
+  const copyCode = (code: InviteCode) => {
+    void navigator.clipboard.writeText(code.code)
+    setCopied(code.id)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  const columns = useMemo<Column<InviteCode>[]>(() => [
+    {
+      key: 'code',
+      header: 'Code',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <code className="text-label text-ink">{row.code}</code>
+          <button
+            type="button" className="text-ink-subtle hover:text-ink"
+            onClick={() => copyCode(row)} aria-label="Copy code"
+          >
+            {copied === row.id ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </div>
+      ),
+    },
+    {
+      key: 'label',
+      header: 'Label',
+      hideBelow: 'sm',
+      render: (row) => <span className="text-ink-muted">{row.label || '—'}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) => row.used_by
+        ? <Badge tone="success">Used by {row.used_by}</Badge>
+        : row.revoked
+          ? <Badge tone="danger">Revoked</Badge>
+          : <Badge tone="info">Available</Badge>,
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      hideBelow: 'md',
+      render: (row) => (
+        <span className="text-meta text-ink-muted">
+          {dateLabel(row.created_at)} by {row.created_by}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (row) => !row.used_by && !row.revoked ? (
+        <Button size="sm" variant="danger" icon={X} onClick={() => void revoke(row.id)}>
+          Revoke
+        </Button>
+      ) : null,
+    },
+  ], [copied])
+
+  return (
+    <Card
+      title="Invite codes"
+      subtitle="Generate single-use codes to share with new users"
+      icon={Ticket}
+      accent="brand"
+      action={
+        <Button size="sm" variant="primary" icon={Plus} onClick={() => setCreating(true)}>
+          New code
+        </Button>
+      }
+      bodyClassName="px-3 py-2 sm:px-4"
+    >
+      {notice && (
+        <p className={notice.tone === 'success' ? 'mb-2 px-2 text-label text-success' : 'mb-2 px-2 text-label text-danger'}>
+          {notice.text}
+        </p>
+      )}
+      <QueryBoundary query={codes} loading={<SkeletonGrid />}>
+        {(data) => data.length === 0
+          ? <p className="px-2 py-4 text-label text-ink-subtle">No invite codes yet. Create one to invite a new user.</p>
+          : <DataTable columns={columns} rows={data} rowKey={(row) => row.id} caption="Invite codes" />
+        }
+      </QueryBoundary>
+
+      <Modal
+        open={creating}
+        onClose={() => !busy && setCreating(false)}
+        title="Create invite code"
+        description="The code will be generated automatically. Add an optional label to remember who it's for."
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={busy} onClick={() => setCreating(false)}>Cancel</Button>
+            <Button variant="primary" loading={busy} onClick={() => void create()}>Create code</Button>
+          </>
+        }
+      >
+        <Field label="Label (optional)" hint="e.g. 'For Alice'">
+          {(id) => (
+            <TextInput
+              id={id} value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Who is this code for?"
+            />
+          )}
+        </Field>
+      </Modal>
+    </Card>
+  )
+}
+
 export function Admin() {
   const currentUser = useCurrentUser()
   const overview = useAdminOverview()
@@ -448,86 +604,98 @@ export function Admin() {
   if (currentUser.data && !currentUser.data.is_admin) return <Navigate to="/" replace />
 
   return (
-    <>
-      <PageHeader
-        title="Admin"
-        description="The operational view of Neural Log: people, usage, and the safeguards around both."
-        icon={ShieldCheck}
-        accent="brand"
-      />
-
-      <QueryBoundary query={overview} loading={<SkeletonGrid />}>
-        {(data) => (
-          <RevealGroup className="flex flex-col gap-4" step={0.05}>
-            <Reveal>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="Accounts" value={data.accounts.total} icon={Users} accent="brand" hint={`${data.accounts.active} active`} />
-                <StatCard label="Active this week" value={data.accounts.active_this_week} icon={UserCheck} accent="lifestyle" hint="Logged a daily check-in" />
-                <StatCard label="Logged days" value={data.logging.days.toLocaleString()} icon={Activity} accent="discipline" hint={`${data.logging.activities.toLocaleString()} classic entries`} />
-                <StatCard label="Active admins" value={data.accounts.admins} icon={ShieldCheck} accent="brand" hint="At least one is always protected" />
-              </div>
-            </Reveal>
-
-            <Reveal>
-              <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-                <Card title="Workspace pulse" subtitle="Records currently stored across the app" icon={Activity} accent="learning">
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
-                    {[
-                      ['Workouts', data.features.workouts],
-                      ['Meals', data.features.meals],
-                      ['Study sessions', data.features.learning_sessions],
-                      ['Goals', data.features.goals],
-                      ['Personal habits', data.features.habits],
-                    ].map(([label, value]) => (
-                      <div key={label as string}>
-                        <dt className="text-meta text-ink-subtle">{label}</dt>
-                        <dd className="mt-1 tabular text-section text-ink">{Number(value).toLocaleString()}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </Card>
-
-                <Card title="System status" subtitle="Read-only production checks" icon={Database} accent="recovery">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone={data.database_integrity === 'ok' ? 'success' : 'danger'}>
-                      Database: {data.database_integrity === 'ok' ? 'Healthy' : data.database_integrity}
-                    </Badge>
-                    <Badge tone="info">Registration: {data.registration_mode}</Badge>
-                    {/* Which release *and* which build. The version only moves
-                        when somebody cuts one, so between releases it cannot tell
-                        two very different images apart - which is how a silent
-                        rollback went unnoticed once. */}
-                    <Badge tone="neutral">
-                      v{data.version}
-                      {data.commit && data.commit !== 'unknown' && (
-                        <span className="tabular ml-1 text-ink-subtle">
-                          {data.commit.slice(0, 7)}
-                        </span>
-                      )}
-                    </Badge>
-                    <Badge tone="neutral">{data.accounts.active} accounts enabled</Badge>
-                    <BackupHealth backup={data.backup} />
-                  </div>
-
-                  {data.backup.known && !data.backup.offsite && (
-                    <p className="mt-3 flex items-start gap-2 text-meta text-ink-subtle">
-                      <HardDriveDownload size={14} className="mt-0.5 shrink-0" aria-hidden />
-                      <span>
-                        Snapshots are being written next to the database, so losing the instance
-                        loses both. See <code>docs/BACKUPS.md</code> to send them to S3.
-                      </span>
-                    </p>
-                  )}
-                </Card>
-              </div>
-            </Reveal>
-
-            <Reveal><AssistantSpend /></Reveal>
-
-            <Reveal><UserManagement /></Reveal>
-          </RevealGroup>
+    <div className="admin-shell">
+      <header className="admin-topbar">
+        <Link to="/" className="admin-back">
+          <ArrowLeft size={16} aria-hidden /> Back to app
+        </Link>
+        <span className="admin-title">
+          <ShieldCheck size={18} aria-hidden /> Admin
+        </span>
+        {currentUser.data && (
+          <span className="text-meta text-ink-subtle">{currentUser.data.username}</span>
         )}
-      </QueryBoundary>
-    </>
+      </header>
+
+      <main className="admin-content">
+        <PageHeader
+          title="Admin"
+          description="The operational view of Neural Log: people, usage, and the safeguards around both."
+          icon={ShieldCheck}
+          accent="brand"
+        />
+
+        <QueryBoundary query={overview} loading={<SkeletonGrid />}>
+          {(data) => (
+            <RevealGroup className="flex flex-col gap-4" step={0.05}>
+              <Reveal>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatCard label="Accounts" value={data.accounts.total} icon={Users} accent="brand" hint={`${data.accounts.active} active`} />
+                  <StatCard label="Active this week" value={data.accounts.active_this_week} icon={UserCheck} accent="lifestyle" hint="Logged a daily check-in" />
+                  <StatCard label="Logged days" value={data.logging.days.toLocaleString()} icon={Activity} accent="discipline" hint={`${data.logging.activities.toLocaleString()} classic entries`} />
+                  <StatCard label="Active admins" value={data.accounts.admins} icon={ShieldCheck} accent="brand" hint="At least one is always protected" />
+                </div>
+              </Reveal>
+
+              <Reveal>
+                <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                  <Card title="Workspace pulse" subtitle="Records currently stored across the app" icon={Activity} accent="learning">
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
+                      {[
+                        ['Workouts', data.features.workouts],
+                        ['Meals', data.features.meals],
+                        ['Study sessions', data.features.learning_sessions],
+                        ['Goals', data.features.goals],
+                        ['Personal habits', data.features.habits],
+                      ].map(([label, value]) => (
+                        <div key={label as string}>
+                          <dt className="text-meta text-ink-subtle">{label}</dt>
+                          <dd className="mt-1 tabular text-section text-ink">{Number(value).toLocaleString()}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </Card>
+
+                  <Card title="System status" subtitle="Read-only production checks" icon={Database} accent="recovery">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={data.database_integrity === 'ok' ? 'success' : 'danger'}>
+                        Database: {data.database_integrity === 'ok' ? 'Healthy' : data.database_integrity}
+                      </Badge>
+                      <Badge tone="info">Registration: {data.registration_mode}</Badge>
+                      <Badge tone="neutral">
+                        v{data.version}
+                        {data.commit && data.commit !== 'unknown' && (
+                          <span className="tabular ml-1 text-ink-subtle">
+                            {data.commit.slice(0, 7)}
+                          </span>
+                        )}
+                      </Badge>
+                      <Badge tone="neutral">{data.accounts.active} accounts enabled</Badge>
+                      <BackupHealth backup={data.backup} />
+                    </div>
+
+                    {data.backup.known && !data.backup.offsite && (
+                      <p className="mt-3 flex items-start gap-2 text-meta text-ink-subtle">
+                        <HardDriveDownload size={14} className="mt-0.5 shrink-0" aria-hidden />
+                        <span>
+                          Snapshots are being written next to the database, so losing the instance
+                          loses both. See <code>docs/BACKUPS.md</code> to send them to S3.
+                        </span>
+                      </p>
+                    )}
+                  </Card>
+                </div>
+              </Reveal>
+
+              <Reveal><InviteCodeManagement /></Reveal>
+
+              <Reveal><AssistantSpend /></Reveal>
+
+              <Reveal><UserManagement /></Reveal>
+            </RevealGroup>
+          )}
+        </QueryBoundary>
+      </main>
+    </div>
   )
 }
